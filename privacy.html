@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy — Ruza Budget Tracker</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.65;
+    max-width: 44rem;
+    margin: 0 auto;
+    padding: 2.5rem 1.25rem 6rem;
+    color: #14181d;
+    background: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    body { color: #e4eaf1; background: #0e1319; }
+    code { background: #1c2530; }
+    th, td { border-color: #26313d; }
+  }
+  h1 { font-size: 1.9rem; line-height: 1.2; margin: 0 0 .35rem; }
+  h2 { font-size: 1.2rem; margin: 2.5rem 0 .6rem; }
+  .updated { color: #667; margin: 0 0 2rem; font-size: .93rem; }
+  ul { padding-left: 1.2rem; }
+  li { margin-bottom: .45rem; }
+  code {
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: .88em;
+    background: #f0f3f6;
+    padding: .1em .35em;
+    border-radius: 3px;
+  }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .95rem; }
+  th, td { text-align: left; padding: .55rem .6rem; border-bottom: 1px solid #dde3e9; vertical-align: top; }
+  th { font-weight: 600; }
+  .box {
+    border-left: 3px solid #9a6a0f;
+    padding: .1rem 0 .1rem 1rem;
+    margin: 1.5rem 0;
+  }
+</style>
+</head>
+<body>
+
+<h1>Privacy Policy — Ruza Budget Tracker</h1>
+<p class="updated">Last updated: 22 August 2026</p>
+
+<p>
+  Ruza Budget Tracker ("the app") is an Android app that works out your spending
+  by reading the transaction text messages your mobile money services and banks
+  send you. This policy explains exactly what the app reads, what it keeps, and
+  where that information goes.
+</p>
+
+<div class="box">
+  <p>
+    <strong>The short version: nothing leaves your phone.</strong> The app does
+    not request the Android <code>INTERNET</code> permission. Without it, the
+    operating system will not allow the app to open a network connection, so it
+    is not capable of transmitting your messages, your transactions or anything
+    else to us or to anyone else. There is no account to create, no server to
+    sign in to, and no analytics.
+  </p>
+</div>
+
+<h2>Who is responsible</h2>
+<p>
+  The app is developed and published by an independent developer. For any
+  question about this policy or about your data, contact:
+  <strong><a href="mailto:barumpofu@gmail.com">barumpofu@gmail.com</a></strong>.
+</p>
+
+<h2>What the app reads</h2>
+<p>
+  With your permission, the app reads SMS messages already stored in your
+  phone's inbox, and messages as they arrive. It does this to find records of
+  money moving in and out of your accounts.
+</p>
+<p>It looks for messages from these senders:</p>
+<ul>
+  <li>Orange Money</li>
+  <li>MyZaka</li>
+  <li>Access Bank</li>
+  <li>Absa</li>
+  <li>FNB</li>
+</ul>
+<p>
+  To find messages from a provider that has changed its sender name, the app
+  also scans the newest messages in your inbox generally. Messages that are not
+  financial are examined only long enough to determine that, and are not
+  recorded — see the next section.
+</p>
+
+<h2>What the app stores, and where</h2>
+<p>
+  Everything the app stores is written to private storage on your device, in an
+  area that Android does not make available to other apps. Nothing is stored
+  anywhere else.
+</p>
+
+<table>
+  <tr>
+    <th>What</th>
+    <th>Why</th>
+  </tr>
+  <tr>
+    <td>Transaction records — amount, fee, date, transaction reference, the
+        other party's name and phone number as they appeared in the message,
+        the account, and a spending category</td>
+    <td>These are your spending totals, history and search results</td>
+  </tr>
+  <tr>
+    <td>Account balances quoted in messages, with the time they were quoted</td>
+    <td>To show your latest known balance and how old that reading is</td>
+  </tr>
+  <tr>
+    <td>Monthly budget amounts you set</td>
+    <td>To compare your spending against your own limits</td>
+  </tr>
+  <tr>
+    <td>Transactions you enter by hand, such as cash</td>
+    <td>So spending that sends no message still counts</td>
+  </tr>
+  <tr>
+    <td>The full text of messages <em>from the financial senders listed above</em>
+        that mention an amount but that the app could not interpret</td>
+    <td>So a later version with better message handling can recover transactions
+        it previously missed. You can view and delete these in the app.</td>
+  </tr>
+  <tr>
+    <td>The date of the newest message already examined</td>
+    <td>So each launch only has to look at what is new</td>
+  </tr>
+</table>
+
+<h2>Messages that arrive while the app is closed</h2>
+<p>
+  So that a transaction is not missed when many messages arrive between uses,
+  the app notices incoming SMS as they arrive. A message is written to a
+  temporary file in the app's private storage <strong>only if it could be
+  financial</strong> — that is, if it comes from one of the senders listed
+  above, or if its text names a pula amount or one of those providers.
+</p>
+<p>
+  <strong>Every other message is discarded the moment it arrives and is never
+  written down.</strong> A message from a friend or family member does not
+  reach the app's storage at all.
+</p>
+<p>
+  The temporary file is processed and <strong>deleted</strong> the next time
+  you open the app. Of what was in it, only messages from the financial senders
+  listed above are kept beyond that point.
+</p>
+
+<h2>What the app does not do</h2>
+<ul>
+  <li>It does not send your messages, transactions or balances anywhere.</li>
+  <li>It does not contain advertising.</li>
+  <li>It does not contain analytics, crash reporting, or tracking of any kind.</li>
+  <li>It does not share or sell any information to anyone, because it holds
+      nothing outside your device and cannot transmit.</li>
+  <li>It does not send SMS messages, and does not read your call log or
+      contacts.</li>
+  <li>It does not ask for your PIN, password or any account credential, and it
+      cannot move money.</li>
+</ul>
+
+<h2>When you choose to export</h2>
+<p>
+  The app can export your transactions as a CSV or a JSON backup file. This
+  happens only when you ask for it. The file is handed to Android's standard
+  share screen, and <em>you</em> choose where it goes — saving it to your
+  device, emailing it, or sending it to another app. Once you send a file to
+  another app or service, that file is subject to the privacy practices of
+  whatever you sent it to, not this one.
+</p>
+
+<h2>Permissions the app requests, and why</h2>
+<table>
+  <tr><th>Permission</th><th>Why it is needed</th></tr>
+  <tr>
+    <td><code>READ_SMS</code></td>
+    <td>To read transaction messages already in your inbox, which is how the app
+        can show you months of real spending immediately rather than asking you
+        to type it in</td>
+  </tr>
+  <tr>
+    <td><code>RECEIVE_SMS</code></td>
+    <td>To notice a transaction message as it arrives, so a busy inbox does not
+        push it out of reach before you next open the app</td>
+  </tr>
+  <tr>
+    <td><code>USE_BIOMETRIC</code></td>
+    <td>Only if you turn on the optional app lock. This shows your device's own
+        fingerprint, face or PIN prompt. The app never receives your fingerprint,
+        face data or PIN — only whether your device confirmed it was you.</td>
+  </tr>
+</table>
+<p>
+  You may refuse SMS access, or withdraw it later in Android's
+  <em>Settings &rarr; Apps &rarr; Ruza Budget Tracker &rarr; Permissions</em>.
+  Without it the app cannot find your transactions automatically, though
+  anything you entered by hand remains.
+</p>
+
+<h2>How long information is kept, and how to delete it</h2>
+<p>
+  Information stays on your device until you remove it. You are in control of
+  all of it:
+</p>
+<ul>
+  <li>Delete individual records, or exclude them from your totals, inside the app.</li>
+  <li>Clear the stored unreadable messages from the app's settings.</li>
+  <li>Clear everything at once through Android's
+      <em>Settings &rarr; Apps &rarr; Ruza Budget Tracker &rarr; Storage &rarr; Clear data</em>.</li>
+  <li>Uninstalling the app deletes all of it.</li>
+</ul>
+<p>
+  Because nothing is ever sent to us, there is no copy anywhere for us to delete
+  on your behalf, and no request you need to make to us to have it removed.
+</p>
+
+<h2>Children</h2>
+<p>
+  The app is intended for people managing their own money and is not directed at
+  children. It collects nothing from anyone, of any age.
+</p>
+
+<h2>Changes to this policy</h2>
+<p>
+  If the app's handling of your information changes, this policy will be updated
+  before or alongside that release, and the date at the top will change. In
+  particular, if a future version ever required network access, that would be
+  stated here plainly and the claim above about the app being unable to transmit
+  would be corrected.
+</p>
+
+<h2>Contact</h2>
+<p>
+  Questions about this policy: <strong><a href="mailto:barumpofu@gmail.com">barumpofu@gmail.com</a></strong>.
+</p>
+
+</body>
+</html>
