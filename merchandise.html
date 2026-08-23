@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Audi A3 Aristocrats — Merchandise Line Sheet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --badge:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MDAgNDAwIiB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCI+CjxkZWZzPgo8bGluZWFyR3JhZGllbnQgaWQ9ImNocm9tZSIgeDE9IjAiIHkxPSIwIiB4Mj0iMCIgeTI9IjEiPgo8c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiNlZWYzZjkiLz4KPHN0b3Agb2Zmc2V0PSIwLjQ1IiBzdG9wLWNvbG9yPSIjYjljNGQyIi8+CjxzdG9wIG9mZnNldD0iMC41IiBzdG9wLWNvbG9yPSIjN2Y4Yjk5Ii8+CjxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iI2Q2ZGVlOCIvPgo8L2xpbmVhckdyYWRpZW50Pgo8bGluZWFyR3JhZGllbnQgaWQ9ImZpZWxkIiB4MT0iMCIgeTE9IjAiIHgyPSIwIiB5Mj0iMSI+CjxzdG9wIG9mZnNldD0iMCIgc3RvcC1jb2xvcj0iIzE2MjMzYSIvPgo8c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiMwYTEwMTgiLz4KPC9saW5lYXJHcmFkaWVudD4KPC9kZWZzPgo8cGF0aCBkPSJNMjAwIDI2IEwzNDYgNzYgVjIwNiBDMzQ2IDI5NiAyODYgMzQ4IDIwMCAzNzggQzExNCAzNDggNTQgMjk2IDU0IDIwNiBWNzYgWiIgZmlsbD0idXJsKCNmaWVsZCkiIHN0cm9rZT0idXJsKCNjaHJvbWUpIiBzdHJva2Utd2lkdGg9IjEzIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+CjxwYXRoIGQ9Ik0yMDAgNTIgTDMyNCA5NCBWMjA2IEMzMjQgMjgyIDI3NCAzMjggMjAwIDM1NSBDMTI2IDMyOCA3NiAyODIgNzYgMjA2IFY5NCBaIiBmaWxsPSJub25lIiBzdHJva2U9IiM1ZTlkZGMiIHN0cm9rZS13aWR0aD0iMyIgb3BhY2l0eT0iMC41NSIvPgo8cGF0aCBkPSJNMTQ4IDEzMiBMMTcwIDEwNiBMMjAwIDEzMCBMMjMwIDEwNiBMMjUyIDEzMiBMMjQ0IDE1MiBIMTU2IFoiIGZpbGw9InVybCgjY2hyb21lKSIvPgo8Y2lyY2xlIGN4PSIxNzAiIGN5PSIxMDAiIHI9IjgiIGZpbGw9IiM1ZTlkZGMiLz4KPGNpcmNsZSBjeD0iMjMwIiBjeT0iMTAwIiByPSI4IiBmaWxsPSIjNWU5ZGRjIi8+CjxjaXJjbGUgY3g9IjIwMCIgY3k9IjEyMiIgcj0iOSIgZmlsbD0iIzVlOWRkYyIvPgo8dGV4dCB4PSIyMDAiIHk9IjI4OCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IidTYWlyYSBDb25kZW5zZWQnLCdBcmlhbCBOYXJyb3cnLEltcGFjdCxzYW5zLXNlcmlmIiBmb250LXNpemU9IjEzMiIgZm9udC13ZWlnaHQ9IjcwMCIgbGV0dGVyLXNwYWNpbmc9IjQiIGZpbGw9InVybCgjY2hyb21lKSI+QTM8L3RleHQ+CjxyZWN0IHg9IjEyOCIgeT0iMzE0IiB3aWR0aD0iMTQ0IiBoZWlnaHQ9IjUiIGZpbGw9IiM1ZTlkZGMiIG9wYWNpdHk9IjAuOCIvPgo8L3N2Zz4K");
+    --bg-color: #0b111a;
+    --text-primary: #e6ebf2;
+    --text-muted: #8892a0;
+    --accent: #5e9ddc;
+    --card-bg: rgba(255, 255, 255, 0.03);
+    --border: rgba(255, 255, 255, 0.1);
+  }
+
+  body {
+    margin: 0;
+    font-family: 'IBM Plex Mono', monospace;
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    line-height: 1.6;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+
+  header {
+    background: radial-gradient(circle at 50% 0%, rgba(94, 157, 220, 0.15), transparent 70%);
+    padding: 3rem 1rem;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+  }
+
+  h1, h2, h3 {
+    font-family: 'Saira Condensed', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin: 0;
+  }
+
+  h1 {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: #fff;
+  }
+
+  .subtitle {
+    color: var(--accent);
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+    letter-spacing: 1px;
+  }
+
+  .container {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 3rem 1.5rem;
+    flex: 1;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 2rem;
+  }
+
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    transition: transform 0.2s, border-color 0.2s;
+  }
+
+  .card:hover {
+    transform: translateY(-4px);
+    border-color: var(--accent);
+  }
+
+  .card-img-container {
+    height: 300px;
+    background-color: #121822;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    position: relative;
+  }
+
+  .card-img-container::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: radial-gradient(circle, rgba(255,255,255,0.05) 0%, transparent 60%);
+  }
+
+  /* CSS Mockups for Merchandise */
+  .mockup-item {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Cap Mockup */
+  .mockup-cap {
+    width: 180px;
+    height: 140px;
+    background: #1a1a1a;
+    border-radius: 100px 100px 20px 20px;
+    position: relative;
+    box-shadow: inset -10px -10px 30px rgba(0,0,0,0.5), 0 20px 30px rgba(0,0,0,0.3);
+  }
+  .mockup-cap::after {
+    content: '';
+    position: absolute;
+    bottom: -15px;
+    left: -20px;
+    right: -20px;
+    height: 40px;
+    background: #151515;
+    border-radius: 50%;
+    box-shadow: inset 0 5px 10px rgba(0,0,0,0.5);
+    z-index: -1;
+  }
+  .cap-logo {
+    width: 60px;
+    height: 60px;
+    background-image: var(--badge);
+    background-size: contain;
+    background-repeat: no-repeat;
+    position: absolute;
+    top: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  /* Shirt Mockup */
+  .mockup-shirt {
+    width: 200px;
+    height: 220px;
+    background: #101c2b; /* Deep blue */
+    border-radius: 20px 20px 10px 10px;
+    position: relative;
+    box-shadow: inset -10px -10px 40px rgba(0,0,0,0.6), 0 20px 30px rgba(0,0,0,0.3);
+  }
+  .mockup-shirt::before { /* Collar */
+    content: '';
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 70px;
+    height: 30px;
+    background: #0d1724;
+    border-radius: 50%;
+  }
+  .mockup-shirt::after { /* Sleeves */
+     content: '';
+     position: absolute;
+     top: 10px;
+     left: -20px;
+     right: -20px;
+     height: 70px;
+     background: #101c2b;
+     border-radius: 20px;
+     z-index: -1;
+     box-shadow: inset -5px -5px 15px rgba(0,0,0,0.4);
+  }
+  .shirt-logo {
+    width: 70px;
+    height: 70px;
+    background-image: var(--badge);
+    background-size: contain;
+    background-repeat: no-repeat;
+    position: absolute;
+    top: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  /* Tumbler Mockup */
+  .mockup-tumbler {
+    width: 100px;
+    height: 200px;
+    background: linear-gradient(90deg, #111, #333, #111);
+    border-radius: 5px 5px 20px 20px;
+    position: relative;
+    box-shadow: 0 20px 30px rgba(0,0,0,0.5);
+  }
+  .mockup-tumbler::before { /* Lid */
+      content: '';
+      position: absolute;
+      top: -15px;
+      left: -5px;
+      right: -5px;
+      height: 20px;
+      background: #0a0a0a;
+      border-radius: 5px 5px 0 0;
+      border-top: 2px solid #555;
+  }
+  .tumbler-logo {
+    width: 60px;
+    height: 60px;
+    background-image: var(--badge);
+    background-size: contain;
+    background-repeat: no-repeat;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  /* Key Fob Mockup */
+  .mockup-keyfob {
+    width: 90px;
+    height: 130px;
+    background: #1a1a1a;
+    border-radius: 45px 45px 5px 5px;
+    position: relative;
+    box-shadow: inset 0 0 10px #000, 0 10px 20px rgba(0,0,0,0.5);
+    border: 1px solid #333;
+  }
+  .mockup-keyfob::before { /* Ring */
+    content: '';
+    position: absolute;
+    top: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 40px;
+    border: 6px solid #ccc;
+    border-radius: 50%;
+    background: transparent;
+    box-shadow: inset 0 2px 5px rgba(0,0,0,0.5), 0 2px 5px rgba(0,0,0,0.5);
+  }
+  .keyfob-logo {
+    width: 70px;
+    height: 70px;
+    background-image: var(--badge);
+    background-size: contain;
+    background-repeat: no-repeat;
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+
+  .card-content {
+    padding: 1.5rem;
+  }
+
+  .card h3 {
+    font-size: 1.25rem;
+    margin-bottom: 0.5rem;
+    color: #fff;
+  }
+
+  .card p {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 1.5rem;
+  }
+
+  .card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid var(--border);
+    padding-top: 1rem;
+    font-size: 0.9rem;
+  }
+
+  .price {
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  footer {
+    text-align: center;
+    padding: 2rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Audi A3 Aristocrats</h1>
+  <div class="subtitle">EST. 2026 • BOTSWANA • EXCLUSIVE MERCHANDISE</div>
+</header>
+
+<div class="container">
+  <div class="grid">
+
+    <!-- Item 1: Polo Shirt -->
+    <div class="card">
+      <div class="card-img-container">
+        <div class="mockup-item mockup-shirt">
+            <div class="shirt-logo"></div>
+        </div>
+      </div>
+      <div class="card-content">
+        <h3>Club Polo Shirt</h3>
+        <p>Premium navy blue polo featuring the official Aristocrats club badge embroidered on the left chest. Breathable cotton blend ideal for meets and technical days.</p>
+        <div class="card-footer">
+          <span class="price">P 350.00</span>
+          <span>PRE-ORDER</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Item 2: Baseball Cap -->
+    <div class="card">
+      <div class="card-img-container">
+         <div class="mockup-item mockup-cap">
+            <div class="cap-logo"></div>
+        </div>
+      </div>
+      <div class="card-content">
+        <h3>Enthusiast Cap</h3>
+        <p>Structured 6-panel cap in deep charcoal grey. The club badge is proudly centered, woven for durability. Adjustable snapback closure for a perfect fit.</p>
+        <div class="card-footer">
+          <span class="price">P 200.00</span>
+          <span>IN STOCK</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Item 3: Travel Tumbler -->
+    <div class="card">
+      <div class="card-img-container">
+         <div class="mockup-item mockup-tumbler">
+            <div class="tumbler-logo"></div>
+        </div>
+      </div>
+      <div class="card-content">
+        <h3>Convoy Tumbler</h3>
+        <p>Matte black insulated stainless steel tumbler. Keeps your coffee hot on those early morning breakfast runs out of Gabs. Laser-etched logo.</p>
+        <div class="card-footer">
+          <span class="price">P 250.00</span>
+          <span>LIMITED EDITION</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Item 4: Key Fob -->
+    <div class="card">
+      <div class="card-img-container">
+         <div class="mockup-item mockup-keyfob">
+            <div class="keyfob-logo"></div>
+        </div>
+      </div>
+      <div class="card-content">
+        <h3>Leather Key Fob</h3>
+        <p>Heavy-duty genuine leather keyring featuring a recessed metallic enamel badge. A subtle but premium way to represent the club every time you start your A3.</p>
+        <div class="card-footer">
+          <span class="price">P 150.00</span>
+          <span>IN STOCK</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<footer>
+  © 2026 Audi A3 Aristocrats Botswana. Unofficial Enthusiast Club.
+</footer>
+
+</body>
+</html>
