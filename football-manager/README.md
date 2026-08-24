@@ -15,12 +15,18 @@ an icon and a service worker that caches everything. In Chrome on Android use
 *Install app* (or *Add to Home screen*); it gets its own icon, opens full screen
 and runs with no connection. On iOS, Share → *Add to Home Screen*.
 
-**An APK.** `android/` is a WebView wrapper around exactly these files: one
-activity, no libraries, no Kotlin, and the game copied in as assets by Gradle.
-The GitHub Actions workflow `.github/workflows/android-apk.yml` builds it on
-every push and uploads `kalahari-manager.apk` as a run artifact — download it
-from the run's Artifacts section and sideload it (Android will ask you to allow
-installs from that source). Locally, with the Android SDK installed:
+**An APK.** Download it on the phone and open it:
+
+<https://github.com/barumpofu-art/ruza-app/releases/download/kalahari-manager-latest/kalahari-manager.apk>
+
+`android/` is a WebView wrapper around exactly these files: one activity, no
+libraries, no Kotlin, and the game copied in as assets by Gradle. The GitHub
+Actions workflow `.github/workflows/android-apk.yml` builds it on every push,
+checks the packaged APK really contains the game, uploads it as a run artifact
+and re-attaches it to the rolling `kalahari-manager-latest` pre-release, so the
+link above is always the newest build. It is debug-signed, so Android will ask
+you to allow installs from wherever you downloaded it. Locally, with the
+Android SDK installed:
 
 ```sh
 cd android && ./gradlew assembleDebug     # app/build/outputs/apk/debug/
