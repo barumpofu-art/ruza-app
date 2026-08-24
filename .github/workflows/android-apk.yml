@@ -9,6 +9,9 @@ on:
       - '.github/workflows/android-apk.yml'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -38,9 +41,12 @@ jobs:
           # The game has to actually be in there, along with a compiled activity.
           for entry in AndroidManifest.xml classes.dex assets/index.html assets/styles.css \
                        assets/js/main.js assets/js/engine.js assets/js/state.js assets/sw.js \
-                       assets/manifest.webmanifest res/mipmap-xxxhdpi/ic_launcher.png; do
+                       assets/manifest.webmanifest; do
             unzip -Z1 "$APK" | grep -qx "$entry" || { echo "missing from APK: $entry"; exit 1; }
           done
+          # Density folders come out of AGP with a -v4 qualifier.
+          unzip -Z1 "$APK" | grep -qE '^res/mipmap-[a-z]+(-v[0-9]+)?/ic_launcher\.png$' \
+            || { echo "missing from APK: a launcher icon"; exit 1; }
           echo "assets in APK: $(unzip -Z1 "$APK" | grep -c '^assets/')"
           echo "apk size: $(du -h "$APK" | cut -f1)"
 
@@ -57,3 +63,29 @@ jobs:
           name: kalahari-manager-apk
           path: out/kalahari-manager.apk
           if-no-files-found: error
+
+      # A release asset is a plain one-tap download on a phone, unlike the
+      # zipped, sign-in-only run artifact above. The tag is rolling: the same
+      # URL always points at the newest build.
+      - name: Publish the APK as a release
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/claude/football-manager-mobile-game-gtn8do'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: kalahari-manager-latest
+        run: |
+          set -euo pipefail
+          NOTES="Kalahari Manager — debug-signed build of football-manager/ at ${GITHUB_SHA::7}.
+
+          Install on Android: download the APK, open it, and allow installs from your browser when asked.
+          It needs no account and makes no network requests; your career is saved on the device."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" out/kalahari-manager.apk --clobber
+            gh release edit "$TAG" --notes "$NOTES" --target "$GITHUB_SHA"
+          else
+            gh release create "$TAG" out/kalahari-manager.apk \
+              --title "Kalahari Manager (latest build)" \
+              --notes "$NOTES" \
+              --prerelease \
+              --target "$GITHUB_SHA"
+          fi
+          gh release view "$TAG" --json assets --jq '.assets[] | "\(.name) \(.size) bytes \(.url)"'
