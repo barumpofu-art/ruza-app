@@ -3,8 +3,25 @@
 A football management game that runs in a phone browser. No install, no account,
 no network calls — the whole game is static files and a save in `localStorage`.
 
-Play it by opening `index.html` from a web server (ES modules will not load from
-`file://`).
+## Getting it onto a phone
+
+**One file, no server.** `kalahari-manager.html` is the whole game — markup,
+styling and code — in a single 157kb file. Save it to a phone's Downloads and
+open it; it plays offline and keeps your save in the browser. Rebuild it after
+changing anything with `node build/build-offline.mjs`.
+
+**Install it like an app.** Served over http(s), the game is a PWA: a manifest,
+an icon and a service worker that caches everything. In Chrome on Android use
+*Install app* (or *Add to Home screen*); it gets its own icon, opens full screen
+and runs with no connection. On iOS, Share → *Add to Home Screen*.
+
+**A real APK** would be a WebView wrapper around these same files. It needs the
+Android SDK, which this repository does not carry — `pwabuilder.com` will
+package the installed PWA URL into a signed APK, or a CI job with the SDK can
+build a wrapper project.
+
+**Running it locally** needs a web server, because ES modules will not load from
+`file://` (the single-file build above is the exception — it has no imports):
 
 ```sh
 npx http-server -p 8899 -c-1 .    # then open http://localhost:8899/
@@ -39,6 +56,9 @@ are replaced by promoted clubs, and the board sets a new target.
 
 ```
 index.html          app shell
+manifest.webmanifest, sw.js, icon-*.png   installable, offline-capable PWA
+kalahari-manager.html                     single-file offline build
+build/              offline bundle and icon generation
 styles.css          all styling, dark and phone-first
 js/rng.js           seeded random number generator
 js/data.js          clubs and name pools
@@ -61,6 +81,7 @@ js/main.js          bootstrap, routing, actions
 node test/engine-test.mjs 1000   # scoreline, discipline and fatigue distributions
 node test/season-test.mjs 5      # plays whole seasons and checks league integrity
 node test/ui-smoke.mjs           # drives the real UI in Chromium (needs a server on :8899)
+node test/offline-test.mjs       # opens the single-file build over file:// and plays a match
 ```
 
 `engine-test` is a calibration check rather than a pass/fail test: it should

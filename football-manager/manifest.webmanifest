@@ -1,0 +1,18 @@
+{
+  "name": "Kalahari Manager",
+  "short_name": "Kalahari",
+  "description": "A football management game: pick the side, set the tactics, live the ninety minutes.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "id": "/football-manager/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0d1310",
+  "theme_color": "#0d1310",
+  "categories": ["games", "sports"],
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

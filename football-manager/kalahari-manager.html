@@ -1,0 +1,3996 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#0d1310">
+<meta name="description" content="Kalahari Manager — a pocket-sized football management game. Pick the side, set the tactics, live the ninety minutes.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Kalahari Manager</title>
+<!-- Single-file offline build. Open it in any browser; progress is saved in the browser. -->
+<style>
+/* Kalahari Manager — phone-first, dark, no external assets. */
+
+:root {
+  --bg: #0d1310;
+  --bg-raised: #151e19;
+  --panel: #18221c;
+  --panel-2: #1e2a23;
+  --line: #26342c;
+  --line-soft: #202c25;
+  --text: #e8efe9;
+  --text-dim: #94a89b;
+  --text-faint: #6c8073;
+  --gold: #f2c14e;
+  --gold-dim: #b08c2c;
+  --pitch: #2f9e6b;
+  --pitch-dark: #1c5f41;
+  --danger: #e2685f;
+  --warn: #e0a03c;
+  --good: #4fc98a;
+  --radius: 14px;
+  --radius-sm: 9px;
+  --tap: 44px;
+  --nav-h: 60px;
+  --pad: 14px;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.45;
+  overscroll-behavior-y: none;
+}
+
+body { -webkit-font-smoothing: antialiased; }
+
+button, input, select { font: inherit; color: inherit; }
+
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  background: var(--bg);
+  position: relative;
+}
+
+/* Top bar ------------------------------------------------------------- */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  padding: calc(env(safe-area-inset-top, 0px) + 10px) var(--pad) 10px;
+  background: linear-gradient(180deg, #101913 0%, #0f1712 100%);
+  border-bottom: 1px solid var(--line);
+}
+
+.topbar-row { display: flex; align-items: center; gap: 10px; }
+.topbar-club { min-width: 0; flex: 1; }
+.topbar-name { font-weight: 700; font-size: 1.02rem; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topbar-sub { font-size: .76rem; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topbar-cash { text-align: right; font-variant-numeric: tabular-nums; }
+.topbar-cash strong { display: block; font-size: .95rem; color: var(--gold); }
+.topbar-cash span { font-size: .7rem; color: var(--text-faint); }
+
+/* Crest ---------------------------------------------------------------- */
+
+.crest { width: 34px; height: 38px; flex: none; }
+.crest.sm { width: 20px; height: 23px; }
+.crest.lg { width: 54px; height: 61px; }
+
+/* View ----------------------------------------------------------------- */
+
+.view {
+  flex: 1;
+  padding: var(--pad) var(--pad) calc(var(--nav-h) + env(safe-area-inset-bottom, 0px) + 28px);
+  outline: none;
+}
+
+.section-title {
+  font-size: .74rem;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  color: var(--text-faint);
+  margin: 20px 2px 8px;
+  font-weight: 700;
+}
+.section-title:first-child { margin-top: 4px; }
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.card.tight { padding: 0; overflow: hidden; }
+.card.flat { background: var(--bg-raised); }
+
+/* Buttons -------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: var(--tap);
+  padding: 0 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  font-weight: 600;
+  font-size: .93rem;
+  cursor: pointer;
+  transition: transform .08s ease, opacity .15s ease;
+}
+.btn:active { transform: scale(.98); }
+.btn[disabled] { opacity: .4; cursor: default; }
+.btn.primary { background: var(--gold); border-color: var(--gold); color: #14180f; }
+.btn.wide { width: 100%; }
+.btn.big { min-height: 54px; font-size: 1.05rem; }
+.btn.ghost { background: transparent; }
+.btn.danger { color: var(--danger); border-color: #4a2b28; }
+.btn-row { display: flex; gap: 8px; }
+.btn-row > * { flex: 1; }
+
+/* Segmented controls ---------------------------------------------------- */
+
+.seg { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip {
+  min-height: 38px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+  color: var(--text-dim);
+  font-size: .85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.chip[aria-pressed="true"] { background: var(--gold); border-color: var(--gold); color: #14180f; }
+.chip.sm { min-height: 32px; font-size: .78rem; padding: 4px 10px; }
+
+/* Fixture / result ------------------------------------------------------ */
+
+.fixture {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+}
+.fixture .side { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.fixture .side.away { flex-direction: row-reverse; text-align: right; }
+.fixture .side span { font-size: .92rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fixture .score {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  font-size: 1.15rem;
+  padding: 2px 10px;
+  border-radius: 8px;
+  background: var(--bg-raised);
+  min-width: 62px;
+  text-align: center;
+}
+.fixture .score.small { font-size: .82rem; font-weight: 700; padding: 3px 8px; min-width: 52px; }
+
+.kv { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line-soft); font-size: .9rem; }
+.kv:last-child { border-bottom: 0; }
+.kv span { color: var(--text-dim); }
+.kv strong { font-variant-numeric: tabular-nums; font-weight: 700; }
+
+.pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  background: var(--panel-2);
+  color: var(--text-dim);
+}
+.pill.gold { background: rgba(242,193,78,.16); color: var(--gold); }
+.pill.good { background: rgba(79,201,138,.15); color: var(--good); }
+.pill.bad { background: rgba(226,104,95,.15); color: var(--danger); }
+.pill.warn { background: rgba(224,160,60,.15); color: var(--warn); }
+
+.form-run { display: inline-flex; gap: 3px; }
+.form-run i {
+  font-style: normal;
+  width: 17px; height: 17px;
+  border-radius: 5px;
+  font-size: .62rem;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+  background: var(--panel-2);
+  color: var(--text-dim);
+}
+.form-run i.W { background: rgba(79,201,138,.22); color: var(--good); }
+.form-run i.D { background: rgba(148,168,155,.18); color: var(--text-dim); }
+.form-run i.L { background: rgba(226,104,95,.2); color: var(--danger); }
+
+/* Meters ---------------------------------------------------------------- */
+
+.meter { height: 6px; border-radius: 4px; background: var(--panel-2); overflow: hidden; }
+.meter > i { display: block; height: 100%; background: var(--pitch); border-radius: 4px; }
+.meter.gold > i { background: var(--gold); }
+.meter.thin { height: 4px; }
+
+/* Tables ---------------------------------------------------------------- */
+
+table.grid { width: 100%; border-collapse: collapse; font-size: .86rem; }
+table.grid th {
+  text-align: right;
+  font-size: .66rem;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-faint);
+  font-weight: 700;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--line);
+}
+table.grid th:nth-child(2) { text-align: left; }
+table.grid td { padding: 9px 4px; border-bottom: 1px solid var(--line-soft); text-align: right; font-variant-numeric: tabular-nums; }
+table.grid td:nth-child(2) { text-align: left; }
+table.grid tr:last-child td { border-bottom: 0; }
+table.grid tr.me td { background: rgba(242,193,78,.08); }
+table.grid tr.me td:nth-child(2) { font-weight: 700; color: var(--gold); }
+table.grid tr.up td:first-child { color: var(--good); }
+table.grid tr.down td:first-child { color: var(--danger); }
+.team-cell { display: flex; align-items: center; gap: 7px; }
+.team-cell span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 128px; }
+
+/* Player rows ----------------------------------------------------------- */
+
+.plist { display: flex; flex-direction: column; }
+.prow {
+  display: grid;
+  grid-template-columns: 30px 1fr auto auto;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line-soft);
+  background: none;
+  border-left: 0; border-right: 0; border-top: 0;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+.prow:last-child { border-bottom: 0; }
+.prow:active { background: var(--panel-2); }
+.prow .pos {
+  font-size: .64rem; font-weight: 800; letter-spacing: .03em;
+  padding: 3px 0; border-radius: 5px; text-align: center;
+  background: var(--panel-2); color: var(--text-dim);
+}
+.prow .pos.GK { color: #e0a03c; }
+.prow .pos.DF { color: #6fa8e0; }
+.prow .pos.MF { color: #4fc98a; }
+.prow .pos.FW { color: #e2685f; }
+.prow .who { min-width: 0; }
+.prow .who b { display: block; font-size: .93rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.prow .who small { color: var(--text-faint); font-size: .72rem; display: flex; gap: 6px; align-items: center; }
+.prow .cond { width: 42px; }
+.prow .rating {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  font-size: .95rem;
+  min-width: 30px;
+  text-align: right;
+}
+
+/* Pitch ----------------------------------------------------------------- */
+
+.pitch {
+  position: relative;
+  border-radius: var(--radius);
+  background:
+    repeating-linear-gradient(180deg, #1f6b4b 0 9%, #1b6044 9% 18%),
+    #1b6044;
+  border: 1px solid #235c44;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+.pitch::before, .pitch::after {
+  content: "";
+  position: absolute;
+  left: 22%;
+  width: 56%;
+  height: 13%;
+  border: 2px solid rgba(255,255,255,.18);
+}
+.pitch::before { top: -1px; border-top: 0; }
+.pitch::after { bottom: -1px; border-bottom: 0; }
+.pitch .halfway {
+  position: absolute; left: 0; right: 0; top: 50%;
+  border-top: 2px solid rgba(255,255,255,.16);
+}
+.pitch .circle {
+  position: absolute; left: 50%; top: 50%;
+  width: 26%; aspect-ratio: 1; transform: translate(-50%, -50%);
+  border: 2px solid rgba(255,255,255,.16); border-radius: 50%;
+}
+
+.slot {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 62px;
+  text-align: center;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  color: var(--text);
+}
+.slot .shirt {
+  width: 34px; height: 34px;
+  margin: 0 auto 3px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  font-size: .74rem;
+  font-weight: 800;
+  color: #10160f;
+  background: var(--gold);
+  border: 2px solid rgba(0,0,0,.25);
+  box-shadow: 0 2px 6px rgba(0,0,0,.35);
+  font-variant-numeric: tabular-nums;
+}
+.slot .nm {
+  display: block;
+  font-size: .63rem;
+  font-weight: 700;
+  text-shadow: 0 1px 3px rgba(0,0,0,.8);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.slot .lbl { display: block; font-size: .55rem; color: rgba(255,255,255,.65); letter-spacing: .05em; }
+.slot[data-selected="true"] .shirt { outline: 3px solid #fff; }
+.slot.unavailable .shirt { background: var(--danger); color: #fff; }
+.slot.tired .shirt { background: var(--warn); }
+
+.benchstrip { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 8px; scrollbar-width: none; }
+.benchstrip::-webkit-scrollbar { display: none; }
+.benchchip {
+  flex: none;
+  min-width: 84px;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+  text-align: center;
+  cursor: pointer;
+}
+.benchchip b { display: block; font-size: .74rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.benchchip small { color: var(--text-faint); font-size: .68rem; }
+.benchchip[data-selected="true"] { border-color: var(--gold); background: rgba(242,193,78,.12); }
+
+/* News ------------------------------------------------------------------ */
+
+.news-item { padding: 12px 14px; border-bottom: 1px solid var(--line-soft); cursor: pointer; }
+.news-item:last-child { border-bottom: 0; }
+.news-item b { display: block; font-size: .9rem; }
+.news-item p { margin: 4px 0 0; font-size: .82rem; color: var(--text-dim); }
+.news-item small { color: var(--text-faint); font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; }
+.news-item.unread { background: rgba(242,193,78,.05); }
+.news-item.unread b::before { content: "•"; color: var(--gold); margin-right: 6px; }
+
+/* Bottom nav ------------------------------------------------------------ */
+
+.tabs {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 560px;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  background: rgba(13,19,16,.94);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  z-index: 30;
+}
+.tab {
+  border: 0;
+  background: none;
+  color: var(--text-faint);
+  height: var(--nav-h);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  font-size: .64rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  position: relative;
+}
+.tab svg { width: 21px; height: 21px; fill: currentColor; }
+.tab[aria-current="page"] { color: var(--gold); }
+.tab .badge {
+  position: absolute;
+  top: 8px; right: 50%;
+  margin-right: -22px;
+  min-width: 16px; height: 16px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: .6rem;
+  display: grid; place-items: center;
+  padding: 0 4px;
+}
+
+/* Sheets / modals -------------------------------------------------------- */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(4,8,6,.72);
+  z-index: 70;
+  backdrop-filter: blur(2px);
+}
+.sheet {
+  position: fixed;
+  z-index: 80;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 560px;
+  max-height: 86vh;
+  overflow-y: auto;
+  background: var(--bg-raised);
+  border-radius: 18px 18px 0 0;
+  border: 1px solid var(--line);
+  border-bottom: 0;
+  padding: 8px var(--pad) calc(env(safe-area-inset-bottom, 0px) + 18px);
+  animation: rise .18s ease-out;
+}
+@keyframes rise { from { transform: translate(-50%, 14px); opacity: .4; } to { transform: translate(-50%, 0); opacity: 1; } }
+.sheet-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 34px; height: 34px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text-dim);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 2;
+}
+.sheet { position: fixed; }
+.sheet .grab { width: 38px; height: 4px; border-radius: 4px; background: var(--line); margin: 6px auto 12px; }
+.sheet h2 { margin: 0 0 2px; font-size: 1.15rem; }
+.sheet .sub { color: var(--text-dim); font-size: .84rem; margin: 0 0 14px; }
+
+.attr-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 16px; margin: 6px 0 14px; }
+.attr { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; align-items: center; font-size: .82rem; }
+.attr span { color: var(--text-dim); }
+.attr b { font-variant-numeric: tabular-nums; }
+.attr .meter { grid-column: 1 / -1; }
+
+/* Match view ------------------------------------------------------------- */
+
+.match {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  max-width: 560px;
+  margin: 0 auto;
+}
+.match-head {
+  padding: calc(env(safe-area-inset-top, 0px) + 12px) var(--pad) 12px;
+  background: linear-gradient(180deg, #16211a, #101913);
+  border-bottom: 1px solid var(--line);
+}
+.scoreline { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; }
+.scoreline .club { text-align: center; }
+.scoreline .club b { display: block; font-size: .72rem; margin-top: 4px; line-height: 1.25; }
+.scoreline .goals {
+  font-size: 2.4rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.02em;
+  text-align: center;
+  line-height: 1.05;
+}
+.scoreline .clock { font-size: .78rem; color: var(--gold); font-weight: 700; text-align: center; }
+.matchstats { display: flex; gap: 10px; margin-top: 12px; font-size: .7rem; color: var(--text-dim); }
+.matchstats > div { flex: 1; }
+.matchstats .bar { height: 4px; border-radius: 3px; background: var(--panel-2); overflow: hidden; margin-top: 3px; display: flex; }
+.matchstats .bar i { display: block; height: 100%; }
+.matchstats .bar i:first-child { background: var(--gold); }
+.matchstats .bar i:last-child { background: var(--text-faint); }
+
+.feed { flex: 1; overflow-y: auto; padding: 10px var(--pad) 14px; -webkit-overflow-scrolling: touch; }
+.ev { display: grid; grid-template-columns: 38px 1fr; gap: 10px; padding: 7px 0; font-size: .87rem; animation: fade .2s ease-out; }
+@keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.ev .min { color: var(--text-faint); font-size: .74rem; font-variant-numeric: tabular-nums; padding-top: 2px; }
+.ev.goal { font-weight: 700; color: var(--gold); }
+.ev.red { color: var(--danger); font-weight: 600; }
+.ev.yellow { color: var(--warn); }
+.ev.injury { color: var(--danger); }
+.ev.sub { color: var(--text-dim); }
+.ev.note, .ev.chance { color: var(--text-dim); }
+.ev.halftime, .ev.fulltime, .ev.kickoff { color: var(--text); font-weight: 700; border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); padding: 10px 0; margin: 6px 0; }
+
+.match-controls {
+  display: flex;
+  gap: 8px;
+  padding: 10px var(--pad) calc(env(safe-area-inset-bottom, 0px) + 12px);
+  border-top: 1px solid var(--line);
+  background: var(--bg-raised);
+}
+.match-controls .btn { flex: 1; padding: 0 8px; font-size: .85rem; }
+
+/* Start screen ------------------------------------------------------------ */
+
+.start { padding: calc(env(safe-area-inset-top, 0px) + 26px) var(--pad) 40px; max-width: 560px; margin: 0 auto; }
+.start h1 { font-size: 2rem; margin: 0 0 4px; letter-spacing: -.02em; }
+.start h1 span { color: var(--gold); }
+.start .lede { color: var(--text-dim); margin: 0 0 22px; font-size: .95rem; }
+.field { margin-bottom: 16px; }
+.field label { display: block; font-size: .74rem; text-transform: uppercase; letter-spacing: .08em; color: var(--text-faint); margin-bottom: 6px; font-weight: 700; }
+.field input {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+}
+.clubpick { display: grid; gap: 8px; }
+.clubopt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+.clubopt[aria-pressed="true"] { border-color: var(--gold); background: rgba(242,193,78,.1); }
+.clubopt .info { flex: 1; min-width: 0; }
+.clubopt .info b { display: block; font-size: .93rem; }
+.clubopt .info small { color: var(--text-faint); font-size: .74rem; }
+
+/* Toast -------------------------------------------------------------------- */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px) + 16px);
+  transform: translateX(-50%);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-size: .85rem;
+  font-weight: 600;
+  z-index: 90;
+  max-width: 88vw;
+  text-align: center;
+  animation: fade .18s ease-out;
+}
+
+.empty { text-align: center; color: var(--text-faint); padding: 26px 10px; font-size: .88rem; }
+.muted { color: var(--text-dim); }
+.tiny { font-size: .74rem; }
+.right { text-align: right; }
+.spread { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.stack { display: flex; flex-direction: column; gap: 10px; }
+.rowwrap { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+hr.sep { border: 0; border-top: 1px solid var(--line-soft); margin: 12px 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+
+</style>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230d1310'/><circle cx='16' cy='16' r='9' fill='%23f2c14e'/><path d='M16 9l3.2 2.3-1.2 3.8h-4L12.8 11.3z' fill='%230d1310'/></svg>">
+</head>
+<body>
+
+<div id="app" class="app" hidden>
+  <header class="topbar" id="topbar"></header>
+  <main class="view" id="view" tabindex="-1"></main>
+  <nav class="tabs" id="tabs" aria-label="Sections"></nav>
+</div>
+
+<div id="overlay" class="overlay" hidden></div>
+<div id="sheet-root"></div>
+<div id="toast" class="toast" hidden></div>
+
+<noscript>
+  <p style="color:#e7ede9;font:16px system-ui;padding:2rem">Kalahari Manager needs JavaScript to run.</p>
+</noscript>
+
+<script>
+(() => {
+  // js/dom.js
+  var $ = (sel, root = document) => root.querySelector(sel);
+  function esc(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  }
+  function setHTML(el, html) {
+    el.innerHTML = html;
+    return el;
+  }
+  var luminance = (hex) => {
+    const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex ?? "");
+    if (!m) return 0.5;
+    const [r, g, b] = [1, 2, 3].map((i) => parseInt(m[i], 16) / 255);
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  var inkOn = (hex) => luminance(hex) > 0.55 ? "#12180f" : "#f4f7f2";
+  function crest(team, cls = "") {
+    const ink = inkOn(team.home);
+    return `<svg class="crest ${cls}" viewBox="0 0 34 38" role="img" aria-label="${esc(team.name)}">
+    <path d="M2 2.5h30v20.2c0 8.4-8.7 12.4-15 15.3-6.3-2.9-15-6.9-15-15.3z" fill="${esc(team.home)}" stroke="rgba(0,0,0,.4)" stroke-width="1"/>
+    <path d="M2 2.5h30v6.4H2z" fill="${esc(team.away)}" opacity=".9"/>
+    <text x="17" y="25" text-anchor="middle" font-size="10.5" font-weight="800" fill="${ink}" font-family="system-ui, sans-serif">${esc(team.abbr)}</text>
+  </svg>`;
+  }
+  function meter(pct, cls = "") {
+    const v = Math.max(0, Math.min(100, Math.round(pct)));
+    return `<div class="meter ${cls}"><i style="width:${v}%"></i></div>`;
+  }
+  function conditionMeter(condition) {
+    const cls = condition >= 80 ? "" : condition >= 55 ? "gold" : "gold";
+    const colour = condition >= 80 ? "var(--good)" : condition >= 55 ? "var(--warn)" : "var(--danger)";
+    const v = Math.max(0, Math.min(100, Math.round(condition)));
+    return `<div class="meter ${cls}"><i style="width:${v}%;background:${colour}"></i></div>`;
+  }
+  function formRun(form) {
+    if (!form || !form.length) return '<span class="tiny muted">\u2014</span>';
+    return `<span class="form-run">${form.map((f) => `<i class="${f}">${f}</i>`).join("")}</span>`;
+  }
+  function ratingBadge(rating) {
+    if (rating == null) return '<span class="muted">\u2014</span>';
+    const colour = rating >= 7.5 ? "var(--good)" : rating >= 6.5 ? "var(--text)" : rating >= 5.8 ? "var(--warn)" : "var(--danger)";
+    return `<span style="color:${colour}">${rating.toFixed(1)}</span>`;
+  }
+  var toastTimer = null;
+  function toast(message) {
+    const el = $("#toast");
+    if (!el) return;
+    el.textContent = message;
+    el.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      el.hidden = true;
+    }, 2400);
+  }
+  var sheetCloser = null;
+  function openSheet(html, onMount) {
+    closeSheet();
+    const root = $("#sheet-root");
+    const overlay = $("#overlay");
+    const sheet = document.createElement("div");
+    sheet.className = "sheet";
+    sheet.setAttribute("role", "dialog");
+    sheet.setAttribute("aria-modal", "true");
+    sheet.innerHTML = `<div class="grab"></div>
+    <button class="sheet-close" data-action="close-sheet" data-sheet-close aria-label="Close">&times;</button>
+    ${html}`;
+    root.appendChild(sheet);
+    overlay.hidden = false;
+    document.body.style.overflow = "hidden";
+    const close = () => closeSheet();
+    const onKey = (e) => {
+      if (e.key === "Escape") closeSheet();
+    };
+    overlay.addEventListener("click", close, { once: true });
+    document.addEventListener("keydown", onKey);
+    sheetCloser = () => {
+      overlay.removeEventListener("click", close);
+      document.removeEventListener("keydown", onKey);
+      sheet.remove();
+      overlay.hidden = true;
+      document.body.style.overflow = "";
+      sheetCloser = null;
+    };
+    onMount?.(sheet);
+    return sheet;
+  }
+  function closeSheet() {
+    sheetCloser?.();
+  }
+
+  // js/data.js
+  var CLUBS = [
+    { id: "gab", name: "Gaborone Thunder", abbr: "GAB", rep: 88, stadium: "Thunderdome", capacity: 24e3, home: "#f2c14e", away: "#151a21" },
+    { id: "fra", name: "Francistown Falcons", abbr: "FRA", rep: 84, stadium: "Falcon Park", capacity: 2e4, home: "#3d7bd6", away: "#ffffff" },
+    { id: "mau", name: "Maun Crocodiles", abbr: "MAU", rep: 76, stadium: "Delta Ground", capacity: 15e3, home: "#2f9e6b", away: "#0f1b16" },
+    { id: "sel", name: "Selebi Steelers", abbr: "SEL", rep: 74, stadium: "The Foundry", capacity: 16e3, home: "#c0562f", away: "#1b1b1b" },
+    { id: "lob", name: "Lobatse Lions", abbr: "LOB", rep: 68, stadium: "Lion Kraal", capacity: 12e3, home: "#d94f4f", away: "#f5f0e6" },
+    { id: "pal", name: "Palapye Pioneers", abbr: "PAL", rep: 64, stadium: "Pioneer Field", capacity: 11e3, home: "#7d5bbe", away: "#ede9f6" },
+    { id: "ser", name: "Serowe Stallions", abbr: "SER", rep: 60, stadium: "The Paddock", capacity: 1e4, home: "#2ba3a3", away: "#12211f" },
+    { id: "moc", name: "Mochudi Meerkats", abbr: "MOC", rep: 56, stadium: "Sentry Hill", capacity: 9e3, home: "#e0873c", away: "#20160e" },
+    { id: "kas", name: "Kasane Rapids", abbr: "KAS", rep: 52, stadium: "Riverside", capacity: 8500, home: "#4bb2e8", away: "#0d2733" },
+    { id: "kan", name: "Kanye Kestrels", abbr: "KAN", rep: 48, stadium: "Hilltop", capacity: 8e3, home: "#9aa63f", away: "#1d2110" },
+    { id: "gha", name: "Ghanzi Dust Devils", abbr: "GHA", rep: 44, stadium: "The Pan", capacity: 7e3, home: "#c9a227", away: "#2a2113" },
+    { id: "tsa", name: "Tsabong Sandstorm", abbr: "TSA", rep: 40, stadium: "Dune Arena", capacity: 6500, home: "#b8804f", away: "#241a12" }
+  ];
+  var PROMOTION_POOL = [
+    { id: "ram", name: "Ramotswa Rangers", abbr: "RAM", rep: 42, stadium: "Border Park", capacity: 6e3, home: "#6f8fbf", away: "#12181f" },
+    { id: "jwa", name: "Jwaneng Diggers", abbr: "JWA", rep: 46, stadium: "Pit Head", capacity: 9e3, home: "#d8d2c4", away: "#1c2733" },
+    { id: "shk", name: "Shakawe Sharks", abbr: "SHK", rep: 41, stadium: "Panhandle", capacity: 5500, home: "#2c6e91", away: "#0e1a22" },
+    { id: "mah", name: "Mahalapye Marabou", abbr: "MAH", rep: 43, stadium: "Rail Yard", capacity: 7e3, home: "#8e8b84", away: "#241f1a" },
+    { id: "gum", name: "Gumare Gazelles", abbr: "GUM", rep: 40, stadium: "Reed Ground", capacity: 5e3, home: "#c96f8c", away: "#1a1013" },
+    { id: "boc", name: "Bobonong Cheetahs", abbr: "BOC", rep: 44, stadium: "Hillside", capacity: 6500, home: "#e2b93b", away: "#1f1a0d" }
+  ];
+  var FIRST_NAMES = [
+    "Thabo",
+    "Kagiso",
+    "Mpho",
+    "Tebogo",
+    "Kabelo",
+    "Lesego",
+    "Onkabetse",
+    "Katlego",
+    "Gaone",
+    "Tumelo",
+    "Oratile",
+    "Pako",
+    "Segolame",
+    "Thato",
+    "Mothusi",
+    "Keabetswe",
+    "Bakang",
+    "Motheo",
+    "Gofaone",
+    "Karabo",
+    "Neo",
+    "Otsile",
+    "Reneilwe",
+    "Tshepo",
+    "Phenyo",
+    "Goitseone",
+    "Modiri",
+    "Obonye",
+    "Tefo",
+    "Mogomotsi",
+    "Baitshepi",
+    "Gaolatlhe",
+    "Kutlwano",
+    "Larona",
+    "Ontiretse",
+    "Kealeboga",
+    "Boemo",
+    "Tshiamo",
+    "Lentswe",
+    "Odirile",
+    "Mmoloki",
+    "Ofentse",
+    "Sekgabo",
+    "Thero",
+    "Wame",
+    "Yaone"
+  ];
+  var SURNAMES = [
+    "Molefe",
+    "Mogotsi",
+    "Sebego",
+    "Motlhabane",
+    "Ditshupo",
+    "Seleka",
+    "Mokgwathi",
+    "Tshukudu",
+    "Baruti",
+    "Modise",
+    "Mmusi",
+    "Segokgo",
+    "Motshegwa",
+    "Rakgomo",
+    "Setlhare",
+    "Motswagole",
+    "Moremi",
+    "Letsholo",
+    "Mmolotsi",
+    "Tladi",
+    "Segale",
+    "Mothibi",
+    "Selepe",
+    "Ntsimane",
+    "Kebonang",
+    "Marumo",
+    "Gabaake",
+    "Pilane",
+    "Serema",
+    "Motshabi",
+    "Kgafela",
+    "Bogatsu",
+    "Ramotswe",
+    "Ketlogetswe",
+    "Onalenna",
+    "Tautona",
+    "Mabutho",
+    "Kgoroba",
+    "Sechele",
+    "Masilo",
+    "Phuthego",
+    "Ranko"
+  ];
+  var IMPORT_NAMES = [
+    ["Kwesi", "Mensah"],
+    ["Ibrahim", "Diallo"],
+    ["Marcos", "Vieira"],
+    ["Tendai", "Chikore"],
+    ["Samuel", "Okonkwo"],
+    ["Amadou", "Traore"],
+    ["Rafael", "Pinto"],
+    ["Blessing", "Moyo"],
+    ["Youssef", "Belhadj"],
+    ["Danilo", "Rocha"],
+    ["Emeka", "Nwosu"],
+    ["Farai", "Mutasa"],
+    ["Joseph", "Kimani"],
+    ["Lucas", "Mbeki"],
+    ["Omar", "Sissoko"],
+    ["Paulo", "Andrade"]
+  ];
+
+  // js/rng.js
+  function makeRng(seed = Date.now()) {
+    let state = seed >>> 0;
+    function next() {
+      state = state + 1831565813 >>> 0;
+      let t = state;
+      t = Math.imul(t ^ t >>> 15, t | 1);
+      t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    }
+    return {
+      next,
+      get state() {
+        return state;
+      },
+      set state(v) {
+        state = v >>> 0;
+      },
+      // float in [min, max)
+      range(min, max) {
+        return min + next() * (max - min);
+      },
+      // integer in [min, max] inclusive
+      int(min, max) {
+        return Math.floor(min + next() * (max - min + 1));
+      },
+      chance(p) {
+        return next() < p;
+      },
+      pick(arr) {
+        return arr[Math.floor(next() * arr.length)];
+      },
+      // Bell-shaped draw, clamped to +-3 sd. Used for player attributes.
+      gauss(mean, sd) {
+        const u = Math.max(next(), 1e-9);
+        const v = next();
+        const z = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+        return mean + sd * Math.max(-3, Math.min(3, z));
+      },
+      shuffle(arr) {
+        const out = arr.slice();
+        for (let i = out.length - 1; i > 0; i--) {
+          const j = Math.floor(next() * (i + 1));
+          [out[i], out[j]] = [out[j], out[i]];
+        }
+        return out;
+      },
+      // items: array, weightOf: item => positive number
+      weighted(items, weightOf) {
+        let total = 0;
+        for (const it of items) total += Math.max(0, weightOf(it));
+        if (total <= 0) return items[Math.floor(next() * items.length)];
+        let r = next() * total;
+        for (const it of items) {
+          r -= Math.max(0, weightOf(it));
+          if (r <= 0) return it;
+        }
+        return items[items.length - 1];
+      }
+    };
+  }
+  var clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+  // js/players.js
+  var WEIGHTS = {
+    GK: { gk: 0.62, phy: 0.16, pas: 0.1, pac: 0.06, def: 0.06, sht: 0 },
+    DF: { def: 0.44, phy: 0.24, pac: 0.14, pas: 0.14, sht: 0.04, gk: 0 },
+    MF: { pas: 0.38, def: 0.18, sht: 0.16, phy: 0.16, pac: 0.12, gk: 0 },
+    FW: { sht: 0.44, pac: 0.24, phy: 0.14, pas: 0.14, def: 0.04, gk: 0 }
+  };
+  var PROFILE = {
+    GK: { gk: 1, def: 0.55, pas: 0.7, sht: 0.3, pac: 0.6, phy: 0.9 },
+    DF: { gk: 0.2, def: 1, pas: 0.78, sht: 0.5, pac: 0.82, phy: 0.95 },
+    MF: { gk: 0.2, def: 0.8, pas: 1, sht: 0.8, pac: 0.85, phy: 0.85 },
+    FW: { gk: 0.2, def: 0.52, pas: 0.8, sht: 1, pac: 0.98, phy: 0.85 }
+  };
+  var nextId = 1;
+  function resetPlayerIds(n = 1) {
+    nextId = n;
+  }
+  function peekPlayerId() {
+    return nextId;
+  }
+  function ability(player) {
+    const w = WEIGHTS[player.pos];
+    let total = 0;
+    for (const key of Object.keys(w)) total += w[key] * player.att[key];
+    return Math.round(total);
+  }
+  function marketValue(player) {
+    const a = ability(player);
+    const base = Math.pow(Math.max(0, a - 34) / 10, 3.1) * 42e3 + 15e3;
+    const ageCurve = player.age <= 20 ? 1.28 : player.age <= 23 ? 1.34 : player.age <= 27 ? 1.15 : player.age <= 30 ? 0.86 : player.age <= 33 ? 0.52 : 0.24;
+    const potentialBonus = 1 + clamp(player.potential - a, 0, 25) * 0.014;
+    return Math.round(base * ageCurve * potentialBonus / 5e3) * 5e3;
+  }
+  function wageFor(player) {
+    const a = ability(player);
+    return Math.round((280 + Math.pow(Math.max(0, a - 30), 2.05) * 5.2) / 50) * 50;
+  }
+  function makeName(rng) {
+    if (rng.chance(0.16)) {
+      const [f, s] = rng.pick(IMPORT_NAMES);
+      return { first: f, last: s };
+    }
+    return { first: rng.pick(FIRST_NAMES), last: rng.pick(SURNAMES) };
+  }
+  function shortName(player) {
+    return `${player.first[0]}. ${player.last}`;
+  }
+  function generatePlayer(rng, { pos, quality, age }) {
+    const { first, last } = makeName(rng);
+    const realAge = age ?? rng.int(17, 35);
+    const profile = PROFILE[pos];
+    const ageDip = realAge < 21 ? (21 - realAge) * 2.4 : 0;
+    const target = clamp(rng.gauss(quality, 4.5) - ageDip, 22, 94);
+    const att = {};
+    for (const key of Object.keys(profile)) {
+      const mean = 24 + (target - 24) * profile[key];
+      att[key] = Math.round(clamp(rng.gauss(mean, 5), 12, 96));
+    }
+    const player = {
+      id: nextId++,
+      first,
+      last,
+      name: `${first} ${last}`,
+      pos,
+      age: realAge,
+      att,
+      potential: 0,
+      condition: rng.int(88, 100),
+      morale: rng.int(58, 82),
+      form: 0,
+      injuryDays: 0,
+      injuryNote: "",
+      yellowSeason: 0,
+      suspension: 0,
+      contract: rng.int(1, 4),
+      wage: 0,
+      value: 0,
+      season: blankSeasonStats(),
+      career: { apps: 0, goals: 0, assists: 0 },
+      transferListed: false
+    };
+    applyGrowth(player, target - ability(player));
+    const now = ability(player);
+    const headroom = realAge <= 19 ? rng.int(6, 22) : realAge <= 23 ? rng.int(3, 14) : realAge <= 27 ? rng.int(0, 5) : 0;
+    player.potential = clamp(now + headroom, now, 96);
+    player.wage = wageFor(player);
+    player.value = marketValue(player);
+    return player;
+  }
+  function blankSeasonStats() {
+    return { apps: 0, subs: 0, minutes: 0, goals: 0, assists: 0, cleanSheets: 0, yellow: 0, red: 0, ratingSum: 0, ratedApps: 0 };
+  }
+  function seasonRating(p) {
+    if (!p.season.ratedApps) return null;
+    return p.season.ratingSum / p.season.ratedApps;
+  }
+  var SQUAD_PLAN = [
+    ["GK", 3],
+    ["DF", 8],
+    ["MF", 8],
+    ["FW", 5]
+  ];
+  var DEPTH_PENALTY = { GK: 8, DF: 2.4, MF: 2.4, FW: 2.8 };
+  function generateSquad(rng, reputation) {
+    const base = 52 + (reputation - 40) * 0.42;
+    const squad = [];
+    for (const [pos, count] of SQUAD_PLAN) {
+      for (let i = 0; i < count; i++) {
+        const depthPenalty = i * DEPTH_PENALTY[pos];
+        const age = rng.chance(0.18) ? rng.int(17, 20) : rng.int(21, 34);
+        squad.push(generatePlayer(rng, { pos, quality: base - depthPenalty + rng.range(-2, 6), age }));
+      }
+    }
+    return squad;
+  }
+  var isAvailable = (p) => p.injuryDays <= 0 && p.suspension <= 0;
+  function recover(player, rng, days = 7, restBoost = 1) {
+    if (player.injuryDays > 0) {
+      player.injuryDays = Math.max(0, player.injuryDays - days);
+      if (player.injuryDays === 0) player.injuryNote = "";
+    }
+    const rate = (5.2 + player.att.phy * 0.055) * days * restBoost;
+    player.condition = clamp(player.condition + rate, 0, 100);
+  }
+  function ageUp(player, rng) {
+    player.age += 1;
+    const a = ability(player);
+    const room = player.potential - a;
+    let delta = 0;
+    if (player.age <= 23) delta = rng.range(0.4, 1) * Math.max(0.4, room * 0.22);
+    else if (player.age <= 27) delta = rng.range(0.1, 0.6) * Math.max(0.2, room * 0.15);
+    else if (player.age <= 30) delta = rng.range(-0.8, 0.6);
+    else if (player.age <= 33) delta = rng.range(-2.6, -0.2);
+    else delta = rng.range(-4.5, -1.2);
+    applyGrowth(player, delta);
+    player.contract = Math.max(0, player.contract - 1);
+    player.value = marketValue(player);
+    player.wage = wageFor(player);
+  }
+  function applyGrowth(player, delta) {
+    const w = WEIGHTS[player.pos];
+    const keys = Object.keys(w).filter((k) => w[k] > 0.03);
+    for (const key of keys) {
+      player.att[key] = clamp(player.att[key] + delta * (w[key] / 0.3), 8, 97);
+    }
+    player.value = marketValue(player);
+  }
+
+  // js/formations.js
+  var shape = (name, slots) => ({ name, slots: slots.map((s, i) => ({ ...s, index: i })) });
+  var FORMATIONS = {
+    "4-4-2": shape("4-4-2", [
+      { role: "GK", label: "GK", x: 50, y: 92 },
+      { role: "DF", label: "LB", x: 14, y: 73 },
+      { role: "DF", label: "CB", x: 38, y: 77 },
+      { role: "DF", label: "CB", x: 62, y: 77 },
+      { role: "DF", label: "RB", x: 86, y: 73 },
+      { role: "MF", label: "LM", x: 14, y: 48 },
+      { role: "MF", label: "CM", x: 38, y: 52 },
+      { role: "MF", label: "CM", x: 62, y: 52 },
+      { role: "MF", label: "RM", x: 86, y: 48 },
+      { role: "FW", label: "ST", x: 36, y: 22 },
+      { role: "FW", label: "ST", x: 64, y: 22 }
+    ]),
+    "4-3-3": shape("4-3-3", [
+      { role: "GK", label: "GK", x: 50, y: 92 },
+      { role: "DF", label: "LB", x: 14, y: 73 },
+      { role: "DF", label: "CB", x: 38, y: 77 },
+      { role: "DF", label: "CB", x: 62, y: 77 },
+      { role: "DF", label: "RB", x: 86, y: 73 },
+      { role: "MF", label: "CM", x: 26, y: 54 },
+      { role: "MF", label: "CM", x: 50, y: 60 },
+      { role: "MF", label: "CM", x: 74, y: 54 },
+      { role: "FW", label: "LW", x: 16, y: 26 },
+      { role: "FW", label: "ST", x: 50, y: 18 },
+      { role: "FW", label: "RW", x: 84, y: 26 }
+    ]),
+    "4-2-3-1": shape("4-2-3-1", [
+      { role: "GK", label: "GK", x: 50, y: 92 },
+      { role: "DF", label: "LB", x: 14, y: 73 },
+      { role: "DF", label: "CB", x: 38, y: 77 },
+      { role: "DF", label: "CB", x: 62, y: 77 },
+      { role: "DF", label: "RB", x: 86, y: 73 },
+      { role: "MF", label: "DM", x: 36, y: 60 },
+      { role: "MF", label: "DM", x: 64, y: 60 },
+      { role: "MF", label: "LW", x: 16, y: 38 },
+      { role: "MF", label: "AM", x: 50, y: 40 },
+      { role: "MF", label: "RW", x: 84, y: 38 },
+      { role: "FW", label: "ST", x: 50, y: 17 }
+    ]),
+    "3-5-2": shape("3-5-2", [
+      { role: "GK", label: "GK", x: 50, y: 92 },
+      { role: "DF", label: "CB", x: 26, y: 77 },
+      { role: "DF", label: "CB", x: 50, y: 79 },
+      { role: "DF", label: "CB", x: 74, y: 77 },
+      { role: "MF", label: "LWB", x: 10, y: 52 },
+      { role: "MF", label: "CM", x: 33, y: 56 },
+      { role: "MF", label: "CM", x: 50, y: 46 },
+      { role: "MF", label: "CM", x: 67, y: 56 },
+      { role: "MF", label: "RWB", x: 90, y: 52 },
+      { role: "FW", label: "ST", x: 36, y: 20 },
+      { role: "FW", label: "ST", x: 64, y: 20 }
+    ]),
+    "5-3-2": shape("5-3-2", [
+      { role: "GK", label: "GK", x: 50, y: 92 },
+      { role: "DF", label: "LWB", x: 10, y: 66 },
+      { role: "DF", label: "CB", x: 30, y: 79 },
+      { role: "DF", label: "CB", x: 50, y: 81 },
+      { role: "DF", label: "CB", x: 70, y: 79 },
+      { role: "DF", label: "RWB", x: 90, y: 66 },
+      { role: "MF", label: "CM", x: 30, y: 52 },
+      { role: "MF", label: "CM", x: 50, y: 56 },
+      { role: "MF", label: "CM", x: 70, y: 52 },
+      { role: "FW", label: "ST", x: 36, y: 22 },
+      { role: "FW", label: "ST", x: 64, y: 22 }
+    ]),
+    "4-5-1": shape("4-5-1", [
+      { role: "GK", label: "GK", x: 50, y: 92 },
+      { role: "DF", label: "LB", x: 14, y: 73 },
+      { role: "DF", label: "CB", x: 38, y: 77 },
+      { role: "DF", label: "CB", x: 62, y: 77 },
+      { role: "DF", label: "RB", x: 86, y: 73 },
+      { role: "MF", label: "LM", x: 12, y: 46 },
+      { role: "MF", label: "CM", x: 34, y: 56 },
+      { role: "MF", label: "CM", x: 50, y: 48 },
+      { role: "MF", label: "CM", x: 66, y: 56 },
+      { role: "MF", label: "RM", x: 88, y: 46 },
+      { role: "FW", label: "ST", x: 50, y: 18 }
+    ])
+  };
+  var FORMATION_NAMES = Object.keys(FORMATIONS);
+  var MENTALITIES = [
+    { id: "defensive", name: "Defensive", blurb: "Sit deep, protect the box, hit on the break." },
+    { id: "balanced", name: "Balanced", blurb: "Take what the game gives you." },
+    { id: "attacking", name: "Attacking", blurb: "Commit numbers forward and accept the risk." }
+  ];
+  var PRESSING = [
+    { id: "low", name: "Low block", blurb: "Stay compact, save legs." },
+    { id: "medium", name: "Medium", blurb: "Press in your own half." },
+    { id: "high", name: "High press", blurb: "Win it high up. Costs stamina and fouls." }
+  ];
+  var TEMPO = [
+    { id: "slow", name: "Patient", blurb: "Keep the ball, fewer chances either way." },
+    { id: "normal", name: "Normal", blurb: "Play it as it comes." },
+    { id: "fast", name: "Direct", blurb: "Get it forward quickly. An open game." }
+  ];
+  var DEFAULT_TACTICS = {
+    formation: "4-4-2",
+    mentality: "balanced",
+    pressing: "medium",
+    tempo: "normal"
+  };
+  function slotsOf(formationName) {
+    return (FORMATIONS[formationName] ?? FORMATIONS["4-4-2"]).slots;
+  }
+
+  // js/lineup.js
+  function autoPickXI(squad, formationName) {
+    const slots = slotsOf(formationName);
+    const pool = squad.filter(isAvailable);
+    const used = /* @__PURE__ */ new Set();
+    const xi = new Array(slots.length).fill(null);
+    const bestFor = (role, penaltyFor) => {
+      const options = pool.filter((p) => !used.has(p.id));
+      if (!options.length) return null;
+      return options.reduce((best, p) => score(p, role, penaltyFor) > score(best, role, penaltyFor) ? p : best);
+    };
+    const order = slots.map((s, i) => ({ i, role: s.role })).sort((a, b) => roleOrder(a.role) - roleOrder(b.role));
+    for (const { i, role } of order) {
+      const p = bestFor(role, true);
+      if (!p) continue;
+      xi[i] = p;
+      used.add(p.id);
+    }
+    for (let i = 0; i < xi.length; i++) {
+      if (xi[i]) continue;
+      const spare = squad.find((p) => !used.has(p.id) && isAvailable(p)) ?? squad.find((p) => !used.has(p.id));
+      if (spare) {
+        xi[i] = spare;
+        used.add(spare.id);
+      }
+    }
+    return xi;
+  }
+  function roleOrder(role) {
+    return role === "GK" ? 0 : role === "DF" ? 1 : role === "MF" ? 2 : 3;
+  }
+  function score(player, role, applyPenalty = true) {
+    if (!player) return -Infinity;
+    const a = ability(player);
+    if (!applyPenalty || player.pos === role) return a;
+    if (player.pos === "GK" || role === "GK") return a * 0.45;
+    const distance = Math.abs(roleOrder(player.pos) - roleOrder(role));
+    return a * (distance === 1 ? 0.86 : 0.72);
+  }
+  function autoPickBench(squad, xi, size = 7) {
+    const inXI = new Set(xi.filter(Boolean).map((p) => p.id));
+    const rest = squad.filter((p) => !inXI.has(p.id) && isAvailable(p));
+    const gk = rest.filter((p) => p.pos === "GK").sort((a, b) => ability(b) - ability(a))[0];
+    const others = rest.filter((p) => p !== gk).sort((a, b) => ability(b) - ability(a));
+    const bench = gk ? [gk, ...others] : others;
+    return bench.slice(0, size);
+  }
+  function xiIsValid(xi) {
+    return Array.isArray(xi) && xi.filter(Boolean).length === 11 && new Set(xi.filter(Boolean).map((p) => p.id)).size === 11;
+  }
+  function matchSide(team, { isUser = false, autoSubs = true } = {}) {
+    const formation = team.tactics.formation;
+    let xi = (team.lineup ?? []).map((id) => team.squad.find((p) => p.id === id) ?? null);
+    if (!xiIsValid(xi) || xi.some((p) => p && !isAvailable(p))) xi = autoPickXI(team.squad, formation);
+    let bench = (team.bench ?? []).map((id) => team.squad.find((p) => p.id === id)).filter((p) => p && isAvailable(p));
+    if (bench.length < 5) bench = autoPickBench(team.squad, xi);
+    return {
+      teamId: team.id,
+      name: team.name,
+      abbr: team.abbr,
+      color: team.home,
+      stadium: team.stadium,
+      tactics: { ...team.tactics },
+      lineup: xi,
+      bench,
+      isUser,
+      autoSubs
+    };
+  }
+
+  // js/engine.js
+  var MENTALITY = {
+    defensive: { att: 0.86, def: 1.13, rate: 0.84, quality: 0.94, counter: 1.18 },
+    balanced: { att: 1, def: 1, rate: 1, quality: 1, counter: 1 },
+    attacking: { att: 1.13, def: 0.88, rate: 1.19, quality: 1.04, counter: 0.86 }
+  };
+  var PRESS = {
+    low: { mid: 0.96, def: 1.03, drain: 0.86, foul: 0.82, turnover: 0.85 },
+    medium: { mid: 1, def: 1, drain: 1, foul: 1, turnover: 1 },
+    high: { mid: 1.06, def: 0.99, drain: 1.28, foul: 1.26, turnover: 1.25 }
+  };
+  var TEMPO2 = {
+    slow: { rate: 0.88, oppRate: 0.94, quality: 1.06, drain: 0.92 },
+    normal: { rate: 1, oppRate: 1, quality: 1, drain: 1 },
+    fast: { rate: 1.14, oppRate: 1.07, quality: 0.95, drain: 1.16 }
+  };
+  var BASE_CHANCE_RATE = 0.104;
+  var HOME_ATT = 1.07;
+  var HOME_RATE = 1.1;
+  var INJURY_NOTES = [
+    ["knock", 3, 8],
+    ["dead leg", 4, 10],
+    ["hamstring strain", 10, 26],
+    ["twisted ankle", 8, 22],
+    ["groin strain", 9, 20],
+    ["bruised ribs", 6, 14],
+    ["shoulder injury", 12, 30],
+    ["knee ligaments", 25, 70]
+  ];
+  function makeRecord(player, role, started) {
+    return {
+      id: player.id,
+      p: player,
+      role,
+      started,
+      on: started,
+      minutes: 0,
+      rating: 6.5,
+      goals: 0,
+      assists: 0,
+      shots: 0,
+      saves: 0,
+      yellow: 0,
+      red: 0,
+      condition: player.condition,
+      injuryDays: 0,
+      injuryNote: "",
+      offMinute: null,
+      onMinute: started ? 0 : null
+    };
+  }
+  function buildSide(input, isHome) {
+    const slots = slotsOf(input.tactics.formation);
+    const records = [];
+    input.lineup.forEach((p, i) => {
+      if (!p) return;
+      records.push(makeRecord(p, slots[i] ? slots[i].role : p.pos, true));
+    });
+    const bench = (input.bench ?? []).map((p) => makeRecord(p, p.pos, false));
+    return {
+      key: isHome ? "home" : "away",
+      teamId: input.teamId,
+      name: input.name,
+      abbr: input.abbr,
+      color: input.color,
+      isHome,
+      tactics: { ...input.tactics },
+      records,
+      bench,
+      subsUsed: 0,
+      isUser: !!input.isUser,
+      goals: 0,
+      stats: { shots: 0, onTarget: 0, xg: 0, fouls: 0, corners: 0, yellow: 0, red: 0, possTicks: 0 }
+    };
+  }
+  var onPitch = (side) => side.records.filter((r) => r.on);
+  function live(rec) {
+    const cond = 0.72 + 0.28 * (rec.condition / 100);
+    const mor = 0.94 + 0.12 * (rec.p.morale / 100);
+    const form = 1 + clamp(rec.p.form ?? 0, -10, 10) * 8e-3;
+    return cond * mor * form;
+  }
+  function sectors(side) {
+    let gk = 38;
+    let def = 0, mid = 0, att = 0, defW = 0, midW = 0, attW = 0, outfield = 0;
+    for (const rec of onPitch(side)) {
+      const a = rec.p.att;
+      const f = live(rec);
+      if (rec.role === "GK") {
+        gk = a.gk * f;
+        continue;
+      }
+      outfield++;
+      const dw = rec.role === "DF" ? 1 : rec.role === "MF" ? 0.5 : 0.16;
+      const mw = rec.role === "DF" ? 0.32 : rec.role === "MF" ? 1 : 0.3;
+      const aw = rec.role === "DF" ? 0.1 : rec.role === "MF" ? 0.5 : 1;
+      def += dw * (a.def * 0.72 + a.phy * 0.28) * f;
+      defW += dw;
+      mid += mw * (a.pas * 0.6 + a.def * 0.2 + a.phy * 0.2) * f;
+      midW += mw;
+      att += aw * (a.sht * 0.55 + a.pac * 0.27 + a.pas * 0.18) * f;
+      attW += aw;
+    }
+    const men = MENTALITY[side.tactics.mentality] ?? MENTALITY.balanced;
+    const press = PRESS[side.tactics.pressing] ?? PRESS.medium;
+    const shortHanded = 0.62 + 0.38 * (outfield / 10);
+    return {
+      gk,
+      def: (defW ? def / defW : 30) * men.def * press.def * shortHanded,
+      mid: (midW ? mid / midW : 30) * press.mid * shortHanded,
+      att: (attW ? att / attW : 30) * men.att * (0.72 + 0.28 * (outfield / 10)),
+      outfield
+    };
+  }
+  var MatchSim = class {
+    constructor({ home, away, rng, neutral = false, competition = "League" }) {
+      this.rng = rng;
+      this.neutral = neutral;
+      this.competition = competition;
+      this.home = buildSide(home, !neutral);
+      this.away = buildSide(away, false);
+      this.minute = 0;
+      this.events = [];
+      this.finished = false;
+      this.half = 1;
+      this.stoppage = { first: rng.int(1, 3), second: rng.int(2, 5) };
+      this.firstHalfEnd = 45 + this.stoppage.first;
+      this.fullTime = 90 + this.stoppage.first + this.stoppage.second;
+      this.pendingHalfTime = false;
+      this.pushEvent({ type: "kickoff", text: `Kick-off at ${home.stadium ?? "the ground"}. ${this.home.name} in ${describeColour(this.home.color)}.` });
+    }
+    get score() {
+      return [this.home.goals, this.away.goals];
+    }
+    // The minute as supporters would say it: 45+2, 90+3.
+    get clock() {
+      if (this.minute <= 45) return String(this.minute);
+      if (this.minute <= this.firstHalfEnd) return `45+${this.minute - 45}`;
+      const second = this.minute - this.stoppage.first;
+      if (second <= 90) return String(second);
+      return `90+${second - 90}`;
+    }
+    pushEvent(ev) {
+      const event = { minute: this.minute, clock: this.clock, side: null, ...ev };
+      this.events.push(event);
+      return event;
+    }
+    sideOf(key) {
+      return key === "home" ? this.home : this.away;
+    }
+    other(side) {
+      return side === this.home ? this.away : this.home;
+    }
+    setTactics(key, patch) {
+      const side = this.sideOf(key);
+      Object.assign(side.tactics, patch);
+      this.pushEvent({ type: "note", side: side.key, text: `${side.name} change shape: ${side.tactics.formation}, ${side.tactics.mentality}.` });
+    }
+    canSub(key) {
+      const side = this.sideOf(key);
+      return side.subsUsed < 5 && side.bench.some((b) => b.on === false && b.offMinute === null && b.onMinute === null);
+    }
+    substitute(key, outId, inId) {
+      const side = this.sideOf(key);
+      const out = side.records.find((r) => r.id === outId && r.on);
+      const inc = side.bench.find((r) => r.id === inId && !r.on && r.onMinute === null);
+      if (!out || !inc || side.subsUsed >= 5) return false;
+      out.on = false;
+      out.offMinute = this.minute;
+      inc.on = true;
+      inc.onMinute = this.minute;
+      inc.role = out.role;
+      side.records.push(inc);
+      side.bench = side.bench.filter((b) => b.id !== inId);
+      side.subsUsed++;
+      this.pushEvent({
+        type: "sub",
+        side: side.key,
+        playerId: inc.id,
+        text: `${side.abbr} sub: ${shortName(inc.p)} on for ${shortName(out.p)}.`
+      });
+      return true;
+    }
+    benchFor(key) {
+      return this.sideOf(key).bench;
+    }
+    onPitchFor(key) {
+      return onPitch(this.sideOf(key));
+    }
+    step() {
+      if (this.finished) return [];
+      const before = this.events.length;
+      if (this.pendingHalfTime) {
+        this.pendingHalfTime = false;
+        this.half = 2;
+        this.pushEvent({ type: "note", text: "Second half under way." });
+      }
+      this.minute++;
+      this.simulateMinute();
+      if (this.minute === this.firstHalfEnd) {
+        this.pushEvent({ type: "halftime", text: `Half-time: ${this.home.abbr} ${this.home.goals}-${this.away.goals} ${this.away.abbr}` });
+        this.pendingHalfTime = true;
+      }
+      if (this.minute >= this.fullTime) this.end();
+      return this.events.slice(before);
+    }
+    runToEnd() {
+      let guard = 0;
+      while (!this.finished && guard++ < 400) this.step();
+      return this.result();
+    }
+    simulateMinute() {
+      const H = sectors(this.home);
+      const A = sectors(this.away);
+      let possHome = H.mid / Math.max(1, H.mid + A.mid);
+      if (!this.neutral) possHome += 0.025;
+      possHome = clamp(possHome, 0.22, 0.78);
+      this.home.stats.possTicks += possHome;
+      this.away.stats.possTicks += 1 - possHome;
+      this.tryChance(this.home, this.away, H, A, possHome);
+      this.tryChance(this.away, this.home, A, H, 1 - possHome);
+      this.tryFoul(possHome);
+      this.drainStamina();
+      this.tryInjury();
+      this.autoSubs();
+    }
+    chanceRate(side, opp, S, O, possShare) {
+      const men = MENTALITY[side.tactics.mentality] ?? MENTALITY.balanced;
+      const tempo = TEMPO2[side.tactics.tempo] ?? TEMPO2.normal;
+      const oppTempo = TEMPO2[opp.tactics.tempo] ?? TEMPO2.normal;
+      const ratio = S.att / Math.max(1, S.att + O.def);
+      let rate = BASE_CHANCE_RATE * Math.pow(ratio / 0.5, 1.9) * men.rate * tempo.rate * oppTempo.oppRate;
+      rate *= 0.55 + 0.9 * possShare;
+      if (side.isHome) rate *= HOME_RATE;
+      const deficit = opp.goals - side.goals;
+      if (this.minute > 55 && deficit > 0) rate *= 1 + Math.min(0.35, deficit * 0.12);
+      if (this.minute > 70 && deficit < 0) rate *= 0.92;
+      return rate;
+    }
+    tryChance(side, opp, S, O, possShare) {
+      const rng = this.rng;
+      if (!rng.chance(this.chanceRate(side, opp, S, O, possShare))) return;
+      const men = MENTALITY[side.tactics.mentality] ?? MENTALITY.balanced;
+      const tempo = TEMPO2[side.tactics.tempo] ?? TEMPO2.normal;
+      const shooter = this.pickShooter(side);
+      if (!shooter) return;
+      const q = rng.next();
+      const attackEdge = clamp(S.att / Math.max(1, O.def), 0.6, 1.7);
+      let xg = (0.014 + 0.4 * Math.pow(q, 3)) * men.quality * tempo.quality * (0.75 + 0.35 * attackEdge);
+      if (side.isHome) xg *= HOME_ATT;
+      xg = clamp(xg, 0.01, 0.92);
+      side.stats.shots++;
+      side.stats.xg += xg;
+      shooter.shots++;
+      const keeper = onPitch(opp).find((r) => r.role === "GK");
+      const keeperSkill = keeper ? keeper.p.att.gk * live(keeper) : 34;
+      const finishing = 0.82 + 0.36 * (shooter.p.att.sht * live(shooter)) / 82;
+      const keeping = 0.84 + 0.32 * keeperSkill / 82;
+      const goalChance = clamp(xg * finishing / keeping, 5e-3, 0.95);
+      if (rng.chance(goalChance)) {
+        this.scoreGoal(side, opp, shooter, xg, keeper);
+        return;
+      }
+      const onTargetChance = clamp(0.24 + xg * 0.5, 0.18, 0.62);
+      if (rng.chance(onTargetChance)) {
+        side.stats.onTarget++;
+        if (keeper) {
+          keeper.saves++;
+          keeper.rating += xg > 0.3 ? 0.3 : 0.1;
+        }
+        if (xg > 0.22 || rng.chance(0.35)) {
+          this.pushEvent({
+            type: "save",
+            side: side.key,
+            playerId: shooter.id,
+            text: pick(rng, [
+              `${shortName(shooter.p)} works ${keeper ? shortName(keeper.p) : "the keeper"} with a low drive \u2014 saved.`,
+              `Save! ${keeper ? shortName(keeper.p) : "The keeper"} turns ${shortName(shooter.p)}'s effort away.`,
+              `${shortName(shooter.p)} makes the keeper earn it, ${side.abbr} come again.`
+            ])
+          });
+        }
+      } else if (rng.chance(0.28)) {
+        side.stats.corners++;
+        if (rng.chance(0.4)) {
+          this.pushEvent({ type: "chance", side: side.key, text: `Deflected behind. Corner ${side.abbr}.` });
+        }
+      } else {
+        shooter.rating -= xg > 0.35 ? 0.25 : 0.04;
+        if (xg > 0.3 || rng.chance(0.22)) {
+          this.pushEvent({
+            type: "miss",
+            side: side.key,
+            playerId: shooter.id,
+            text: xg > 0.3 ? pick(rng, [
+              `Big chance! ${shortName(shooter.p)} pulls it wide with the goal at his mercy.`,
+              `${shortName(shooter.p)} should score \u2014 over the bar from twelve yards.`
+            ]) : pick(rng, [
+              `${shortName(shooter.p)} tries his luck from distance, wide.`,
+              `Ambitious from ${shortName(shooter.p)}, into the crowd.`
+            ])
+          });
+        }
+      }
+    }
+    scoreGoal(side, opp, shooter, xg, keeper) {
+      const rng = this.rng;
+      side.goals++;
+      side.stats.onTarget++;
+      shooter.goals++;
+      shooter.rating += shooter.role === "GK" ? 2 : shooter.role === "DF" ? 1.4 : shooter.role === "MF" ? 1.25 : 1.1;
+      let assist = null;
+      const mates = onPitch(side).filter((r) => r.id !== shooter.id && r.role !== "GK");
+      if (mates.length && rng.chance(0.68)) {
+        assist = rng.weighted(mates, (r) => r.p.att.pas * (r.role === "MF" ? 1.6 : r.role === "FW" ? 1.2 : 0.6));
+        assist.assists++;
+        assist.rating += 0.7;
+      }
+      for (const rec of onPitch(opp)) {
+        if (rec.role === "GK") rec.rating -= 0.3;
+        else if (rec.role === "DF") rec.rating -= 0.16;
+        else if (rec.role === "MF") rec.rating -= 0.05;
+      }
+      const finish = xg > 0.45 ? pick(rng, ["taps it into an empty net", "cannot miss from there", "slots it past the keeper"]) : xg > 0.18 ? pick(rng, ["sweeps it into the bottom corner", "buries it first time", "heads it home", "turns and finishes"]) : pick(rng, ["lashes it in from range", "curls a beauty into the top corner", "finishes from an impossible angle"]);
+      this.pushEvent({
+        type: "goal",
+        side: side.key,
+        playerId: shooter.id,
+        text: `GOAL! ${side.abbr} ${this.home === side ? "" : ""}${shortName(shooter.p)} ${finish}${assist ? `, set up by ${shortName(assist.p)}` : ""}. ${this.home.abbr} ${this.home.goals}-${this.away.goals} ${this.away.abbr}`
+      });
+    }
+    pickShooter(side) {
+      const players = onPitch(side).filter((r) => r.role !== "GK");
+      if (!players.length) return null;
+      return this.rng.weighted(players, (r) => {
+        const base = r.role === "FW" ? 3.2 : r.role === "MF" ? 1.35 : 0.32;
+        return base * (0.5 + r.p.att.sht * live(r) / 100);
+      });
+    }
+    tryFoul(possHome) {
+      const rng = this.rng;
+      const homePress = PRESS[this.home.tactics.pressing] ?? PRESS.medium;
+      const awayPress = PRESS[this.away.tactics.pressing] ?? PRESS.medium;
+      const rate = 0.26 * ((homePress.foul + awayPress.foul) / 2);
+      if (!rng.chance(rate)) return;
+      const side = rng.chance(possHome) ? this.away : this.home;
+      const candidates = onPitch(side).filter((r) => r.role !== "GK");
+      if (!candidates.length) return;
+      const offender = rng.weighted(candidates, (r) => (r.role === "DF" ? 1.6 : r.role === "MF" ? 1.4 : 0.7) * (1 + (100 - r.p.att.def) / 140) * (r.yellow ? 0.5 : 1));
+      side.stats.fouls++;
+      const press = PRESS[side.tactics.pressing] ?? PRESS.medium;
+      const cardChance = 0.145 * press.foul * (offender.yellow ? 0.3 : 1);
+      if (!rng.chance(cardChance)) return;
+      if (rng.chance(0.018)) {
+        offender.red = 1;
+        offender.rating -= 1.6;
+        offender.on = false;
+        offender.offMinute = this.minute;
+        side.stats.red++;
+        this.pushEvent({ type: "red", side: side.key, playerId: offender.id, text: `RED CARD. ${shortName(offender.p)} is sent off. ${side.abbr} down to ${onPitch(side).length}.` });
+        return;
+      }
+      offender.yellow++;
+      offender.rating -= 0.3;
+      side.stats.yellow++;
+      if (offender.yellow >= 2) {
+        offender.red = 1;
+        offender.rating -= 1.1;
+        offender.on = false;
+        offender.offMinute = this.minute;
+        side.stats.red++;
+        this.pushEvent({ type: "red", side: side.key, playerId: offender.id, text: `Second yellow \u2014 ${shortName(offender.p)} is off. ${side.abbr} down to ${onPitch(side).length}.` });
+      } else {
+        this.pushEvent({ type: "yellow", side: side.key, playerId: offender.id, text: `Booked: ${shortName(offender.p)} for a late one.` });
+      }
+    }
+    drainStamina() {
+      for (const side of [this.home, this.away]) {
+        const press = PRESS[side.tactics.pressing] ?? PRESS.medium;
+        const tempo = TEMPO2[side.tactics.tempo] ?? TEMPO2.normal;
+        const short = onPitch(side).length < 11 ? 1.15 : 1;
+        for (const rec of onPitch(side)) {
+          rec.minutes++;
+          const base = rec.role === "GK" ? 0.12 : 0.55;
+          const fitness = 0.72 + 0.5 * (1 - rec.p.att.phy / 100);
+          rec.condition = clamp(rec.condition - base * fitness * press.drain * tempo.drain * short, 4, 100);
+        }
+      }
+    }
+    tryInjury() {
+      const rng = this.rng;
+      for (const side of [this.home, this.away]) {
+        if (!rng.chance(16e-4)) continue;
+        const players = onPitch(side);
+        if (!players.length) continue;
+        const victim = rng.weighted(players, (r) => 1 + (100 - r.condition) / 55);
+        const [note, lo, hi] = rng.pick(INJURY_NOTES);
+        victim.injuryNote = note;
+        victim.injuryDays = rng.int(lo, hi);
+        victim.condition = clamp(victim.condition - 25, 4, 100);
+        this.pushEvent({ type: "injury", side: side.key, playerId: victim.id, text: `${shortName(victim.p)} is down \u2014 looks like a ${note}.` });
+        if (victim.injuryDays > 5 && side.subsUsed < 5 && side.bench.length) {
+          const replacement = this.bestBenchFor(side, victim.role);
+          if (replacement) this.substitute(side.key, victim.id, replacement.id);
+          else if (rng.chance(0.5)) {
+            victim.on = false;
+            victim.offMinute = this.minute;
+          }
+        }
+      }
+    }
+    bestBenchFor(side, role) {
+      const exact = side.bench.filter((b) => b.p.pos === role);
+      const pool = exact.length ? exact : side.bench.filter((b) => b.p.pos !== "GK" || role === "GK");
+      if (!pool.length) return null;
+      return pool.reduce((best, b) => rate(b) > rate(best) ? b : best);
+      function rate(b) {
+        return b.p.att.pas + b.p.att.def + b.p.att.sht + b.p.att.pac + b.p.att.phy + (b.p.pos === role ? 60 : 0);
+      }
+    }
+    // Computer-managed sides look after themselves. The user's side only gets
+    // help if they asked for it.
+    autoSubs() {
+      for (const side of [this.home, this.away]) {
+        if (side.isUser && !side.autoSubs) continue;
+        if (side.subsUsed >= 3 || !side.bench.length) continue;
+        if (![58, 65, 72, 79].includes(this.minute)) continue;
+        const tired = onPitch(side).filter((r) => r.role !== "GK" && r.condition < 62).sort((a, b) => a.condition - b.condition)[0];
+        if (!tired) continue;
+        const replacement = this.bestBenchFor(side, tired.role);
+        if (replacement && replacement.p.att.phy > 0) this.substitute(side.key, tired.id, replacement.id);
+      }
+      for (const side of [this.home, this.away]) {
+        if (side.isUser) continue;
+        if (this.minute !== 70) continue;
+        const opp = this.other(side);
+        if (opp.goals > side.goals && side.tactics.mentality !== "attacking") {
+          side.tactics.mentality = "attacking";
+          this.pushEvent({ type: "note", side: side.key, text: `${side.name} throw men forward.` });
+        } else if (side.goals - opp.goals >= 2 && side.tactics.mentality === "attacking") {
+          side.tactics.mentality = "balanced";
+        }
+      }
+    }
+    end() {
+      this.finished = true;
+      const homeWin = this.home.goals > this.away.goals;
+      const draw = this.home.goals === this.away.goals;
+      for (const side of [this.home, this.away]) {
+        const opp = this.other(side);
+        const won = side.goals > opp.goals;
+        const clean = opp.goals === 0;
+        for (const rec of side.records) {
+          if (rec.minutes === 0) continue;
+          if (clean) {
+            if (rec.role === "GK") rec.rating += 0.5;
+            else if (rec.role === "DF") rec.rating += 0.35;
+          }
+          rec.rating += won ? 0.22 : side.goals === opp.goals ? 0 : -0.22;
+          if (rec.minutes < 25) rec.rating = 6.5 + (rec.rating - 6.5) * (0.45 + rec.minutes / 50);
+          rec.rating = clamp(Math.round(rec.rating * 10) / 10, 3, 10);
+        }
+      }
+      this.pushEvent({
+        type: "fulltime",
+        text: `Full time. ${this.home.name} ${this.home.goals}-${this.away.goals} ${this.away.name}.` + (draw ? " A point apiece." : ` ${homeWin ? this.home.name : this.away.name} take it.`)
+      });
+    }
+    result() {
+      const pack = (side) => ({
+        teamId: side.teamId,
+        goals: side.goals,
+        possession: Math.round(side.stats.possTicks / Math.max(1, this.minute) * 100),
+        shots: side.stats.shots,
+        onTarget: side.stats.onTarget,
+        xg: Math.round(side.stats.xg * 100) / 100,
+        fouls: side.stats.fouls,
+        corners: side.stats.corners,
+        yellow: side.stats.yellow,
+        red: side.stats.red,
+        players: side.records.map((r) => ({
+          id: r.id,
+          name: r.p.name,
+          pos: r.p.pos,
+          role: r.role,
+          started: r.started,
+          minutes: r.minutes,
+          rating: r.rating,
+          goals: r.goals,
+          assists: r.assists,
+          saves: r.saves,
+          yellow: r.yellow,
+          red: r.red,
+          condition: Math.round(r.condition),
+          injuryDays: r.injuryDays,
+          injuryNote: r.injuryNote
+        }))
+      });
+      const home = pack(this.home);
+      const away = pack(this.away);
+      away.possession = 100 - home.possession;
+      return {
+        homeId: this.home.teamId,
+        awayId: this.away.teamId,
+        homeGoals: this.home.goals,
+        awayGoals: this.away.goals,
+        home,
+        away,
+        events: this.events,
+        scorers: this.events.filter((e) => e.type === "goal").map((e) => ({ minute: e.minute, clock: e.clock, side: e.side, playerId: e.playerId }))
+      };
+    }
+  };
+  function pick(rng, arr) {
+    return arr[Math.floor(rng.next() * arr.length)];
+  }
+  function describeColour(hex) {
+    if (!hex) return "their usual kit";
+    const map = [
+      ["#f2c14e", "gold"],
+      ["#3d7bd6", "blue"],
+      ["#2f9e6b", "green"],
+      ["#c0562f", "rust"],
+      ["#d94f4f", "red"],
+      ["#7d5bbe", "purple"],
+      ["#2ba3a3", "teal"],
+      ["#e0873c", "orange"],
+      ["#4bb2e8", "sky blue"],
+      ["#9aa63f", "olive"],
+      ["#c9a227", "yellow"],
+      ["#b8804f", "sand"]
+    ];
+    const found = map.find(([h]) => h === hex);
+    return found ? found[1] : "their usual kit";
+  }
+  function strengthPreview(sideInput) {
+    return sectors(buildSide(sideInput, false));
+  }
+
+  // js/league.js
+  var POINTS_WIN = 3;
+  var POINTS_DRAW = 1;
+  function makeFixtures(teamIds, rng) {
+    const ids = rng.shuffle(teamIds);
+    if (ids.length % 2 === 1) ids.push(null);
+    const n = ids.length;
+    const rounds = [];
+    const rotation = ids.slice();
+    for (let r = 0; r < n - 1; r++) {
+      const pairs = [];
+      for (let i = 0; i < n / 2; i++) {
+        const a = rotation[i];
+        const b = rotation[n - 1 - i];
+        if (a == null || b == null) continue;
+        pairs.push(r % 2 === 0 ? { homeId: a, awayId: b } : { homeId: b, awayId: a });
+      }
+      rounds.push(pairs);
+      const fixed = rotation[0];
+      const rest = rotation.slice(1);
+      rest.unshift(rest.pop());
+      rotation.splice(0, rotation.length, fixed, ...rest);
+    }
+    const firstHalf = rng.shuffle(rounds);
+    const secondHalf = rng.shuffle(rounds).map((pairs) => pairs.map((p) => ({ homeId: p.awayId, awayId: p.homeId })));
+    const fixtures = [];
+    [...firstHalf, ...secondHalf].forEach((pairs, index) => {
+      for (const pair of pairs) {
+        fixtures.push({
+          round: index + 1,
+          homeId: pair.homeId,
+          awayId: pair.awayId,
+          played: false,
+          homeGoals: null,
+          awayGoals: null
+        });
+      }
+    });
+    return fixtures;
+  }
+  var totalRounds = (fixtures) => fixtures.reduce((m, f) => Math.max(m, f.round), 0);
+  function blankRow(team) {
+    return {
+      id: team.id,
+      name: team.name,
+      abbr: team.abbr,
+      color: team.home,
+      played: 0,
+      won: 0,
+      drawn: 0,
+      lost: 0,
+      gf: 0,
+      ga: 0,
+      gd: 0,
+      points: 0,
+      form: []
+    };
+  }
+  function buildTable(teams, fixtures) {
+    const rows = new Map(teams.map((t) => [t.id, blankRow(t)]));
+    for (const f of fixtures) {
+      if (!f.played) continue;
+      const home = rows.get(f.homeId);
+      const away = rows.get(f.awayId);
+      if (!home || !away) continue;
+      home.played++;
+      away.played++;
+      home.gf += f.homeGoals;
+      home.ga += f.awayGoals;
+      away.gf += f.awayGoals;
+      away.ga += f.homeGoals;
+      if (f.homeGoals > f.awayGoals) {
+        home.won++;
+        away.lost++;
+        home.points += POINTS_WIN;
+        away.points += 0;
+        home.form.push("W");
+        away.form.push("L");
+      } else if (f.homeGoals < f.awayGoals) {
+        away.won++;
+        home.lost++;
+        away.points += POINTS_WIN;
+        away.form.push("W");
+        home.form.push("L");
+      } else {
+        home.drawn++;
+        away.drawn++;
+        home.points += POINTS_DRAW;
+        away.points += POINTS_DRAW;
+        home.form.push("D");
+        away.form.push("D");
+      }
+    }
+    const table = [...rows.values()];
+    for (const row of table) {
+      row.gd = row.gf - row.ga;
+      row.form = row.form.slice(-5);
+    }
+    table.sort(compareRows);
+    table.forEach((row, i) => {
+      row.position = i + 1;
+    });
+    return table;
+  }
+  function compareRows(a, b) {
+    return b.points - a.points || b.gd - a.gd || b.gf - a.gf || a.name.localeCompare(b.name);
+  }
+  var positionOf = (table, teamId) => table.findIndex((r) => r.id === teamId) + 1 || table.length;
+  function nextFixtureFor(fixtures, teamId) {
+    return fixtures.find((f) => !f.played && (f.homeId === teamId || f.awayId === teamId)) ?? null;
+  }
+  function topScorers(teams, limit = 12) {
+    const players = [];
+    for (const team of teams) {
+      for (const p of team.squad) {
+        if (p.season.goals > 0 || p.season.assists > 0) players.push({ player: p, team });
+      }
+    }
+    players.sort((a, b) => b.player.season.goals - a.player.season.goals || b.player.season.assists - a.player.season.assists || a.player.season.minutes - b.player.season.minutes);
+    return players.slice(0, limit);
+  }
+  function bestRated(teams, limit = 10, minApps = 3) {
+    const players = [];
+    for (const team of teams) {
+      for (const p of team.squad) {
+        if (p.season.ratedApps >= minApps) {
+          players.push({ player: p, team, rating: p.season.ratingSum / p.season.ratedApps });
+        }
+      }
+    }
+    players.sort((a, b) => b.rating - a.rating);
+    return players.slice(0, limit);
+  }
+
+  // js/state.js
+  var SAVE_VERSION = 3;
+  var SQUAD_MIN = 16;
+  var SQUAD_MAX = 30;
+  var TICKET_PRICE = 45;
+  var TRAINING_FOCUS = [
+    { id: "balanced", name: "Balanced", blurb: "A bit of everything.", keys: ["pac", "pas", "sht", "def", "phy"] },
+    { id: "attack", name: "Attacking", blurb: "Finishing and movement.", keys: ["sht", "pac"] },
+    { id: "defence", name: "Defending", blurb: "Shape, tackling, heading.", keys: ["def", "phy"] },
+    { id: "possession", name: "Possession", blurb: "Passing and control.", keys: ["pas"] },
+    { id: "fitness", name: "Fitness", blurb: "Legs for the run-in. Recover faster.", keys: ["phy"] }
+  ];
+  var TRAINING_INTENSITY = [
+    { id: "light", name: "Light", recovery: 1.35, growth: 0.55, injury: 2e-3 },
+    { id: "normal", name: "Normal", recovery: 1, growth: 1, injury: 8e-3 },
+    { id: "hard", name: "Hard", recovery: 0.74, growth: 1.5, injury: 0.022 }
+  ];
+  var EXPECTATIONS = [
+    { minRep: 80, id: "title", text: "Win the league", maxPos: 2 },
+    { minRep: 66, id: "europe", text: "Finish in the top four", maxPos: 5 },
+    { minRep: 52, id: "tophalf", text: "Finish in the top half", maxPos: 8 },
+    { minRep: 0, id: "survive", text: "Stay in the division", maxPos: 10 }
+  ];
+  var PRIZE_MONEY = [6e6, 42e5, 32e5, 26e5, 22e5, 19e5, 165e4, 145e4, 125e4, 11e5, 95e4, 8e5];
+  var newsId = 1;
+  function newGame({ clubId, managerName, seed = Date.now() }) {
+    resetPlayerIds(1);
+    newsId = 1;
+    const rng = makeRng(seed);
+    const teams = CLUBS.map((club2) => makeTeam(club2, rng));
+    const state = {
+      version: SAVE_VERSION,
+      seed,
+      rngState: rng.state,
+      createdAt: Date.now(),
+      managerName: managerName?.trim() || "The Gaffer",
+      clubId,
+      season: 1,
+      round: 1,
+      // the matchday about to be played
+      teams,
+      fixtures: makeFixtures(teams.map((t) => t.id), rng),
+      freeAgents: [],
+      market: [],
+      news: [],
+      history: [],
+      lastResult: null,
+      training: { focus: "balanced", intensity: "normal" },
+      settings: { autoSubs: true, speed: "normal" },
+      board: null,
+      gameOver: null,
+      reserveClubs: PROMOTION_POOL.map((c) => c.id),
+      nextPlayerId: peekPlayerId()
+    };
+    const club = teams.find((t) => t.id === clubId);
+    state.board = makeBoard(club);
+    refreshMarket(state);
+    saveRng(state, rng);
+    pushNews(state, {
+      kind: "board",
+      title: `Welcome to ${club.name}`,
+      body: `The board have handed you the job on a two-year deal. Their expectation for the season: ${state.board.expectationText.toLowerCase()}. You start with ${money(club.finances.balance)} in the bank and a wage bill of ${money(wageBill(club))} a week.`
+    });
+    return state;
+  }
+  function makeTeam(club, rng) {
+    const squad = generateSquad(rng, club.rep);
+    const team = {
+      ...club,
+      squad,
+      tactics: { ...DEFAULT_TACTICS },
+      lineup: [],
+      bench: [],
+      finances: {
+        balance: Math.round((club.rep * 62e3 + rng.int(-400, 400) * 1e3) / 5e4) * 5e4,
+        sponsorship: Math.round(club.rep * 780)
+      },
+      seasonStats: { transfersIn: 0, transfersOut: 0, spent: 0, received: 0 }
+    };
+    const xi = autoPickXI(squad, team.tactics.formation);
+    team.lineup = xi.map((p) => p.id);
+    team.bench = autoPickBench(squad, xi).map((p) => p.id);
+    return team;
+  }
+  function makeBoard(club) {
+    const exp = EXPECTATIONS.find((e) => club.rep >= e.minRep);
+    return {
+      confidence: 62,
+      expectation: exp.id,
+      expectationText: exp.text,
+      maxPos: exp.maxPos,
+      seasonsInCharge: 0
+    };
+  }
+  var getTeam = (state, id) => state.teams.find((t) => t.id === id);
+  var userTeam = (state) => getTeam(state, state.clubId);
+  var roundsInSeason = (state) => totalRounds(state.fixtures);
+  var nextFixture = (state) => nextFixtureFor(state.fixtures, state.clubId);
+  var findPlayer = (state, playerId) => {
+    for (const team of state.teams) {
+      const p = team.squad.find((x) => x.id === playerId);
+      if (p) return { player: p, team };
+    }
+    const free = state.freeAgents.find((x) => x.id === playerId);
+    return free ? { player: free, team: null } : null;
+  };
+  var wageBill = (team) => team.squad.reduce((s, p) => s + p.wage, 0);
+  var squadValue = (team) => team.squad.reduce((s, p) => s + p.value, 0);
+  var seasonOver = (state) => state.fixtures.every((f) => f.played);
+  function withRng(state, fn) {
+    const rng = makeRng(state.seed);
+    rng.state = state.rngState;
+    const out = fn(rng);
+    saveRng(state, rng);
+    return out;
+  }
+  function saveRng(state, rng) {
+    state.rngState = rng.state;
+  }
+  function money(amount) {
+    const n = Math.round(amount);
+    const sign = n < 0 ? "-" : "";
+    const abs = Math.abs(n);
+    if (abs >= 1e6) return `${sign}P${(abs / 1e6).toFixed(abs >= 1e7 ? 1 : 2)}m`;
+    if (abs >= 1e3) return `${sign}P${Math.round(abs / 1e3)}k`;
+    return `${sign}P${abs}`;
+  }
+  function pushNews(state, item) {
+    state.news.unshift({
+      id: newsId++,
+      season: state.season,
+      round: state.round,
+      read: false,
+      ...item
+    });
+    state.news = state.news.slice(0, 60);
+  }
+  function startMatch(state) {
+    const fixture = nextFixture(state);
+    if (!fixture) return null;
+    const rng = makeRng(state.seed);
+    rng.state = state.rngState;
+    const home = getTeam(state, fixture.homeId);
+    const away = getTeam(state, fixture.awayId);
+    const sim = new MatchSim({
+      home: matchSide(home, { isUser: home.id === state.clubId, autoSubs: state.settings.autoSubs }),
+      away: matchSide(away, { isUser: away.id === state.clubId, autoSubs: state.settings.autoSubs }),
+      rng
+    });
+    sim.fixture = fixture;
+    sim.saveRngTo = state;
+    return sim;
+  }
+  function completeMatch(state, sim) {
+    saveRng(state, sim.rng);
+    const result = sim.result();
+    applyResult(state, sim.fixture, result);
+    state.lastResult = summariseResult(state, sim.fixture, result);
+    simulateRound(state, state.round, sim.fixture);
+    finishRound(state);
+    return state.lastResult;
+  }
+  function quickPlayRound(state) {
+    const fixture = nextFixture(state);
+    if (fixture) {
+      const sim = startMatch(state);
+      sim.runToEnd();
+      return completeMatch(state, sim);
+    }
+    simulateRound(state, state.round, null);
+    finishRound(state);
+    return null;
+  }
+  function simulateRound(state, round, skipFixture) {
+    withRng(state, (rng) => {
+      for (const fixture of state.fixtures) {
+        if (fixture.round !== round || fixture.played || fixture === skipFixture) continue;
+        const home = getTeam(state, fixture.homeId);
+        const away = getTeam(state, fixture.awayId);
+        const sim = new MatchSim({ home: matchSide(home), away: matchSide(away), rng });
+        applyResult(state, fixture, sim.runToEnd());
+      }
+    });
+  }
+  function applyResult(state, fixture, result) {
+    fixture.played = true;
+    fixture.homeGoals = result.homeGoals;
+    fixture.awayGoals = result.awayGoals;
+    fixture.homeScorers = result.home.players.filter((p) => p.goals > 0).map((p) => ({ name: p.name, goals: p.goals }));
+    fixture.awayScorers = result.away.players.filter((p) => p.goals > 0).map((p) => ({ name: p.name, goals: p.goals }));
+    for (const [side, teamId, opponentGoals, ownGoals] of [
+      [result.home, fixture.homeId, result.awayGoals, result.homeGoals],
+      [result.away, fixture.awayId, result.homeGoals, result.awayGoals]
+    ]) {
+      const team = getTeam(state, teamId);
+      if (!team) continue;
+      const won = ownGoals > opponentGoals;
+      const drew = ownGoals === opponentGoals;
+      for (const line of side.players) {
+        const player = team.squad.find((p) => p.id === line.id);
+        if (!player || line.minutes === 0) continue;
+        player.condition = line.condition;
+        player.season.minutes += line.minutes;
+        if (line.started) player.season.apps++;
+        else player.season.subs++;
+        player.season.goals += line.goals;
+        player.season.assists += line.assists;
+        player.season.yellow += line.yellow;
+        player.season.red += line.red;
+        player.season.ratingSum += line.rating;
+        player.season.ratedApps++;
+        player.career.apps++;
+        player.career.goals += line.goals;
+        player.career.assists += line.assists;
+        if (line.role === "GK" && opponentGoals === 0 && line.minutes > 60) player.season.cleanSheets++;
+        player.form = clamp(player.form * 0.72 + (line.rating - 6.5) * 3.4, -10, 10);
+        const moraleShift = (won ? 5 : drew ? 1 : -4) + (line.rating - 6.5) * 2.5;
+        player.morale = clamp(player.morale + moraleShift, 5, 100);
+        if (line.injuryDays > 0) {
+          player.injuryDays = line.injuryDays;
+          player.injuryNote = line.injuryNote;
+          player.morale = clamp(player.morale - 8, 5, 100);
+        }
+        if (line.red > 0) player.suspension = 2;
+        player.yellowSeason += line.yellow;
+        if (player.yellowSeason >= 5) {
+          player.yellowSeason = 0;
+          player.suspension = Math.max(player.suspension, 2);
+        }
+      }
+      const involved = new Set(side.players.filter((p) => p.minutes > 0).map((p) => p.id));
+      for (const p of team.squad) {
+        if (involved.has(p.id) || !isAvailable(p)) continue;
+        p.morale = clamp(p.morale - 1.6, 5, 100);
+      }
+    }
+    if (fixture.homeId === state.clubId || fixture.awayId === state.clubId) {
+      applyMatchdayFinances(state, fixture, result);
+    }
+  }
+  function applyMatchdayFinances(state, fixture, result) {
+    const club = userTeam(state);
+    if (fixture.homeId !== club.id) return;
+    const opponent = getTeam(state, fixture.awayId);
+    const standings = buildTable(state.teams, state.fixtures);
+    const pos = positionOf(standings, club.id);
+    const pull = clamp(0.42 + club.rep / 240 + opponent.rep / 400 + (12 - pos) * 0.014, 0.3, 0.98);
+    const attendance = Math.round(club.capacity * pull);
+    const gate = attendance * TICKET_PRICE;
+    club.finances.balance += gate;
+    state.lastGate = { attendance, gate };
+  }
+  function summariseResult(state, fixture, result) {
+    const club = userTeam(state);
+    const isHome = fixture.homeId === club.id;
+    const own = isHome ? result.homeGoals : result.awayGoals;
+    const opp = isHome ? result.awayGoals : result.homeGoals;
+    const opponent = getTeam(state, isHome ? fixture.awayId : fixture.homeId);
+    return {
+      season: state.season,
+      round: fixture.round,
+      isHome,
+      opponentId: opponent.id,
+      opponentName: opponent.name,
+      own,
+      opp,
+      outcome: own > opp ? "W" : own === opp ? "D" : "L",
+      result
+    };
+  }
+  function finishRound(state) {
+    const club = userTeam(state);
+    const standings = buildTable(state.teams, state.fixtures);
+    const pos = positionOf(standings, club.id);
+    const wages = wageBill(club);
+    club.finances.balance += club.finances.sponsorship - wages;
+    if (state.lastResult) {
+      const r = state.lastResult;
+      const scoreline = `${r.own}-${r.opp}`;
+      pushNews(state, {
+        kind: "result",
+        title: `${r.outcome === "W" ? "Win" : r.outcome === "D" ? "Draw" : "Defeat"} ${r.isHome ? "v" : "away to"} ${r.opponentName} ${scoreline}`,
+        body: `${club.name} are ${ordinal(pos)} after ${standings.find((row) => row.id === club.id).played} matches.` + (state.lastGate ? ` ${state.lastGate.attendance.toLocaleString()} through the gates, ${money(state.lastGate.gate)} taken.` : "")
+      });
+      state.lastGate = null;
+      updateBoard(state, r, pos);
+    }
+    runTrainingWeek(state);
+    injuryReport(state);
+    state.round++;
+    if (seasonOver(state)) endSeason(state);
+    else if (state.round === Math.floor(roundsInSeason(state) / 2) + 1) openMidseasonWindow(state);
+  }
+  function ordinal(n) {
+    const s = ["th", "st", "nd", "rd"];
+    const v = n % 100;
+    return n + (s[(v - 20) % 10] ?? s[v] ?? s[0]);
+  }
+  function runTrainingWeek(state) {
+    const focus = TRAINING_FOCUS.find((f) => f.id === state.training.focus) ?? TRAINING_FOCUS[0];
+    const intensity = TRAINING_INTENSITY.find((i) => i.id === state.training.intensity) ?? TRAINING_INTENSITY[1];
+    withRng(state, (rng) => {
+      for (const team of state.teams) {
+        const isUser = team.id === state.clubId;
+        const teamFocus = isUser ? focus : TRAINING_FOCUS[0];
+        const teamIntensity = isUser ? intensity : TRAINING_INTENSITY[1];
+        for (const player of team.squad) {
+          recover(player, rng, 7, teamIntensity.recovery * (focus.id === "fitness" && isUser ? 1.12 : 1));
+          player.morale = clamp(player.morale + (player.morale < 55 ? 1.1 : -0.4), 5, 100);
+          player.suspension = Math.max(0, player.suspension - 1);
+          const now = ability(player);
+          const room = player.potential - now;
+          if (room > 0) {
+            const ageFactor = player.age <= 21 ? 1 : player.age <= 25 ? 0.6 : player.age <= 29 ? 0.25 : 0.08;
+            const gain = 0.055 * ageFactor * teamIntensity.growth * (0.5 + Math.min(1, room / 12));
+            if (rng.chance(0.55)) growFocused(player, gain, teamFocus.keys);
+          } else if (player.age >= 31 && rng.chance(0.12)) {
+            applyGrowth(player, -0.12);
+          }
+          if (isUser && isAvailable(player) && rng.chance(teamIntensity.injury)) {
+            player.injuryDays = rng.int(4, 21);
+            player.injuryNote = rng.pick(["strain in training", "tweaked a hamstring", "rolled an ankle in a small-sided game"]);
+            pushNews(state, {
+              kind: "injury",
+              title: `${player.name} injured in training`,
+              body: `${shortName(player)} ${player.injuryNote} and is out for around ${player.injuryDays} days.`
+            });
+          }
+        }
+        for (const player of team.squad) player.value = marketValue(player);
+      }
+    });
+  }
+  function growFocused(player, gain, keys) {
+    applyGrowth(player, gain * 0.4);
+    for (const key of keys) {
+      player.att[key] = clamp(player.att[key] + gain * 1.6 / keys.length, 8, 97);
+    }
+    player.value = marketValue(player);
+  }
+  function injuryReport(state) {
+    const club = userTeam(state);
+    const fresh = club.squad.filter((p) => p.injuryDays > 0 && p.injuryDays <= 7 && p.injuryNote);
+    if (!fresh.length) return;
+    const back = fresh.map((p) => `${shortName(p)} (${p.injuryDays}d)`).join(", ");
+    pushNews(state, { kind: "injury", title: "Treatment room", body: `Close to a return: ${back}.` });
+  }
+  function updateBoard(state, result, position) {
+    const board = state.board;
+    const target = board.maxPos;
+    const positional = clamp((target - position) * 0.7, -5, 4);
+    const resultShift = result.outcome === "W" ? 3 : result.outcome === "D" ? 0.4 : -2.4;
+    board.confidence = clamp(board.confidence + positional * 0.35 + resultShift, 0, 100);
+    const played = state.fixtures.filter((f) => f.played && (f.homeId === state.clubId || f.awayId === state.clubId)).length;
+    if (board.confidence < 8 && played >= 10 && !state.gameOver) {
+      sack(state, `${played} matches in, ${ordinal(position)} in the table, and the board have run out of patience.`);
+    } else if (board.confidence < 25 && played >= 6 && !board.warned) {
+      board.warned = true;
+      pushNews(state, {
+        kind: "board",
+        title: "The board want to see improvement",
+        body: `Sitting ${ordinal(position)} is not what was agreed. The target remains: ${board.expectationText.toLowerCase()}. Results need to turn quickly.`
+      });
+    }
+  }
+  function sack(state, reason) {
+    state.gameOver = {
+      reason,
+      season: state.season,
+      club: userTeam(state).name,
+      honours: state.history.filter((h) => h.position === 1).length
+    };
+    pushNews(state, { kind: "board", title: "You have been relieved of your duties", body: reason });
+  }
+  var windowOpen = (state) => state.round === 1 || state.round === Math.floor(roundsInSeason(state) / 2) + 1;
+  function refreshMarket(state) {
+    withRng(state, (rng) => {
+      state.freeAgents = [];
+      const club = userTeam(state);
+      const level = clamp(52 + (club.rep - 40) * 0.42, 45, 74);
+      for (let i = 0; i < 6; i++) {
+        const pos = rng.pick(["GK", "DF", "DF", "MF", "MF", "FW", "FW"]);
+        const p = generatePlayer(rng, { pos, quality: level + rng.range(-12, 3), age: rng.int(18, 34) });
+        p.contract = 0;
+        state.freeAgents.push(p);
+      }
+      const listed = [];
+      for (const team of state.teams) {
+        if (team.id === state.clubId) continue;
+        const candidates = team.squad.filter((p) => isAvailable(p)).sort((a, b) => ability(a) - ability(b));
+        const surplus = candidates.filter((p) => team.squad.filter((q) => q.pos === p.pos).length > (p.pos === "GK" ? 2 : 4));
+        const pool = surplus.length ? surplus : candidates;
+        const count = rng.int(1, 2);
+        for (let i = 0; i < count && i < pool.length; i++) {
+          const p = rng.pick(pool);
+          if (listed.some((l) => l.playerId === p.id)) continue;
+          p.transferListed = true;
+          listed.push({ playerId: p.id, teamId: team.id, fee: Math.round(p.value * rng.range(1.05, 1.45) / 5e3) * 5e3 });
+        }
+      }
+      state.market = [
+        ...state.freeAgents.map((p) => ({ playerId: p.id, teamId: null, fee: 0 })),
+        ...rng.shuffle(listed).slice(0, 14)
+      ];
+      state.nextPlayerId = peekPlayerId();
+    });
+  }
+  function openMidseasonWindow(state) {
+    refreshMarket(state);
+    pushNews(state, {
+      kind: "transfer",
+      title: "The mid-season window is open",
+      body: "Agents are working the phones. The window closes when the next round of fixtures kicks off."
+    });
+  }
+  function transferOffer(state, playerId) {
+    const listing = state.market.find((m) => m.playerId === playerId);
+    if (!listing) return null;
+    const found = findPlayer(state, playerId);
+    if (!found) return null;
+    const club = userTeam(state);
+    const wage = Math.round(wageFor(found.player) * 1.08);
+    const fee = listing.fee;
+    const reasons = [];
+    if (!windowOpen(state)) reasons.push("The transfer window is shut.");
+    if (fee > club.finances.balance) reasons.push(`You cannot cover ${money(fee)}.`);
+    if (club.squad.length >= SQUAD_MAX) reasons.push("Your squad is full.");
+    if (wage + wageBill(club) > club.finances.sponsorship * 2.6) reasons.push("That wage would break the budget.");
+    return { listing, player: found.player, fromTeam: found.team, fee, wage, canSign: reasons.length === 0, reasons };
+  }
+  function signPlayer(state, playerId) {
+    const offer = transferOffer(state, playerId);
+    if (!offer || !offer.canSign) return { ok: false, message: offer ? offer.reasons[0] : "That player is no longer available." };
+    const club = userTeam(state);
+    const { player, fromTeam, fee, wage } = offer;
+    if (fromTeam) {
+      fromTeam.squad = fromTeam.squad.filter((p) => p.id !== player.id);
+      fromTeam.lineup = fromTeam.lineup.filter((id) => id !== player.id);
+      fromTeam.bench = fromTeam.bench.filter((id) => id !== player.id);
+      fromTeam.finances.balance += fee;
+      fromTeam.seasonStats.received += fee;
+      if (fromTeam.squad.length < SQUAD_MIN) restockSquad(state, fromTeam);
+    } else {
+      state.freeAgents = state.freeAgents.filter((p) => p.id !== player.id);
+    }
+    player.transferListed = false;
+    player.contract = 3;
+    player.wage = wage;
+    player.morale = clamp(player.morale + 12, 5, 100);
+    player.season = blankSeasonStats();
+    club.squad.push(player);
+    club.finances.balance -= fee;
+    club.seasonStats.transfersIn++;
+    club.seasonStats.spent += fee;
+    state.market = state.market.filter((m) => m.playerId !== playerId);
+    pushNews(state, {
+      kind: "transfer",
+      title: `${player.name} signs`,
+      body: `${player.name} (${player.pos}, ${player.age}) joins ${fee ? `for ${money(fee)}` : "on a free transfer"} from ${fromTeam ? fromTeam.name : "free agency"}, on ${money(wage)} a week.`
+    });
+    return { ok: true, message: `${player.name} signed.` };
+  }
+  function saleOffer(state, playerId) {
+    const club = userTeam(state);
+    const player = club.squad.find((p) => p.id === playerId);
+    if (!player) return null;
+    return withRng(state, (rng) => {
+      const interest = state.teams.filter((t) => t.id !== club.id && t.finances.balance > player.value * 0.9 && t.squad.length < SQUAD_MAX);
+      if (!interest.length) return { player, fee: 0, buyer: null, canSell: false, reason: "Nobody can afford him at the moment." };
+      const buyer = rng.pick(interest);
+      const fee = Math.round(player.value * rng.range(0.72, 1.12) / 5e3) * 5e3;
+      const canSell = club.squad.length > SQUAD_MIN && windowOpen(state);
+      const reason = !windowOpen(state) ? "The transfer window is shut." : club.squad.length <= SQUAD_MIN ? "Your squad is already at the minimum." : "";
+      return { player, fee, buyer, canSell, reason };
+    });
+  }
+  function sellPlayer(state, playerId, offer) {
+    const club = userTeam(state);
+    const player = club.squad.find((p) => p.id === playerId);
+    if (!player || !offer || !offer.canSell) return { ok: false, message: offer?.reason ?? "Cannot sell that player." };
+    club.squad = club.squad.filter((p) => p.id !== playerId);
+    club.lineup = club.lineup.filter((id) => id !== playerId);
+    club.bench = club.bench.filter((id) => id !== playerId);
+    club.finances.balance += offer.fee;
+    club.seasonStats.transfersOut++;
+    club.seasonStats.received += offer.fee;
+    const buyer = offer.buyer;
+    buyer.squad.push(player);
+    buyer.finances.balance -= offer.fee;
+    player.transferListed = false;
+    player.morale = clamp(player.morale + 6, 5, 100);
+    const a = ability(player);
+    for (const p of club.squad) if (ability(p) < a) p.morale = clamp(p.morale - 2, 5, 100);
+    pushNews(state, {
+      kind: "transfer",
+      title: `${player.name} sold to ${buyer.name}`,
+      body: `${money(offer.fee)} banked. The squad is down to ${club.squad.length} players.`
+    });
+    ensureSelection(club);
+    return { ok: true, message: `${player.name} sold for ${money(offer.fee)}.` };
+  }
+  function restockSquad(state, team) {
+    withRng(state, (rng) => {
+      while (team.squad.length < SQUAD_MIN + 4) {
+        const counts = { GK: 0, DF: 0, MF: 0, FW: 0 };
+        for (const p of team.squad) counts[p.pos]++;
+        const need = counts.GK < 2 ? "GK" : counts.DF < 5 ? "DF" : counts.MF < 5 ? "MF" : "FW";
+        team.squad.push(generatePlayer(rng, { pos: need, quality: 44 + (team.rep - 40) * 0.4, age: rng.int(18, 31) }));
+      }
+      state.nextPlayerId = peekPlayerId();
+    });
+  }
+  function renewContract(state, playerId) {
+    const club = userTeam(state);
+    const player = club.squad.find((p) => p.id === playerId);
+    if (!player) return { ok: false, message: "Player not found." };
+    const newWage = Math.round(wageFor(player) * (player.contract === 0 ? 1.25 : 1.12) / 50) * 50;
+    if (newWage + wageBill(club) - player.wage > club.finances.sponsorship * 2.6) {
+      return { ok: false, message: `${money(newWage)} a week would break the wage budget.` };
+    }
+    player.wage = newWage;
+    player.contract = 3;
+    player.morale = clamp(player.morale + 8, 5, 100);
+    return { ok: true, message: `${shortName(player)} signs on until ${state.season + 3}, ${money(newWage)} a week.` };
+  }
+  function ensureSelection(team) {
+    const ids = new Set(team.squad.map((p) => p.id));
+    team.lineup = (team.lineup ?? []).filter((id) => ids.has(id));
+    team.bench = (team.bench ?? []).filter((id) => ids.has(id) && !team.lineup.includes(id));
+    const xi = team.lineup.map((id) => team.squad.find((p) => p.id === id));
+    const broken = xi.length !== 11 || xi.some((p) => !p || !isAvailable(p));
+    if (broken) autoSelect(team);
+    if (team.bench.length < 5) {
+      const picked = autoPickBench(team.squad, team.lineup.map((id) => team.squad.find((p) => p.id === id)).filter(Boolean));
+      team.bench = picked.map((p) => p.id);
+    }
+  }
+  function autoSelect(team) {
+    const xi = autoPickXI(team.squad, team.tactics.formation);
+    team.lineup = xi.map((p) => p && p.id).filter(Boolean);
+    team.bench = autoPickBench(team.squad, xi).map((p) => p.id);
+    return team;
+  }
+  function setFormation(team, formation) {
+    team.tactics.formation = formation;
+    autoSelect(team);
+  }
+  function endSeason(state) {
+    const standings = buildTable(state.teams, state.fixtures);
+    const club = userTeam(state);
+    const row = standings.find((r) => r.id === club.id);
+    const position = row.position;
+    const champion = standings[0];
+    club.finances.balance += PRIZE_MONEY[position - 1] ?? 8e5;
+    state.history.push({
+      season: state.season,
+      clubId: club.id,
+      clubName: club.name,
+      position,
+      points: row.points,
+      won: row.won,
+      drawn: row.drawn,
+      lost: row.lost,
+      gf: row.gf,
+      ga: row.ga,
+      champion: champion.name
+    });
+    pushNews(state, {
+      kind: "board",
+      title: `Season ${state.season} is over \u2014 ${ordinal(position)} place`,
+      body: `${champion.name} are champions. ${club.name} finish ${ordinal(position)} on ${row.points} points and collect ${money(PRIZE_MONEY[position - 1] ?? 8e5)} in prize money.`
+    });
+    const board = state.board;
+    board.seasonsInCharge++;
+    const met = position <= board.maxPos;
+    board.confidence = 60 + (board.confidence - 60) * 0.6;
+    board.confidence = clamp(board.confidence + (met ? 22 : -16) + (board.maxPos - position) * 2.2, 0, 100);
+    if (position === 1) {
+      pushNews(state, { kind: "board", title: "CHAMPIONS", body: `${club.name} win the Kalahari Premiership. The city has not slept.` });
+    }
+    if (position > 10) {
+      sack(state, `${club.name} finish ${ordinal(position)} and go down. The board thank you for your service.`);
+      return state;
+    }
+    const disaster = position >= board.maxPos + 4;
+    if (!met && board.confidence < 22 && (board.seasonsInCharge >= 2 || disaster)) {
+      sack(state, `A ${ordinal(position)} place finish against a target of ${board.expectationText.toLowerCase()} has cost you the job.`);
+      return state;
+    }
+    if (!met) {
+      pushNews(state, {
+        kind: "board",
+        title: "The board expect better next season",
+        body: `${ordinal(position)} is short of ${board.expectationText.toLowerCase()}. You keep the job, but another season like it will not be tolerated.`
+      });
+    }
+    rollOverSeason(state, standings);
+    return state;
+  }
+  function rollOverSeason(state, standings) {
+    withRng(state, (rng) => {
+      for (const row of standings) {
+        const team = getTeam(state, row.id);
+        const expected = 6.5;
+        team.rep = clamp(Math.round(team.rep + (expected - row.position) * 0.9), 34, 95);
+      }
+      const goingDown = standings.slice(-2).map((r) => r.id).filter((id) => id !== state.clubId);
+      for (const id of goingDown) {
+        const poolId = state.reserveClubs.shift();
+        const template = PROMOTION_POOL.find((c) => c.id === poolId);
+        const oldIndex = state.teams.findIndex((t) => t.id === id);
+        if (!template || oldIndex < 0) continue;
+        state.reserveClubs.push(id);
+        const promoted = makeTeam({ ...template, rep: clamp(template.rep + rng.int(-2, 4), 36, 60) }, rng);
+        state.teams[oldIndex] = promoted;
+        pushNews(state, {
+          kind: "league",
+          title: `${promoted.name} promoted`,
+          body: `${getTeam(state, id)?.name ?? "A club"} go down; ${promoted.name} come up in their place.`
+        });
+      }
+      for (const team of state.teams) {
+        const retiring = [];
+        for (const player of team.squad) {
+          player.season = blankSeasonStats();
+          player.form = 0;
+          player.yellowSeason = 0;
+          player.suspension = 0;
+          player.condition = rng.int(84, 98);
+          ageUp(player, rng);
+          if (player.age >= 34 && (rng.chance(0.35) || ability(player) < 42)) retiring.push(player.id);
+        }
+        if (retiring.length) {
+          team.squad = team.squad.filter((p) => !retiring.includes(p.id));
+          if (team.id === state.clubId) {
+            pushNews(state, {
+              kind: "squad",
+              title: `${retiring.length} player${retiring.length > 1 ? "s" : ""} retire`,
+              body: "Time catches everyone. Replacements have been added to the academy intake."
+            });
+          }
+        }
+        if (team.id !== state.clubId) {
+          for (const p of team.squad) if (p.contract <= 0) {
+            p.contract = rng.int(1, 3);
+            p.wage = wageFor(p);
+          }
+        } else {
+          const expired = team.squad.filter((p) => p.contract <= 0);
+          const leaving = [];
+          const stayed = [];
+          for (const p of expired) {
+            const newWage = Math.round(wageFor(p) * 1.1 / 50) * 50;
+            const affordable = wageBill(team) - p.wage + newWage <= team.finances.sponsorship * 2.6;
+            if (p.morale >= 45 && affordable) {
+              p.contract = rng.int(2, 3);
+              p.wage = newWage;
+              stayed.push(p);
+            } else {
+              leaving.push(p);
+            }
+          }
+          if (leaving.length) {
+            const ids = new Set(leaving.map((p) => p.id));
+            team.squad = team.squad.filter((p) => !ids.has(p.id));
+            pushNews(state, {
+              kind: "squad",
+              title: `${leaving.length} player${leaving.length > 1 ? "s" : ""} leave on a free`,
+              body: `${leaving.map((p) => p.name).join(", ")} would not sign again. Renew contracts from a player's profile before the final year runs out.`
+            });
+          }
+          if (stayed.length) {
+            pushNews(state, {
+              kind: "squad",
+              title: `${stayed.length} new contract${stayed.length > 1 ? "s" : ""} agreed`,
+              body: `${stayed.map((p) => shortName(p)).join(", ")} have signed on again.`
+            });
+          }
+          const expiring = team.squad.filter((p) => p.contract === 1);
+          if (expiring.length) {
+            pushNews(state, {
+              kind: "squad",
+              title: `${expiring.length} player${expiring.length > 1 ? "s" : ""} in the final year`,
+              body: `${expiring.map((p) => shortName(p)).join(", ")} will be out of contract at the end of this season.`
+            });
+          }
+        }
+        while (team.squad.length < SQUAD_MIN + 4) {
+          const counts = { GK: 0, DF: 0, MF: 0, FW: 0 };
+          for (const p of team.squad) counts[p.pos]++;
+          const need = counts.GK < 2 ? "GK" : counts.DF < 6 ? "DF" : counts.MF < 6 ? "MF" : "FW";
+          team.squad.push(generatePlayer(rng, { pos: need, quality: 46 + (team.rep - 40) * 0.44, age: rng.int(17, 20) }));
+        }
+        ensureSelection(team);
+      }
+      state.season++;
+      state.round = 1;
+      state.fixtures = makeFixtures(state.teams.map((t) => t.id), rng);
+      state.lastResult = null;
+      state.board.warned = false;
+      state.nextPlayerId = peekPlayerId();
+      const club2 = userTeam(state);
+      const exp = EXPECTATIONS.find((e) => club2.rep >= e.minRep);
+      state.board.expectation = exp.id;
+      state.board.expectationText = exp.text;
+      state.board.maxPos = exp.maxPos;
+    });
+    refreshMarket(state);
+    const club = userTeam(state);
+    pushNews(state, {
+      kind: "board",
+      title: `Season ${state.season} \u2014 the board's target`,
+      body: `${state.board.expectationText}. Budget available: ${money(club.finances.balance)}. Pre-season transfer window is open until the first match.`
+    });
+  }
+  function setTraining(state, patch) {
+    Object.assign(state.training, patch);
+  }
+
+  // js/storage.js
+  var KEY = "kalahari-manager-save-v1";
+  var memory = /* @__PURE__ */ new Map();
+  function backing() {
+    try {
+      const probe = "__kalahari_probe__";
+      localStorage.setItem(probe, "1");
+      localStorage.removeItem(probe);
+      return localStorage;
+    } catch {
+      return null;
+    }
+  }
+  var store = backing();
+  var persistent = () => store !== null;
+  var read = (key) => store ? store.getItem(key) : memory.get(key) ?? null;
+  var write = (key, value) => store ? store.setItem(key, value) : memory.set(key, value);
+  var remove = (key) => store ? store.removeItem(key) : memory.delete(key);
+  function save(state) {
+    try {
+      const slim = { ...state, lastResult: state.lastResult ? { ...state.lastResult, result: void 0 } : null };
+      write(KEY, JSON.stringify(slim));
+      return true;
+    } catch (err) {
+      console.warn("Could not save", err);
+      return false;
+    }
+  }
+  function load() {
+    try {
+      const raw = read(KEY);
+      if (!raw) return null;
+      const state = JSON.parse(raw);
+      if (state.version !== SAVE_VERSION) return null;
+      resetPlayerIds(state.nextPlayerId ?? highestPlayerId(state) + 1);
+      return state;
+    } catch (err) {
+      console.warn("Could not load save", err);
+      return null;
+    }
+  }
+  function highestPlayerId(state) {
+    let max = 0;
+    for (const team of state.teams ?? []) for (const p of team.squad) max = Math.max(max, p.id);
+    for (const p of state.freeAgents ?? []) max = Math.max(max, p.id);
+    return max;
+  }
+  function clear() {
+    try {
+      remove(KEY);
+    } catch {
+    }
+  }
+
+  // js/screens.js
+  var POS_GROUPS = [["GK", "Goalkeepers"], ["DF", "Defenders"], ["MF", "Midfielders"], ["FW", "Forwards"]];
+  function renderScreen(app2) {
+    switch (app2.route) {
+      case "squad":
+        return squadScreen(app2);
+      case "tactics":
+        return tacticsScreen(app2);
+      case "league":
+        return leagueScreen(app2);
+      case "club":
+        return clubScreen(app2);
+      default:
+        return homeScreen(app2);
+    }
+  }
+  function renderTopbar(app2) {
+    const s = app2.state;
+    const club = userTeam(s);
+    const standings = buildTable(s.teams, s.fixtures);
+    const pos = positionOf(standings, club.id);
+    const rounds = roundsInSeason(s);
+    const played = standings.find((r) => r.id === club.id)?.played ?? 0;
+    return `
+    <div class="topbar-row">
+      ${crest(club)}
+      <div class="topbar-club">
+        <div class="topbar-name">${esc(club.name)}</div>
+        <div class="topbar-sub">Season ${s.season} \xB7 MD ${Math.min(s.round, rounds)}/${rounds} \xB7 ${played ? ordinal2(pos) : "Pre-season"}</div>
+      </div>
+      <div class="topbar-cash">
+        <strong>${money(club.finances.balance)}</strong>
+        <span>${money(wageBill(club))}/wk wages</span>
+      </div>
+    </div>`;
+  }
+  function homeScreen(app2) {
+    const s = app2.state;
+    const club = userTeam(s);
+    const fixture = nextFixture(s);
+    const standings = buildTable(s.teams, s.fixtures);
+    const myRow = standings.find((r) => r.id === club.id);
+    const injured = club.squad.filter((p) => p.injuryDays > 0);
+    const suspended = club.squad.filter((p) => p.suspension > 0);
+    const avgCondition = club.squad.reduce((t, p) => t + p.condition, 0) / club.squad.length;
+    const avgMorale = club.squad.reduce((t, p) => t + p.morale, 0) / club.squad.length;
+    return `
+    ${nextMatchCard(app2, fixture)}
+    ${s.lastResult ? lastResultCard(app2) : ""}
+
+    <div class="section-title">Dressing room</div>
+    <div class="card">
+      <div class="kv"><span>Squad fitness</span><strong>${Math.round(avgCondition)}%</strong></div>
+      ${meter(avgCondition)}
+      <div class="kv" style="margin-top:10px"><span>Morale</span><strong>${moraleWord(avgMorale)}</strong></div>
+      ${meter(avgMorale, "gold")}
+      <hr class="sep">
+      <div class="rowwrap">
+        <span class="pill ${injured.length ? "bad" : ""}">${injured.length} injured</span>
+        <span class="pill ${suspended.length ? "warn" : ""}">${suspended.length} suspended</span>
+        <span class="pill">${club.squad.length} players</span>
+        <span class="pill">${club.tactics.formation}</span>
+      </div>
+      ${injured.length ? `<p class="tiny muted" style="margin:10px 0 0">${injured.slice(0, 4).map((p) => `${esc(shortName(p))} (${p.injuryDays}d)`).join(" \xB7 ")}${injured.length > 4 ? ` +${injured.length - 4} more` : ""}</p>` : ""}
+    </div>
+
+    <div class="section-title">Board</div>
+    <div class="card">
+      <div class="spread"><span class="muted tiny">Confidence</span><strong>${Math.round(s.board.confidence)}%</strong></div>
+      ${meter(s.board.confidence, s.board.confidence < 30 ? "" : "gold")}
+      <p class="tiny muted" style="margin:10px 0 0">Target: ${esc(s.board.expectationText)}. ${myRow.played ? `You are ${ordinal2(myRow.position)} on ${myRow.points} points.` : "The season has not kicked off yet."}</p>
+    </div>
+
+    <div class="section-title">Inbox</div>
+    <div class="card tight">
+      ${s.news.length ? s.news.slice(0, 6).map(newsRow).join("") : '<p class="empty">Nothing new.</p>'}
+    </div>
+    ${s.news.length > 6 ? `<button class="btn wide ghost" data-action="all-news">All news (${s.news.length})</button>` : ""}
+  `;
+  }
+  function nextMatchCard(app2, fixture) {
+    const s = app2.state;
+    const club = userTeam(s);
+    if (!fixture) {
+      return `<div class="card">
+      <div class="section-title" style="margin-top:0">Season complete</div>
+      <p class="tiny muted">Every fixture has been played. The board are reviewing the season.</p>
+    </div>`;
+    }
+    const isHome = fixture.homeId === club.id;
+    const opponent = getTeam(s, isHome ? fixture.awayId : fixture.homeId);
+    const standings = buildTable(s.teams, s.fixtures);
+    const oppRow = standings.find((r) => r.id === opponent.id);
+    return `
+    <div class="card">
+      <div class="spread" style="margin-bottom:6px">
+        <span class="pill gold">Matchday ${fixture.round}</span>
+        <span class="tiny muted">${isHome ? `${esc(club.stadium)}` : `Away at ${esc(opponent.stadium)}`}</span>
+      </div>
+      <div class="fixture">
+        <div class="side">${crest(isHome ? club : opponent, "sm")}<span>${esc((isHome ? club : opponent).name)}</span></div>
+        <div class="score">v</div>
+        <div class="side away">${crest(isHome ? opponent : club, "sm")}<span>${esc((isHome ? opponent : club).name)}</span></div>
+      </div>
+      <div class="spread tiny muted" style="margin:8px 0 12px">
+        <span>${esc(opponent.abbr)}: ${ordinal2(oppRow.position)}, ${oppRow.points} pts</span>
+        ${formRun(oppRow.form)}
+      </div>
+      <button class="btn primary wide big" data-action="play-match">Play match</button>
+      <div class="btn-row" style="margin-top:8px">
+        <button class="btn ghost" data-action="quick-match">Instant result</button>
+        <button class="btn ghost" data-action="tab:squad">Team selection</button>
+      </div>
+    </div>`;
+  }
+  function lastResultCard(app2) {
+    const r = app2.state.lastResult;
+    const club = userTeam(app2.state);
+    const opponent = getTeam(app2.state, r.opponentId);
+    const label = r.outcome === "W" ? "good" : r.outcome === "D" ? "" : "bad";
+    return `
+    <div class="section-title">Last match</div>
+    <div class="card">
+      <div class="spread">
+        <span class="pill ${label}">${r.outcome === "W" ? "Win" : r.outcome === "D" ? "Draw" : "Defeat"}</span>
+        <span class="tiny muted">Matchday ${r.round}${r.isHome ? " \xB7 Home" : " \xB7 Away"}</span>
+      </div>
+      <div class="fixture" style="margin-top:6px">
+        <div class="side">${crest(r.isHome ? club : opponent, "sm")}<span>${esc((r.isHome ? club : opponent).abbr)}</span></div>
+        <div class="score">${r.isHome ? r.own : r.opp}\u2013${r.isHome ? r.opp : r.own}</div>
+        <div class="side away">${crest(r.isHome ? opponent : club, "sm")}<span>${esc((r.isHome ? opponent : club).abbr)}</span></div>
+      </div>
+    </div>`;
+  }
+  function newsRow(item) {
+    return `<div class="news-item ${item.read ? "" : "unread"}" data-action="news:${item.id}">
+    <small>Season ${item.season} \xB7 MD ${item.round} \xB7 ${esc(item.kind)}</small>
+    <b>${esc(item.title)}</b>
+    <p>${esc(truncate(item.body, 110))}</p>
+  </div>`;
+  }
+  function squadScreen(app2) {
+    const club = userTeam(app2.state);
+    const view = app2.squadView ?? "pitch";
+    return `
+    <div class="seg" style="margin-bottom:12px">
+      <button class="chip" aria-pressed="${view === "pitch"}" data-action="squad-view:pitch">Selection</button>
+      <button class="chip" aria-pressed="${view === "list"}" data-action="squad-view:list">Full squad</button>
+      <button class="chip" data-action="auto-pick">Auto pick</button>
+    </div>
+    ${view === "pitch" ? pitchView(app2, club) : listView(app2, club)}
+  `;
+  }
+  function pitchView(app2, club) {
+    const slots = slotsOf(club.tactics.formation);
+    const selected = app2.selection;
+    const marks = slots.map((slot, i) => {
+      const player = club.squad.find((p) => p.id === club.lineup[i]);
+      if (!player) {
+        return `<button class="slot" style="left:${slot.x}%;top:${slot.y}%" data-action="slot:${i}">
+        <span class="shirt">+</span><span class="nm">Empty</span><span class="lbl">${slot.label}</span></button>`;
+      }
+      const unavailable = !isAvailable(player);
+      const tired = player.condition < 70;
+      const isSelected = selected?.kind === "slot" && selected.index === i;
+      return `<button class="slot ${unavailable ? "unavailable" : tired ? "tired" : ""}"
+        style="left:${slot.x}%;top:${slot.y}%"
+        data-selected="${isSelected}"
+        data-action="slot:${i}">
+      <span class="shirt">${ability(player)}</span>
+      <span class="nm">${esc(player.last)}</span>
+      <span class="lbl">${slot.label}${unavailable ? " \u26A0" : ""}</span>
+    </button>`;
+    }).join("");
+    const bench = club.bench.map((id) => club.squad.find((p) => p.id === id)).filter(Boolean);
+    const benchHTML = bench.map((p) => {
+      const isSelected = app2.selection?.kind === "bench" && app2.selection.id === p.id;
+      return `<button class="benchchip" data-selected="${isSelected}" data-action="benchpick:${p.id}">
+      <b>${esc(p.last)}</b>
+      <small>${p.pos} \xB7 ${ability(p)}${isAvailable(p) ? "" : " \u26A0"}</small>
+    </button>`;
+    }).join("");
+    const xi = club.lineup.map((id) => club.squad.find((p) => p.id === id)).filter(Boolean);
+    const problems = xi.filter((p) => !isAvailable(p));
+    return `
+    <div class="pitch">
+      <div class="halfway"></div><div class="circle"></div>
+      ${marks}
+    </div>
+    <p class="tiny muted" style="margin:0 0 10px">Tap a player to pick him up, tap another to swap. Tap the same shirt twice for his profile.</p>
+    ${problems.length ? `<div class="card flat"><b class="tiny" style="color:var(--danger)">${problems.length} unavailable player${problems.length > 1 ? "s" : ""} in the XI</b><p class="tiny muted" style="margin:4px 0 0">${problems.map((p) => esc(shortName(p))).join(", ")} will be replaced automatically at kick-off.</p></div>` : ""}
+    <div class="section-title">Substitutes</div>
+    <div class="benchstrip">${benchHTML || '<p class="empty">No substitutes named.</p>'}</div>
+    <div class="section-title">Squad depth</div>
+    <div class="card tight">${club.squad.filter((p) => !club.lineup.includes(p.id) && !club.bench.includes(p.id)).sort((a, b) => ability(b) - ability(a)).map((p) => playerRow(app2, club, p)).join("") || '<p class="empty">Everyone is involved.</p>'}</div>
+  `;
+  }
+  function listView(app2, club) {
+    return POS_GROUPS.map(([pos, label]) => {
+      const players = club.squad.filter((p) => p.pos === pos).sort((a, b) => ability(b) - ability(a));
+      if (!players.length) return "";
+      return `<div class="section-title">${label}</div>
+      <div class="card tight">${players.map((p) => playerRow(app2, club, p)).join("")}</div>`;
+    }).join("") + `
+    <div class="card flat">
+      <div class="kv"><span>Squad size</span><strong>${club.squad.length} / ${SQUAD_MAX}</strong></div>
+      <div class="kv"><span>Squad value</span><strong>${money(squadValue(club))}</strong></div>
+      <div class="kv"><span>Wage bill</span><strong>${money(wageBill(club))} / week</strong></div>
+      <div class="kv"><span>Average age</span><strong>${(club.squad.reduce((s, p) => s + p.age, 0) / club.squad.length).toFixed(1)}</strong></div>
+    </div>`;
+  }
+  function playerRow(app2, club, p) {
+    const inXI = club.lineup.includes(p.id);
+    const onBench = club.bench.includes(p.id);
+    const rating = seasonRating(p);
+    const status = p.injuryDays > 0 ? `<span class="pill bad">INJ ${p.injuryDays}d</span>` : p.suspension > 0 ? '<span class="pill warn">SUS</span>' : inXI ? '<span class="pill gold">XI</span>' : onBench ? '<span class="pill">SUB</span>' : "";
+    return `<button class="prow" data-action="player:${p.id}">
+    <span class="pos ${p.pos}">${p.pos}</span>
+    <span class="who">
+      <b>${esc(p.name)}</b>
+      <small>${p.age}y \xB7 ${money(p.value)} ${status}</small>
+    </span>
+    <span class="cond">${conditionMeter(p.condition)}<small class="tiny muted">${Math.round(p.condition)}%</small></span>
+    <span class="rating">${ability(p)}${rating ? `<br><small class="tiny muted">${rating.toFixed(1)}</small>` : ""}</span>
+  </button>`;
+  }
+  function tacticsScreen(app2) {
+    const club = userTeam(app2.state);
+    const t = club.tactics;
+    const side = matchSide(club, { isUser: true });
+    const strength = strengthPreview(side);
+    const opponentFixture = nextFixture(app2.state);
+    const opponent = opponentFixture ? getTeam(app2.state, opponentFixture.homeId === club.id ? opponentFixture.awayId : opponentFixture.homeId) : null;
+    const oppStrength = opponent ? strengthPreview(matchSide(opponent)) : null;
+    const bar = (label, mine, theirs) => `
+    <div style="margin-bottom:10px">
+      <div class="spread tiny"><span class="muted">${label}</span><strong>${Math.round(mine)}${theirs ? ` <span class="muted">vs ${Math.round(theirs)}</span>` : ""}</strong></div>
+      ${meter(mine / 90 * 100, "gold")}
+      ${theirs ? meter(theirs / 90 * 100) : ""}
+    </div>`;
+    return `
+    <div class="section-title">Formation</div>
+    <div class="seg">${FORMATION_NAMES.map((f) => `<button class="chip" aria-pressed="${t.formation === f}" data-action="formation:${f}">${f}</button>`).join("")}</div>
+
+    <div class="section-title">Mentality</div>
+    <div class="card">
+      <div class="seg">${MENTALITIES.map((m) => `<button class="chip" aria-pressed="${t.mentality === m.id}" data-action="mentality:${m.id}">${m.name}</button>`).join("")}</div>
+      <p class="tiny muted" style="margin:10px 0 0">${esc(MENTALITIES.find((m) => m.id === t.mentality).blurb)}</p>
+    </div>
+
+    <div class="section-title">Pressing</div>
+    <div class="card">
+      <div class="seg">${PRESSING.map((m) => `<button class="chip" aria-pressed="${t.pressing === m.id}" data-action="pressing:${m.id}">${m.name}</button>`).join("")}</div>
+      <p class="tiny muted" style="margin:10px 0 0">${esc(PRESSING.find((m) => m.id === t.pressing).blurb)}</p>
+    </div>
+
+    <div class="section-title">Tempo</div>
+    <div class="card">
+      <div class="seg">${TEMPO.map((m) => `<button class="chip" aria-pressed="${t.tempo === m.id}" data-action="tempo:${m.id}">${m.name}</button>`).join("")}</div>
+      <p class="tiny muted" style="margin:10px 0 0">${esc(TEMPO.find((m) => m.id === t.tempo).blurb)}</p>
+    </div>
+
+    <div class="section-title">Strength of the eleven${opponent ? ` v ${esc(opponent.name)}` : ""}</div>
+    <div class="card">
+      ${bar("Attack", strength.att, oppStrength?.def)}
+      ${bar("Midfield", strength.mid, oppStrength?.mid)}
+      ${bar("Defence", strength.def, oppStrength?.att)}
+      ${bar("Goalkeeper", strength.gk, oppStrength?.gk)}
+      <p class="tiny muted" style="margin:2px 0 0">Gold is your side${opponent ? `, green is ${esc(opponent.name)}` : ""}. Ratings include fitness, form and morale.</p>
+    </div>
+
+    <div class="card">
+      <div class="spread">
+        <div><b class="tiny">Automatic substitutions</b><p class="tiny muted" style="margin:2px 0 0">Let the bench make changes for tired legs.</p></div>
+        <button class="chip" aria-pressed="${app2.state.settings.autoSubs}" data-action="toggle-autosubs">${app2.state.settings.autoSubs ? "On" : "Off"}</button>
+      </div>
+    </div>`;
+  }
+  function leagueScreen(app2) {
+    const tab = app2.leagueTab ?? "table";
+    return `
+    <div class="seg" style="margin-bottom:12px">
+      <button class="chip" aria-pressed="${tab === "table"}" data-action="league-tab:table">Table</button>
+      <button class="chip" aria-pressed="${tab === "fixtures"}" data-action="league-tab:fixtures">Fixtures</button>
+      <button class="chip" aria-pressed="${tab === "stats"}" data-action="league-tab:stats">Stats</button>
+    </div>
+    ${tab === "table" ? tableView(app2) : tab === "fixtures" ? fixturesView(app2) : statsView(app2)}`;
+  }
+  function tableView(app2) {
+    const s = app2.state;
+    const standings = buildTable(s.teams, s.fixtures);
+    const rows = standings.map((row, i) => `
+    <tr class="${row.id === s.clubId ? "me" : ""} ${i === 0 ? "up" : i >= standings.length - 2 ? "down" : ""}" data-action="club-info:${row.id}">
+      <td>${i + 1}</td>
+      <td><div class="team-cell">${crest(getTeam(s, row.id), "sm")}<span>${esc(row.name)}</span></div></td>
+      <td>${row.played}</td>
+      <td>${row.gd > 0 ? "+" : ""}${row.gd}</td>
+      <td><strong>${row.points}</strong></td>
+    </tr>`).join("");
+    return `
+    <div class="card tight">
+      <table class="grid">
+        <thead><tr><th>#</th><th>Club</th><th>P</th><th>GD</th><th>Pts</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <p class="tiny muted">Champions at the top, the bottom two go down. Tap a club for their record.</p>`;
+  }
+  function fixturesView(app2) {
+    const s = app2.state;
+    const rounds = roundsInSeason(s);
+    const round = Math.min(Math.max(app2.fixtureRound ?? s.round, 1), rounds);
+    const fixtures = s.fixtures.filter((f) => f.round === round);
+    return `
+    <div class="spread" style="margin-bottom:10px">
+      <button class="btn ghost" data-action="round:${round - 1}" ${round <= 1 ? "disabled" : ""}>\u2039</button>
+      <b>Matchday ${round}</b>
+      <button class="btn ghost" data-action="round:${round + 1}" ${round >= rounds ? "disabled" : ""}>\u203A</button>
+    </div>
+    <div class="card">
+      ${fixtures.map((f) => {
+      const home = getTeam(s, f.homeId);
+      const away = getTeam(s, f.awayId);
+      const mine = f.homeId === s.clubId || f.awayId === s.clubId;
+      return `<div class="fixture" style="${mine ? "background:rgba(242,193,78,.07);border-radius:8px;padding:6px 4px" : ""}">
+          <div class="side">${crest(home, "sm")}<span>${esc(home.abbr)}</span></div>
+          <div class="score small">${f.played ? `${f.homeGoals}\u2013${f.awayGoals}` : "v"}</div>
+          <div class="side away">${crest(away, "sm")}<span>${esc(away.abbr)}</span></div>
+        </div>`;
+    }).join("")}
+    </div>`;
+  }
+  function statsView(app2) {
+    const s = app2.state;
+    const scorers = topScorers(s.teams, 10);
+    const rated = bestRated(s.teams, 10, 3);
+    return `
+    <div class="section-title">Leading scorers</div>
+    <div class="card tight">
+      <table class="grid">
+        <thead><tr><th></th><th>Player</th><th>Gls</th><th>Ast</th></tr></thead>
+        <tbody>${scorers.length ? scorers.map((e, i) => `
+          <tr class="${e.team.id === s.clubId ? "me" : ""}">
+            <td>${i + 1}</td>
+            <td><div class="team-cell">${crest(e.team, "sm")}<span>${esc(e.player.name)}</span></div></td>
+            <td><strong>${e.player.season.goals}</strong></td>
+            <td>${e.player.season.assists}</td>
+          </tr>`).join("") : '<tr><td colspan="4" class="empty">No goals yet this season.</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+    <div class="section-title">Best rated</div>
+    <div class="card tight">
+      <table class="grid">
+        <thead><tr><th></th><th>Player</th><th>Apps</th><th>Avg</th></tr></thead>
+        <tbody>${rated.length ? rated.map((e, i) => `
+          <tr class="${e.team.id === s.clubId ? "me" : ""}">
+            <td>${i + 1}</td>
+            <td><div class="team-cell">${crest(e.team, "sm")}<span>${esc(e.player.name)}</span></div></td>
+            <td>${e.player.season.ratedApps}</td>
+            <td><strong>${ratingBadge(e.rating)}</strong></td>
+          </tr>`).join("") : '<tr><td colspan="4" class="empty">Not enough matches played.</td></tr>'}
+        </tbody>
+      </table>
+    </div>`;
+  }
+  function clubScreen(app2) {
+    const s = app2.state;
+    const club = userTeam(s);
+    const focus = TRAINING_FOCUS.find((f) => f.id === s.training.focus);
+    const intensity = TRAINING_INTENSITY.find((i) => i.id === s.training.intensity);
+    const weekly = club.finances.sponsorship - wageBill(club);
+    const open = windowOpen(s);
+    return `
+    <div class="section-title">Finances</div>
+    <div class="card">
+      <div class="kv"><span>Balance</span><strong style="color:var(--gold)">${money(club.finances.balance)}</strong></div>
+      <div class="kv"><span>Sponsorship</span><strong>+${money(club.finances.sponsorship)}/wk</strong></div>
+      <div class="kv"><span>Wages</span><strong>\u2212${money(wageBill(club))}/wk</strong></div>
+      <div class="kv"><span>Net</span><strong style="color:${weekly >= 0 ? "var(--good)" : "var(--danger)"}">${weekly >= 0 ? "+" : ""}${money(weekly)}/wk</strong></div>
+      <div class="kv"><span>Spent this season</span><strong>${money(club.seasonStats.spent)}</strong></div>
+      <div class="kv"><span>Received this season</span><strong>${money(club.seasonStats.received)}</strong></div>
+      <p class="tiny muted" style="margin:10px 0 0">Home gates are paid in on matchday: ${esc(club.stadium)} holds ${club.capacity.toLocaleString()}.</p>
+    </div>
+
+    <div class="section-title">Transfers</div>
+    <div class="card">
+      <div class="spread">
+        <div>
+          <b class="tiny">${open ? "Window open" : "Window closed"}</b>
+          <p class="tiny muted" style="margin:2px 0 0">${open ? "Deals can be done until the next match kicks off." : "The window reopens at the midway point of the season and in pre-season."}</p>
+        </div>
+        <span class="pill ${open ? "good" : ""}">${s.market.length} listed</span>
+      </div>
+      <button class="btn wide ${open ? "primary" : ""}" style="margin-top:12px" data-action="market">Transfer market</button>
+    </div>
+
+    <div class="section-title">Training</div>
+    <div class="card">
+      <div class="seg">${TRAINING_FOCUS.map((f) => `<button class="chip sm" aria-pressed="${f.id === focus.id}" data-action="train-focus:${f.id}">${f.name}</button>`).join("")}</div>
+      <p class="tiny muted" style="margin:8px 0 12px">${esc(focus.blurb)}</p>
+      <div class="seg">${TRAINING_INTENSITY.map((i) => `<button class="chip sm" aria-pressed="${i.id === intensity.id}" data-action="train-intensity:${i.id}">${i.name}</button>`).join("")}</div>
+      <p class="tiny muted" style="margin:8px 0 0">${intensity.id === "hard" ? "Fastest improvement, slowest recovery, most injuries." : intensity.id === "light" ? "Legs stay fresh but nobody gets much better." : "A sensible balance."}</p>
+    </div>
+
+    <div class="section-title">Record</div>
+    <div class="card tight">
+      ${s.history.length ? `<table class="grid">
+        <thead><tr><th>Season</th><th>Club</th><th>Pos</th><th>Pts</th></tr></thead>
+        <tbody>${s.history.slice().reverse().map((h) => `
+          <tr><td>${h.season}</td><td>${esc(h.clubName)}</td><td>${h.position === 1 ? "\u{1F3C6} 1" : h.position}</td><td>${h.points}</td></tr>`).join("")}
+        </tbody></table>` : '<p class="empty">Your first season in charge.</p>'}
+    </div>
+
+    <div class="section-title">Game</div>
+    <div class="card">
+      <p class="tiny muted" style="margin:0 0 12px">Progress saves to this device automatically after every match.</p>
+      <button class="btn wide danger" data-action="new-game">Start a new career</button>
+    </div>`;
+  }
+  function playerSheet(app2, playerId) {
+    const s = app2.state;
+    const found = findPlayer(s, playerId);
+    if (!found) return '<p class="empty">Player not found.</p>';
+    const { player: p, team } = found;
+    const club = userTeam(s);
+    const mine = team && team.id === club.id;
+    const rating = seasonRating(p);
+    const inXI = club.lineup.includes(p.id);
+    const onBench = club.bench.includes(p.id);
+    const attr = (label, key) => `
+    <div class="attr">
+      <span>${label}</span><b>${Math.round(p.att[key])}</b>
+      ${meter(p.att[key], key === "gk" ? "gold" : "")}
+    </div>`;
+    return `
+    <h2>${esc(p.name)}</h2>
+    <p class="sub">${p.pos} \xB7 ${p.age} years \xB7 ${esc(team ? team.name : "Free agent")} \xB7 ability ${ability(p)}${p.potential > ability(p) ? ` <span class="muted">(potential ${p.potential})</span>` : ""}</p>
+
+    <div class="rowwrap" style="margin-bottom:12px">
+      ${p.injuryDays > 0 ? `<span class="pill bad">Out ${p.injuryDays} days \xB7 ${esc(p.injuryNote)}</span>` : ""}
+      ${p.suspension > 0 ? '<span class="pill warn">Suspended</span>' : ""}
+      ${inXI ? '<span class="pill gold">Starting XI</span>' : onBench ? '<span class="pill">Substitute</span>' : ""}
+      <span class="pill ${p.form > 2 ? "good" : p.form < -2 ? "bad" : ""}">${formWord(p.form)}</span>
+      <span class="pill">${moraleWord(p.morale)}</span>
+    </div>
+
+    <div class="attr-grid">
+      ${attr("Pace", "pac")}
+      ${attr("Passing", "pas")}
+      ${attr("Shooting", "sht")}
+      ${attr("Defending", "def")}
+      ${attr("Physical", "phy")}
+      ${p.pos === "GK" ? attr("Goalkeeping", "gk") : attr("Fitness", "phy")}
+    </div>
+
+    <div class="card flat">
+      <div class="kv"><span>Condition</span><strong>${Math.round(p.condition)}%</strong></div>
+      <div class="kv"><span>Season</span><strong>${p.season.apps + p.season.subs} apps \xB7 ${p.season.goals} goals \xB7 ${p.season.assists} assists</strong></div>
+      <div class="kv"><span>Average rating</span><strong>${rating ? ratingBadge(rating) : "\u2014"}</strong></div>
+      <div class="kv"><span>Career</span><strong>${p.career.apps} apps \xB7 ${p.career.goals} goals</strong></div>
+      <div class="kv"><span>Value</span><strong>${money(p.value)}</strong></div>
+      <div class="kv"><span>Wage</span><strong>${money(p.wage)}/wk</strong></div>
+      <div class="kv"><span>Contract</span><strong>${p.contract > 0 ? `${p.contract} season${p.contract > 1 ? "s" : ""} left` : "Expiring"}</strong></div>
+    </div>
+
+    ${mine ? `
+      <div class="btn-row" style="margin-bottom:8px">
+        <button class="btn" data-action="select-xi:${p.id}">${inXI ? "Move to bench" : "Into the XI"}</button>
+        <button class="btn" data-action="toggle-bench:${p.id}">${onBench ? "Drop from bench" : "Name as sub"}</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn" data-action="renew:${p.id}">Renew contract</button>
+        <button class="btn danger" data-action="sell:${p.id}">Sell</button>
+      </div>` : ""}
+  `;
+  }
+  function marketSheet(app2) {
+    const s = app2.state;
+    const club = userTeam(s);
+    const open = windowOpen(s);
+    const listings = s.market.map((m) => ({ listing: m, found: findPlayer(s, m.playerId) })).filter((x) => x.found).sort((a, b) => ability(b.found.player) - ability(a.found.player));
+    return `
+    <h2>Transfer market</h2>
+    <p class="sub">${open ? "Window open \u2014 deals close when the next match kicks off." : "Window shut. You can look, but nothing can be signed."} Budget ${money(club.finances.balance)}.</p>
+    <div class="card tight">
+      ${listings.length ? listings.map(({ listing, found }) => {
+      const p = found.player;
+      const offer = transferOffer(s, p.id);
+      return `<div class="prow" style="cursor:default">
+          <span class="pos ${p.pos}">${p.pos}</span>
+          <span class="who">
+            <b>${esc(p.name)}</b>
+            <small>${p.age}y \xB7 ${ability(p)} \xB7 ${esc(found.team ? found.team.abbr : "Free agent")} \xB7 ${money(offer?.wage ?? p.wage)}/wk</small>
+          </span>
+          <span class="tiny" style="text-align:right;min-width:56px">${listing.fee ? money(listing.fee) : "Free"}</span>
+          <button class="btn chip sm" data-action="sign:${p.id}" ${offer && offer.canSign ? "" : "disabled"}>Sign</button>
+        </div>`;
+    }).join("") : '<p class="empty">No players available right now.</p>'}
+    </div>
+    <p class="tiny muted">Squad ${club.squad.length}/${SQUAD_MAX}. Tap a name in your squad list to sell.</p>`;
+  }
+  function newsSheet(app2, item) {
+    return `
+    <h2>${esc(item.title)}</h2>
+    <p class="sub">Season ${item.season} \xB7 Matchday ${item.round}</p>
+    <p style="font-size:.92rem;line-height:1.55">${esc(item.body)}</p>
+    <button class="btn wide" style="margin-top:14px" data-action="close-sheet">Close</button>`;
+  }
+  function allNewsSheet(app2) {
+    return `
+    <h2>Inbox</h2>
+    <p class="sub">Everything the club has told you.</p>
+    <div class="card tight">${app2.state.news.map(newsRow).join("")}</div>`;
+  }
+  function clubInfoSheet(app2, teamId) {
+    const s = app2.state;
+    const team = getTeam(s, teamId);
+    const standings = buildTable(s.teams, s.fixtures);
+    const row = standings.find((r) => r.id === teamId);
+    const best = team.squad.slice().sort((a, b) => ability(b) - ability(a)).slice(0, 5);
+    return `
+    <h2>${esc(team.name)}</h2>
+    <p class="sub">${esc(team.stadium)} \xB7 ${team.capacity.toLocaleString()} capacity \xB7 reputation ${team.rep}</p>
+    <div class="card flat">
+      <div class="kv"><span>Position</span><strong>${ordinal2(row.position)}</strong></div>
+      <div class="kv"><span>Record</span><strong>${row.won}W ${row.drawn}D ${row.lost}L</strong></div>
+      <div class="kv"><span>Goals</span><strong>${row.gf} for \xB7 ${row.ga} against</strong></div>
+      <div class="kv"><span>Form</span><strong>${formRun(row.form)}</strong></div>
+      <div class="kv"><span>Squad value</span><strong>${money(squadValue(team))}</strong></div>
+    </div>
+    <div class="section-title">Key players</div>
+    <div class="card tight">${best.map((p) => `
+      <div class="prow" style="cursor:default">
+        <span class="pos ${p.pos}">${p.pos}</span>
+        <span class="who"><b>${esc(p.name)}</b><small>${p.age}y \xB7 ${p.season.goals} goals this season</small></span>
+        <span></span>
+        <span class="rating">${ability(p)}</span>
+      </div>`).join("")}</div>`;
+  }
+  function sellSheet(app2, playerId) {
+    const offer = saleOffer(app2.state, playerId);
+    if (!offer) return '<p class="empty">No offer.</p>';
+    const p = offer.player;
+    return `
+    <h2>Sell ${esc(p.name)}?</h2>
+    <p class="sub">${offer.buyer ? `${esc(offer.buyer.name)} are interested.` : "No club has shown an interest."}</p>
+    <div class="card flat">
+      <div class="kv"><span>Valuation</span><strong>${money(p.value)}</strong></div>
+      <div class="kv"><span>Offer on the table</span><strong style="color:var(--gold)">${money(offer.fee)}</strong></div>
+      <div class="kv"><span>Wage saved</span><strong>${money(p.wage)}/wk</strong></div>
+    </div>
+    ${offer.canSell ? `<button class="btn primary wide" data-action="confirm-sell:${p.id}">Accept ${money(offer.fee)}</button>` : `<p class="tiny" style="color:var(--danger)">${esc(offer.reason)}</p>`}
+    <button class="btn wide ghost" style="margin-top:8px" data-action="close-sheet">Keep him</button>`;
+  }
+  function gameOverScreen(app2) {
+    const over = app2.state.gameOver;
+    const titles = app2.state.history.filter((h) => h.position === 1).length;
+    return `
+    <div class="start">
+      <h1>The <span>end</span> of the road</h1>
+      <p class="lede">${esc(over.reason)}</p>
+      <div class="card">
+        <div class="kv"><span>Club</span><strong>${esc(over.club)}</strong></div>
+        <div class="kv"><span>Seasons</span><strong>${app2.state.history.length}</strong></div>
+        <div class="kv"><span>League titles</span><strong>${titles}</strong></div>
+      </div>
+      ${app2.state.history.length ? `<div class="card tight"><table class="grid">
+        <thead><tr><th>Season</th><th>Club</th><th>Pos</th><th>Pts</th></tr></thead>
+        <tbody>${app2.state.history.map((h) => `<tr><td>${h.season}</td><td>${esc(h.clubName)}</td><td>${h.position}</td><td>${h.points}</td></tr>`).join("")}</tbody>
+      </table></div>` : ""}
+      <button class="btn primary wide big" data-action="new-game-now">Take another job</button>
+    </div>`;
+  }
+  function ordinal2(n) {
+    const s = ["th", "st", "nd", "rd"];
+    const v = n % 100;
+    return n + (s[(v - 20) % 10] ?? s[v] ?? s[0]);
+  }
+  function moraleWord(m) {
+    if (m >= 85) return "Delighted";
+    if (m >= 70) return "Good";
+    if (m >= 55) return "Settled";
+    if (m >= 40) return "Uneasy";
+    if (m >= 25) return "Poor";
+    return "Mutinous";
+  }
+  function formWord(f) {
+    if (f >= 5) return "Flying";
+    if (f >= 2) return "In form";
+    if (f > -2) return "Steady";
+    if (f > -5) return "Off colour";
+    return "Out of sorts";
+  }
+  function truncate(text, len) {
+    return text.length > len ? `${text.slice(0, len - 1)}\u2026` : text;
+  }
+
+  // js/matchview.js
+  var SPEEDS = [
+    { label: "1\xD7", ms: 620 },
+    { label: "2\xD7", ms: 300 },
+    { label: "4\xD7", ms: 130 }
+  ];
+  function playMatch(app2) {
+    const sim = startMatch(app2.state);
+    if (!sim) {
+      toast("No fixture to play.");
+      return;
+    }
+    const state = app2.state;
+    const userKey = sim.home.teamId === state.clubId ? "home" : "away";
+    const homeTeam = getTeam(state, sim.home.teamId);
+    const awayTeam = getTeam(state, sim.away.teamId);
+    const root = document.createElement("div");
+    root.className = "match";
+    root.innerHTML = shell(homeTeam, awayTeam);
+    document.body.appendChild(root);
+    document.body.style.overflow = "hidden";
+    const feed = root.querySelector(".feed");
+    const view = {
+      speed: 1,
+      playing: true,
+      timer: null,
+      finished: false
+    };
+    const els = {
+      goals: root.querySelector("[data-goals]"),
+      clock: root.querySelector("[data-clock]"),
+      poss: root.querySelector("[data-poss]"),
+      shots: root.querySelector("[data-shots]"),
+      controls: root.querySelector(".match-controls")
+    };
+    function paintHead() {
+      els.goals.textContent = `${sim.home.goals}\u2013${sim.away.goals}`;
+      els.clock.textContent = sim.finished ? "Full time" : `${sim.clock}'`;
+      const hp = Math.round(sim.home.stats.possTicks / Math.max(1, sim.minute) * 100);
+      els.poss.innerHTML = `<span>Possession ${hp}% \u2013 ${100 - hp}%</span>
+      <div class="bar"><i style="width:${hp}%"></i><i style="width:${100 - hp}%"></i></div>`;
+      const hs = sim.home.stats.shots, as = sim.away.stats.shots;
+      const total = Math.max(1, hs + as);
+      els.shots.innerHTML = `<span>Shots ${hs} \u2013 ${as}</span>
+      <div class="bar"><i style="width:${hs / total * 100}%"></i><i style="width:${as / total * 100}%"></i></div>`;
+    }
+    function addEvents(events) {
+      for (const ev of events) {
+        if (ev.type === "chance" && Math.random() > 0.7) continue;
+        const line = document.createElement("div");
+        line.className = `ev ${ev.type}`;
+        line.innerHTML = `<span class="min">${ev.type === "kickoff" ? "" : `${ev.clock}'`}</span><span>${esc(ev.text)}</span>`;
+        feed.appendChild(line);
+      }
+      while (feed.children.length > 220) feed.removeChild(feed.firstChild);
+      feed.scrollTop = feed.scrollHeight;
+    }
+    function tick() {
+      if (sim.finished) return;
+      const events = sim.step();
+      addEvents(events);
+      paintHead();
+      if (events.some((e) => e.type === "halftime")) {
+        pause();
+        renderControls("halftime");
+        return;
+      }
+      if (sim.finished) {
+        finish();
+      }
+    }
+    function play() {
+      view.playing = true;
+      clearInterval(view.timer);
+      view.timer = setInterval(tick, SPEEDS[view.speed].ms);
+      renderControls();
+    }
+    function pause() {
+      view.playing = false;
+      clearInterval(view.timer);
+      view.timer = null;
+      renderControls();
+    }
+    function skip() {
+      pause();
+      while (!sim.finished) {
+        const events = sim.step();
+        addEvents(events);
+      }
+      paintHead();
+      finish();
+    }
+    function finish() {
+      clearInterval(view.timer);
+      view.finished = true;
+      paintHead();
+      addEvents([]);
+      renderSummary();
+      renderControls("fulltime");
+    }
+    function renderSummary() {
+      const result = sim.result();
+      const side = userKey === "home" ? result.home : result.away;
+      const opp = userKey === "home" ? result.away : result.home;
+      const rows = side.players.filter((p) => p.minutes > 0).sort((a, b) => b.rating - a.rating).map((p) => `
+        <div class="prow" style="cursor:default">
+          <span class="pos ${p.pos}">${p.role}</span>
+          <span class="who"><b>${esc(p.name)}</b><small>${p.minutes}'${p.goals ? ` \xB7 ${p.goals} goal${p.goals > 1 ? "s" : ""}` : ""}${p.assists ? ` \xB7 ${p.assists} assist${p.assists > 1 ? "s" : ""}` : ""}${p.yellow ? " \xB7 booked" : ""}${p.red ? " \xB7 sent off" : ""}${p.injuryDays ? ` \xB7 ${esc(p.injuryNote)}` : ""}</small></span>
+          <span></span>
+          <span class="rating">${ratingBadge(p.rating)}</span>
+        </div>`).join("");
+      const summary = document.createElement("div");
+      summary.innerHTML = `
+      <div class="section-title">Your ratings</div>
+      <div class="card tight">${rows}</div>
+      <div class="section-title">Match stats</div>
+      <div class="card">
+        <div class="kv"><span>Possession</span><strong>${side.possession}% \u2013 ${opp.possession}%</strong></div>
+        <div class="kv"><span>Shots (on target)</span><strong>${side.shots} (${side.onTarget}) \u2013 ${opp.shots} (${opp.onTarget})</strong></div>
+        <div class="kv"><span>Expected goals</span><strong>${side.xg.toFixed(2)} \u2013 ${opp.xg.toFixed(2)}</strong></div>
+        <div class="kv"><span>Fouls</span><strong>${side.fouls} \u2013 ${opp.fouls}</strong></div>
+        <div class="kv"><span>Cards</span><strong>${side.yellow}Y ${side.red}R \u2013 ${opp.yellow}Y ${opp.red}R</strong></div>
+      </div>`;
+      feed.appendChild(summary);
+      feed.scrollTop = feed.scrollHeight;
+    }
+    function renderControls(mode) {
+      if (mode === "fulltime") {
+        els.controls.innerHTML = `<button class="btn primary" data-match="continue">Continue</button>`;
+        return;
+      }
+      if (mode === "halftime") {
+        els.controls.innerHTML = `
+        <button class="btn" data-match="subs">Subs</button>
+        <button class="btn" data-match="shout">Talk</button>
+        <button class="btn primary" data-match="resume">Second half</button>`;
+        return;
+      }
+      els.controls.innerHTML = `
+      <button class="btn" data-match="playpause">${view.playing ? "Pause" : "Play"}</button>
+      <button class="btn" data-match="speed">${SPEEDS[view.speed].label}</button>
+      <button class="btn" data-match="subs">Subs</button>
+      <button class="btn" data-match="skip">Skip</button>`;
+    }
+    function subsSheet() {
+      const wasPlaying = view.playing;
+      pause();
+      const on = sim.onPitchFor(userKey);
+      const bench = sim.benchFor(userKey);
+      let out = null;
+      const render2 = () => `
+      <h2>Substitutions</h2>
+      <p class="sub">${sim.sideOf(userKey).subsUsed}/5 used. Pick a player to come off, then his replacement.</p>
+      <div class="section-title">On the pitch</div>
+      <div class="card tight">${on.map((r) => `
+        <button class="prow" data-sub-out="${r.id}" ${out === r.id ? 'style="background:rgba(242,193,78,.12)"' : ""}>
+          <span class="pos ${r.p.pos}">${r.role}</span>
+          <span class="who"><b>${esc(r.p.name)}</b><small>${Math.round(r.condition)}% fit${r.yellow ? " \xB7 booked" : ""}${r.injuryDays ? " \xB7 injured" : ""}</small></span>
+          <span></span>
+          <span class="rating">${Math.round(r.rating * 10) / 10}</span>
+        </button>`).join("")}</div>
+      <div class="section-title">Bench</div>
+      <div class="card tight">${bench.length ? bench.map((r) => `
+        <button class="prow" data-sub-in="${r.id}">
+          <span class="pos ${r.p.pos}">${r.p.pos}</span>
+          <span class="who"><b>${esc(r.p.name)}</b><small>${Math.round(r.condition)}% fit \xB7 ability ${ability(r.p)}</small></span>
+          <span></span>
+          <span class="rating">${ability(r.p)}</span>
+        </button>`).join("") : '<p class="empty">Nobody left on the bench.</p>'}</div>
+      <button class="btn wide ghost" data-match="close">Back to the match</button>`;
+      const sheet = openSheet(render2(), (el) => {
+        el.addEventListener("click", (e) => {
+          const outBtn = e.target.closest("[data-sub-out]");
+          const inBtn = e.target.closest("[data-sub-in]");
+          const close2 = e.target.closest('[data-match="close"]');
+          if (close2) {
+            closeSheet();
+            if (wasPlaying) play();
+            return;
+          }
+          if (outBtn) {
+            out = Number(outBtn.dataset.subOut);
+            el.querySelectorAll("[data-sub-out]").forEach((b) => {
+              b.style.background = Number(b.dataset.subOut) === out ? "rgba(242,193,78,.12)" : "";
+            });
+            toast("Now choose his replacement.");
+            return;
+          }
+          if (inBtn) {
+            if (!out) {
+              toast("Choose who comes off first.");
+              return;
+            }
+            const ok = sim.substitute(userKey, out, Number(inBtn.dataset.subIn));
+            if (!ok) {
+              toast("That change cannot be made.");
+              return;
+            }
+            addEvents(sim.events.slice(-1));
+            closeSheet();
+            if (wasPlaying) play();
+            else renderControls(sim.pendingHalfTime ? "halftime" : void 0);
+          }
+        });
+      });
+      return sheet;
+    }
+    function shoutSheet() {
+      const current = sim.sideOf(userKey).tactics.mentality;
+      openSheet(`
+      <h2>Team talk</h2>
+      <p class="sub">Change the approach for the rest of the match.</p>
+      <div class="seg">${MENTALITIES.map((m) => `
+        <button class="chip" aria-pressed="${m.id === current}" data-shout="${m.id}">${m.name}</button>`).join("")}</div>
+      <p class="tiny muted" style="margin-top:10px">This only applies to today. Your saved tactics are untouched.</p>
+      <button class="btn wide ghost" style="margin-top:12px" data-match="close">Back</button>
+    `, (el) => {
+        el.addEventListener("click", (e) => {
+          const chip = e.target.closest("[data-shout]");
+          if (chip) {
+            sim.setTactics(userKey, { mentality: chip.dataset.shout });
+            addEvents(sim.events.slice(-1));
+            toast(`Approach: ${chip.textContent}`);
+            closeSheet();
+            renderControls(sim.pendingHalfTime ? "halftime" : void 0);
+            return;
+          }
+          if (e.target.closest('[data-match="close"]')) closeSheet();
+        });
+      });
+    }
+    root.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-match]");
+      if (!btn) return;
+      switch (btn.dataset.match) {
+        case "playpause":
+          view.playing ? pause() : play();
+          break;
+        case "speed":
+          view.speed = (view.speed + 1) % SPEEDS.length;
+          if (view.playing) play();
+          else renderControls();
+          break;
+        case "skip":
+          skip();
+          break;
+        case "subs":
+          subsSheet();
+          break;
+        case "shout":
+          shoutSheet();
+          break;
+        case "resume":
+          play();
+          break;
+        case "continue":
+          close();
+          break;
+      }
+    });
+    function close() {
+      clearInterval(view.timer);
+      closeSheet();
+      root.remove();
+      document.body.style.overflow = "";
+      completeMatch(app2.state, sim);
+      app2.save();
+      app2.go("home");
+    }
+    paintHead();
+    addEvents(sim.events);
+    renderControls();
+    play();
+  }
+  function shell(homeTeam, awayTeam) {
+    return `
+    <div class="match-head">
+      <div class="scoreline">
+        <div class="club">${crest(homeTeam)}<b>${esc(homeTeam.name)}</b></div>
+        <div>
+          <div class="goals" data-goals>0\u20130</div>
+          <div class="clock" data-clock>0'</div>
+        </div>
+        <div class="club">${crest(awayTeam)}<b>${esc(awayTeam.name)}</b></div>
+      </div>
+      <div class="matchstats">
+        <div data-poss></div>
+        <div data-shots></div>
+      </div>
+    </div>
+    <div class="feed"></div>
+    <div class="match-controls"></div>`;
+  }
+
+  // js/main.js
+  var TABS = [
+    { id: "home", label: "Home", icon: "M12 3l9 8h-3v9h-5v-6h-2v6H6v-9H3z" },
+    { id: "squad", label: "Squad", icon: "M9 2L4 4v6h3v12h10V10h3V4l-5-2a3 3 0 01-6 0z" },
+    { id: "tactics", label: "Tactics", icon: "M3 4h18v16H3V4zm2 2v12h14V6H5zm6 0h2v12h-2V6z" },
+    { id: "league", label: "League", icon: "M4 5h16v3H4zm0 5.5h16v3H4zM4 16h16v3H4z" },
+    { id: "club", label: "Club", icon: "M3 8h18v12H3zm5-4h8v4H8zm3 8h2v4h-2z" }
+  ];
+  var app = {
+    state: null,
+    route: "home",
+    squadView: "pitch",
+    leagueTab: "table",
+    fixtureRound: null,
+    selection: null,
+    saveTimer: null,
+    go(route) {
+      this.route = route;
+      this.selection = null;
+      render();
+      window.scrollTo(0, 0);
+    },
+    refresh() {
+      render();
+    },
+    save() {
+      clearTimeout(this.saveTimer);
+      this.saveTimer = setTimeout(() => save(this.state), 200);
+    }
+  };
+  function boot() {
+    const saved = load();
+    if (saved) {
+      app.state = saved;
+      ensureSelection(userTeam(saved));
+      render();
+    } else {
+      startScreen();
+    }
+    document.addEventListener("click", onClick);
+    registerServiceWorker();
+    if (!persistent()) {
+      setTimeout(() => toast("This browser will not let the page save \u2014 progress lasts until you close it."), 1200);
+    }
+  }
+  function registerServiceWorker() {
+    if (!/^https?:$/.test(location.protocol)) return;
+    navigator.serviceWorker?.register("sw.js").catch(() => {
+    });
+  }
+  function startScreen() {
+    const appEl = $("#app");
+    appEl.hidden = true;
+    const existing = document.querySelector(".start-wrap");
+    existing?.remove();
+    const wrap = document.createElement("div");
+    wrap.className = "start-wrap";
+    wrap.innerHTML = `
+    <div class="start">
+      <h1>Kalahari <span>Manager</span></h1>
+      <p class="lede">Twelve clubs, twenty-two matchdays, one job to keep. Pick the side, set the tactics, live the ninety minutes.</p>
+
+      <div class="field">
+        <label for="mgr">Your name</label>
+        <input id="mgr" type="text" maxlength="26" placeholder="The Gaffer" autocomplete="off">
+      </div>
+
+      <label class="tiny" style="display:block;text-transform:uppercase;letter-spacing:.08em;color:var(--text-faint);font-weight:700;margin-bottom:8px">Choose a club</label>
+      <div class="clubpick">
+        ${CLUBS.map((c) => `
+          <button class="clubopt" aria-pressed="false" data-club="${c.id}">
+            ${crest(c)}
+            <span class="info">
+              <b>${esc(c.name)}</b>
+              <small>${esc(c.stadium)} \xB7 ${c.capacity.toLocaleString()} seats \xB7 ${difficulty(c.rep)}</small>
+            </span>
+            <span class="pill ${c.rep >= 74 ? "gold" : ""}">${c.rep}</span>
+          </button>`).join("")}
+      </div>
+
+      <button class="btn primary wide big" style="margin-top:18px" data-start disabled>Pick a club to begin</button>
+      <p class="tiny muted" style="margin-top:12px">Everything is saved on this device. Nothing is uploaded anywhere.</p>
+    </div>`;
+    document.body.appendChild(wrap);
+    let chosen = null;
+    wrap.addEventListener("click", (e) => {
+      const opt = e.target.closest("[data-club]");
+      const start = e.target.closest("[data-start]");
+      if (opt) {
+        chosen = opt.dataset.club;
+        wrap.querySelectorAll("[data-club]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.club === chosen)));
+        const btn = wrap.querySelector("[data-start]");
+        btn.disabled = false;
+        btn.textContent = `Take charge of ${CLUBS.find((c) => c.id === chosen).name}`;
+        return;
+      }
+      if (start && chosen) {
+        const name = wrap.querySelector("#mgr").value;
+        app.state = newGame({ clubId: chosen, managerName: name, seed: Date.now() % 2147483647 });
+        save(app.state);
+        wrap.remove();
+        app.route = "home";
+        render();
+      }
+    });
+  }
+  function difficulty(rep) {
+    if (rep >= 80) return "Expected to win it all";
+    if (rep >= 66) return "Chasing the title";
+    if (rep >= 52) return "Solid mid-table";
+    return "Scrapping to stay up";
+  }
+  function render() {
+    const appEl = $("#app");
+    appEl.hidden = false;
+    if (app.state.gameOver) {
+      $("#topbar").innerHTML = "";
+      $("#tabs").innerHTML = "";
+      setHTML($("#view"), gameOverScreen(app));
+      return;
+    }
+    ensureSelection(userTeam(app.state));
+    setHTML($("#topbar"), renderTopbar(app));
+    setHTML($("#view"), renderScreen(app));
+    setHTML($("#tabs"), TABS.map((t) => `
+    <button class="tab" data-action="tab:${t.id}" ${app.route === t.id ? 'aria-current="page"' : ""}>
+      <svg viewBox="0 0 24 24"><path d="${t.icon}" fill-rule="evenodd"/></svg>
+      ${t.label}
+      ${t.id === "home" && unread() ? `<span class="badge">${unread()}</span>` : ""}
+    </button>`).join(""));
+  }
+  var unread = () => app.state.news.filter((n) => !n.read).length;
+  function onClick(event) {
+    const el = event.target.closest("[data-action]");
+    if (!el || el.disabled) return;
+    const [action, arg] = el.dataset.action.split(":");
+    const club = app.state ? userTeam(app.state) : null;
+    switch (action) {
+      case "tab":
+        app.go(arg);
+        return;
+      case "play-match":
+        closeSheet();
+        playMatch(app);
+        return;
+      case "quick-match": {
+        const result = quickPlayRound(app.state);
+        app.save();
+        app.go("home");
+        if (result) toast(`${result.outcome === "W" ? "Won" : result.outcome === "D" ? "Drew" : "Lost"} ${result.own}-${result.opp} ${result.isHome ? "at home to" : "away to"} ${result.opponentName}`);
+        return;
+      }
+      case "news": {
+        const item = app.state.news.find((n) => n.id === Number(arg));
+        if (!item) return;
+        item.read = true;
+        app.save();
+        openSheet(newsSheet(app, item));
+        render();
+        return;
+      }
+      case "all-news":
+        app.state.news.forEach((n) => {
+          n.read = true;
+        });
+        app.save();
+        openSheet(allNewsSheet(app));
+        render();
+        return;
+      case "squad-view":
+        app.squadView = arg;
+        app.selection = null;
+        render();
+        return;
+      case "auto-pick":
+        autoSelect(club);
+        app.selection = null;
+        app.save();
+        render();
+        toast("Strongest available eleven picked.");
+        return;
+      case "slot": {
+        const index = Number(arg);
+        const sel = app.selection;
+        if (sel?.kind === "slot" && sel.index === index) {
+          const id = club.lineup[index];
+          app.selection = null;
+          render();
+          if (id) openSheet(playerSheet(app, id));
+          return;
+        }
+        if (sel?.kind === "slot") {
+          const j = sel.index;
+          [club.lineup[index], club.lineup[j]] = [club.lineup[j], club.lineup[index]];
+          app.selection = null;
+        } else if (sel?.kind === "bench") {
+          const benchIndex = club.bench.indexOf(sel.id);
+          const outId = club.lineup[index];
+          club.lineup[index] = sel.id;
+          if (benchIndex >= 0) club.bench[benchIndex] = outId;
+          app.selection = null;
+        } else {
+          app.selection = { kind: "slot", index };
+        }
+        app.save();
+        render();
+        return;
+      }
+      case "benchpick": {
+        const id = Number(arg);
+        const sel = app.selection;
+        if (sel?.kind === "bench" && sel.id === id) {
+          app.selection = null;
+          render();
+          openSheet(playerSheet(app, id));
+          return;
+        }
+        if (sel?.kind === "slot") {
+          const benchIndex = club.bench.indexOf(id);
+          const outId = club.lineup[sel.index];
+          club.lineup[sel.index] = id;
+          if (benchIndex >= 0) club.bench[benchIndex] = outId;
+          app.selection = null;
+        } else if (sel?.kind === "bench") {
+          const a = club.bench.indexOf(sel.id);
+          const b = club.bench.indexOf(id);
+          [club.bench[a], club.bench[b]] = [club.bench[b], club.bench[a]];
+          app.selection = null;
+        } else {
+          app.selection = { kind: "bench", id };
+        }
+        app.save();
+        render();
+        return;
+      }
+      case "player":
+        openSheet(playerSheet(app, Number(arg)));
+        return;
+      case "select-xi": {
+        const id = Number(arg);
+        closeSheet();
+        if (club.lineup.includes(id)) demote(club, id);
+        else promote(club, id);
+        app.save();
+        render();
+        return;
+      }
+      case "toggle-bench": {
+        const id = Number(arg);
+        closeSheet();
+        if (club.lineup.includes(id)) {
+          toast("He is in the starting eleven.");
+          return;
+        }
+        if (club.bench.includes(id)) {
+          club.bench = club.bench.filter((b) => b !== id);
+          toast("Removed from the bench.");
+        } else if (club.bench.length >= 7) {
+          toast("The bench is full \u2014 drop someone first.");
+        } else {
+          club.bench.push(id);
+          toast("Named as a substitute.");
+        }
+        app.save();
+        render();
+        return;
+      }
+      case "formation":
+        setFormation(club, arg);
+        app.save();
+        render();
+        return;
+      case "mentality":
+      case "pressing":
+      case "tempo":
+        club.tactics[action] = arg;
+        app.save();
+        render();
+        return;
+      case "toggle-autosubs":
+        app.state.settings.autoSubs = !app.state.settings.autoSubs;
+        app.save();
+        render();
+        return;
+      case "league-tab":
+        app.leagueTab = arg;
+        app.fixtureRound = null;
+        render();
+        return;
+      case "round":
+        app.fixtureRound = Number(arg);
+        render();
+        return;
+      case "club-info":
+        openSheet(clubInfoSheet(app, arg));
+        return;
+      case "train-focus":
+        setTraining(app.state, { focus: arg });
+        app.save();
+        render();
+        return;
+      case "train-intensity":
+        setTraining(app.state, { intensity: arg });
+        app.save();
+        render();
+        return;
+      case "market":
+        openSheet(marketSheet(app));
+        return;
+      case "sign": {
+        const outcome = signPlayer(app.state, Number(arg));
+        toast(outcome.message);
+        app.save();
+        if (outcome.ok) {
+          closeSheet();
+          render();
+          openSheet(marketSheet(app));
+        }
+        return;
+      }
+      case "sell":
+        closeSheet();
+        openSheet(sellSheet(app, Number(arg)));
+        return;
+      case "confirm-sell": {
+        const id = Number(arg);
+        const offer = saleOffer(app.state, id);
+        const outcome = sellPlayer(app.state, id, offer);
+        toast(outcome.message);
+        closeSheet();
+        app.save();
+        render();
+        return;
+      }
+      case "renew": {
+        const outcome = renewContract(app.state, Number(arg));
+        toast(outcome.message);
+        app.save();
+        closeSheet();
+        render();
+        return;
+      }
+      case "new-game":
+        openSheet(`
+        <h2>Start a new career?</h2>
+        <p class="sub">This deletes your current save. There is no way back.</p>
+        <button class="btn danger wide" data-action="new-game-now">Delete and start again</button>
+        <button class="btn wide ghost" style="margin-top:8px" data-action="close-sheet">Keep playing</button>`);
+        return;
+      case "new-game-now":
+        closeSheet();
+        clear();
+        app.state = null;
+        $("#app").hidden = true;
+        startScreen();
+        return;
+      case "close-sheet":
+        closeSheet();
+        return;
+    }
+  }
+  function promote(club, id) {
+    const player = club.squad.find((p) => p.id === id);
+    if (!player) return;
+    const xi = club.lineup.map((pid) => club.squad.find((p) => p.id === pid));
+    let index = -1;
+    let worst = Infinity;
+    xi.forEach((p, i) => {
+      if (!p) {
+        index = i;
+        worst = -Infinity;
+        return;
+      }
+      const samePos = p.pos === player.pos;
+      const value = ability(p) + (samePos ? 0 : 40) + (isAvailable(p) ? 0 : -60);
+      if (value < worst) {
+        worst = value;
+        index = i;
+      }
+    });
+    if (index < 0) return;
+    const outId = club.lineup[index];
+    club.lineup[index] = id;
+    club.bench = club.bench.filter((b) => b !== id);
+    if (outId && !club.bench.includes(outId) && club.bench.length < 7) club.bench.push(outId);
+    toast(`${shortName(player)} starts.`);
+  }
+  function demote(club, id) {
+    const index = club.lineup.indexOf(id);
+    if (index < 0) return;
+    const player = club.squad.find((p) => p.id === id);
+    const replacement = club.bench.map((bid) => club.squad.find((p) => p.id === bid)).filter((p) => p && isAvailable(p)).sort((a, b) => (b.pos === player.pos ? 1 : 0) - (a.pos === player.pos ? 1 : 0) || ability(b) - ability(a))[0];
+    if (!replacement) {
+      toast("Nobody on the bench to replace him.");
+      return;
+    }
+    club.lineup[index] = replacement.id;
+    club.bench = club.bench.map((b) => b === replacement.id ? id : b);
+    toast(`${shortName(player)} drops to the bench.`);
+  }
+  boot();
+})();
+
+</script>
+</body>
+</html>

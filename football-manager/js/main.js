@@ -56,6 +56,17 @@ function boot() {
     startScreen();
   }
   document.addEventListener('click', onClick);
+  registerServiceWorker();
+  if (!store.persistent()) {
+    setTimeout(() => toast('This browser will not let the page save — progress lasts until you close it.'), 1200);
+  }
+}
+
+// Offline support when the game is served over http(s). A page opened straight
+// from a file has no service worker, and does not need one.
+function registerServiceWorker() {
+  if (!/^https?:$/.test(location.protocol)) return;
+  navigator.serviceWorker?.register('sw.js').catch(() => { /* offline support is optional */ });
 }
 
 function startScreen() {
