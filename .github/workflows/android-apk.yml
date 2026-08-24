@@ -1,7 +1,7 @@
 name: Kalahari Manager APK
 
-# Builds the WebView wrapper around football-manager/ and uploads the APK as a
-# run artifact. GitHub's Ubuntu runners already carry the Android SDK.
+# Builds the WebView wrapper around football-manager/, proves the APK works on
+# an emulator, and only then publishes it.
 on:
   push:
     paths:
@@ -64,17 +64,84 @@ jobs:
           path: out/kalahari-manager.apk
           if-no-files-found: error
 
-      # A release asset is a plain one-tap download on a phone, unlike the
-      # zipped, sign-in-only run artifact above. The tag is rolling: the same
-      # URL always points at the newest build.
-      - name: Publish the APK as a release
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/claude/football-manager-mobile-game-gtn8do'
+  # Installs the APK on a real Android image and plays the game through the
+  # WebView's devtools: the only check that covers the packaged app.
+  smoke:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: kalahari-manager-apk
+          path: out
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install the devtools client
+        run: npm install --no-save --no-audit --no-fund playwright-core@1.56.1
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Play the game on an emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          ram-size: 4096M
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash football-manager/test/apk-smoke.sh out/kalahari-manager.apk
+
+      - name: Upload what the emulator saw
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: emulator-screenshots
+          path: |
+            apk-*.png
+            apk-logcat.txt
+          if-no-files-found: warn
+
+  # A release asset is a plain one-tap download on a phone, unlike the zipped,
+  # sign-in-only run artifact. The tag is rolling: the same URL always points at
+  # the newest build that passed the emulator.
+  release:
+    needs: smoke
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/claude/football-manager-mobile-game-gtn8do'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: kalahari-manager-apk
+          path: out
+
+      - name: Publish the APK
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: kalahari-manager-latest
         run: |
           set -euo pipefail
-          NOTES="Kalahari Manager — debug-signed build of football-manager/ at ${GITHUB_SHA::7}.
+          NOTES="Kalahari Manager — debug-signed build of football-manager/ at ${GITHUB_SHA::7}, installed and played on an Android 14 emulator by CI.
 
           Install on Android: download the APK, open it, and allow installs from your browser when asked.
           It needs no account and makes no network requests; your career is saved on the device."
@@ -88,4 +155,4 @@ jobs:
               --prerelease \
               --target "$GITHUB_SHA"
           fi
-          gh release view "$TAG" --json assets --jq '.assets[] | "\(.name) \(.size) bytes \(.url)"'
+          gh release view "$TAG" --json assets --jq '.assets[] | "\(.name) \(.size) bytes"'

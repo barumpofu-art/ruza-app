@@ -305,6 +305,10 @@ table.grid tr.down td:first-child { color: var(--danger); }
 }
 .pitch::before { top: -1px; border-top: 0; }
 .pitch::after { bottom: -1px; border-bottom: 0; }
+@supports not (aspect-ratio: 3 / 4) {
+  .pitch { height: 0; padding-bottom: 133.33%; }
+}
+
 .pitch .halfway {
   position: absolute; left: 0; right: 0; top: 50%;
   border-top: 2px solid rgba(255,255,255,.16);

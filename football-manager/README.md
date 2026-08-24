@@ -22,9 +22,10 @@ and runs with no connection. On iOS, Share → *Add to Home Screen*.
 `android/` is a WebView wrapper around exactly these files: one activity, no
 libraries, no Kotlin, and the game copied in as assets by Gradle. The GitHub
 Actions workflow `.github/workflows/android-apk.yml` builds it on every push,
-checks the packaged APK really contains the game, uploads it as a run artifact
-and re-attaches it to the rolling `kalahari-manager-latest` pre-release, so the
-link above is always the newest build. It is debug-signed, so Android will ask
+checks the packaged APK really contains the game, installs it on an Android 14
+emulator and plays a match through the WebView's devtools, and only then
+re-attaches it to the rolling `kalahari-manager-latest` pre-release — so the
+link above is always the newest build that passed. It is debug-signed, so Android will ask
 you to allow installs from wherever you downloaded it. Locally, with the
 Android SDK installed:
 
@@ -102,6 +103,11 @@ node test/season-test.mjs 5      # plays whole seasons and checks league integri
 node test/ui-smoke.mjs           # drives the real UI in Chromium (needs a server on :8899)
 node test/offline-test.mjs       # opens the single-file build over file:// and plays a match
 ```
+
+`test/apk-smoke.sh` and `test/apk-smoke.mjs` are the emulator pair, run by CI:
+the shell script installs the APK and forwards the WebView's devtools socket,
+the module then plays a match inside it, checks the pitch lays out and confirms
+the save survives a reload.
 
 `engine-test` is a calibration check rather than a pass/fail test: it should
 report roughly 2.7–2.9 goals a game, a home win share in the low forties, about
