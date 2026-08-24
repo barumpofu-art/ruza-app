@@ -28,6 +28,22 @@ jobs:
         working-directory: football-manager/android
         run: ./gradlew --no-daemon assembleDebug
 
+      - name: Check what is inside the APK
+        working-directory: football-manager/android
+        run: |
+          set -euo pipefail
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          AAPT2=$(ls -d "$ANDROID_HOME"/build-tools/*/aapt2 | sort -V | tail -1)
+          "$AAPT2" dump badging "$APK" | grep -E '^(package|application-label|sdkVersion|targetSdkVersion|uses-permission)' || true
+          # The game has to actually be in there, along with a compiled activity.
+          for entry in AndroidManifest.xml classes.dex assets/index.html assets/styles.css \
+                       assets/js/main.js assets/js/engine.js assets/js/state.js assets/sw.js \
+                       assets/manifest.webmanifest res/mipmap-xxxhdpi/ic_launcher.png; do
+            unzip -Z1 "$APK" | grep -qx "$entry" || { echo "missing from APK: $entry"; exit 1; }
+          done
+          echo "assets in APK: $(unzip -Z1 "$APK" | grep -c '^assets/')"
+          echo "apk size: $(du -h "$APK" | cut -f1)"
+
       - name: Name the APK
         working-directory: football-manager/android
         run: |
