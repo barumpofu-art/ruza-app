@@ -15,10 +15,22 @@ an icon and a service worker that caches everything. In Chrome on Android use
 *Install app* (or *Add to Home screen*); it gets its own icon, opens full screen
 and runs with no connection. On iOS, Share → *Add to Home Screen*.
 
-**A real APK** would be a WebView wrapper around these same files. It needs the
-Android SDK, which this repository does not carry — `pwabuilder.com` will
-package the installed PWA URL into a signed APK, or a CI job with the SDK can
-build a wrapper project.
+**An APK.** `android/` is a WebView wrapper around exactly these files: one
+activity, no libraries, no Kotlin, and the game copied in as assets by Gradle.
+The GitHub Actions workflow `.github/workflows/android-apk.yml` builds it on
+every push and uploads `kalahari-manager.apk` as a run artifact — download it
+from the run's Artifacts section and sideload it (Android will ask you to allow
+installs from that source). Locally, with the Android SDK installed:
+
+```sh
+cd android && ./gradlew assembleDebug     # app/build/outputs/apk/debug/
+```
+
+The APK carries no code of its own beyond the shell: assets are served to the
+WebView from a virtual `https://appassets.androidplatform.net` origin, so the
+page is a secure context with a real, persistent `localStorage` for your save.
+It asks for `INTERNET` because WebView needs it to load that origin; the game
+never makes a request that leaves the APK.
 
 **Running it locally** needs a web server, because ES modules will not load from
 `file://` (the single-file build above is the exception — it has no imports):
@@ -59,6 +71,7 @@ index.html          app shell
 manifest.webmanifest, sw.js, icon-*.png   installable, offline-capable PWA
 kalahari-manager.html                     single-file offline build
 build/              offline bundle and icon generation
+android/            WebView wrapper project for the APK
 styles.css          all styling, dark and phone-first
 js/rng.js           seeded random number generator
 js/data.js          clubs and name pools

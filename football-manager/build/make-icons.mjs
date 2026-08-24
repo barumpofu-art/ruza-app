@@ -20,12 +20,23 @@ const svg = (size) => `
   </g>
 </svg>`;
 
+// PWA icons at the root, launcher icons for the Android wrapper.
+const targets = [
+  [192, 'icon-192.png'],
+  [512, 'icon-512.png'],
+  [48, 'android/app/src/main/res/mipmap-mdpi/ic_launcher.png'],
+  [72, 'android/app/src/main/res/mipmap-hdpi/ic_launcher.png'],
+  [96, 'android/app/src/main/res/mipmap-xhdpi/ic_launcher.png'],
+  [144, 'android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png'],
+  [192, 'android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png'],
+];
+
 const browser = await chromium.launch();
-for (const size of [192, 512]) {
+for (const [size, out] of targets) {
   const page = await browser.newPage({ viewport: { width: size, height: size } });
   await page.setContent(`<body style="margin:0">${svg(size)}</body>`);
-  await page.screenshot({ path: join(root, `icon-${size}.png`) });
+  await page.screenshot({ path: join(root, out) });
   await page.close();
-  console.log(`icon-${size}.png`);
+  console.log(out);
 }
 await browser.close();

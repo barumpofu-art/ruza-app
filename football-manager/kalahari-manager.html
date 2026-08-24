@@ -3949,6 +3949,18 @@ hr.sep { border: 0; border-top: 1px solid var(--line-soft); margin: 12px 0; }
         return;
     }
   }
+  window.__androidBack = () => {
+    if (document.querySelector(".sheet")) {
+      closeSheet();
+      return true;
+    }
+    if (document.querySelector(".match")) return true;
+    if (app.route !== "home") {
+      app.go("home");
+      return true;
+    }
+    return false;
+  };
   function promote(club, id) {
     const player = club.squad.find((p) => p.id === id);
     if (!player) return;

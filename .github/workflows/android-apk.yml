@@ -1,0 +1,43 @@
+name: Kalahari Manager APK
+
+# Builds the WebView wrapper around football-manager/ and uploads the APK as a
+# run artifact. GitHub's Ubuntu runners already carry the Android SDK.
+on:
+  push:
+    paths:
+      - 'football-manager/**'
+      - '.github/workflows/android-apk.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build debug APK
+        working-directory: football-manager/android
+        run: ./gradlew --no-daemon assembleDebug
+
+      - name: Name the APK
+        working-directory: football-manager/android
+        run: |
+          mkdir -p ../../out
+          cp app/build/outputs/apk/debug/app-debug.apk ../../out/kalahari-manager.apk
+          ls -la ../../out
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: kalahari-manager-apk
+          path: out/kalahari-manager.apk
+          if-no-files-found: error

@@ -410,6 +410,14 @@ function onClick(event) {
   }
 }
 
+// The Android shell asks the page to handle back before it closes the app.
+window.__androidBack = () => {
+  if (document.querySelector('.sheet')) { closeSheet(); return true; }
+  if (document.querySelector('.match')) return true;   // never quit mid-match
+  if (app.route !== 'home') { app.go('home'); return true; }
+  return false;
+};
+
 // Selection helpers --------------------------------------------------------------
 
 function promote(club, id) {
