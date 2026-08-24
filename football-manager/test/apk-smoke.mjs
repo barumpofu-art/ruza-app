@@ -84,12 +84,27 @@ async function evaluate(expression) {
 
 async function waitFor(expression, what, timeoutMs = 30000) {
   const deadline = Date.now() + timeoutMs;
+  let lastError = null;
   for (;;) {
-    const value = await evaluate(expression);
-    if (value) return value;
-    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`);
+    try {
+      const value = await evaluate(expression);
+      if (value) return value;
+    } catch (err) {
+      // A reload tears the execution context down mid-poll; keep trying.
+      lastError = err;
+    }
+    if (Date.now() > deadline) {
+      throw new Error(`timed out waiting for ${what}${lastError ? ` (last error: ${lastError.message})` : ''}`);
+    }
     await sleep(400);
   }
+}
+
+// Page.reload rather than location.reload(): the latter destroys the context
+// the evaluate is still waiting on.
+async function reload() {
+  await send('Page.reload', { ignoreCache: false });
+  await sleep(1500);
 }
 
 const click = (selector) => evaluate(
@@ -115,25 +130,15 @@ const href = await evaluate('location.href');
 console.log('url:', href);
 if (!href.includes(PKG_ORIGIN)) throw new Error(`the WebView is not on the app's asset origin: ${href}`);
 
-// 2. Start from a clean slate: a re-run (or a rehearsal against a dev server)
-//    can arrive with a save, a cached shell and a live service worker.
-await evaluate(`(async () => {
-  try { localStorage.clear(); } catch (e) { /* no storage, nothing to clear */ }
-  if (navigator.serviceWorker) {
-    const regs = await navigator.serviceWorker.getRegistrations();
-    await Promise.all(regs.map((r) => r.unregister()));
-  }
-  if (self.caches) {
-    const keys = await caches.keys();
-    await Promise.all(keys.map((k) => caches.delete(k)));
-  }
-  location.reload();
-  return true;
-})()`);
-await sleep(2000);
-
-// The start screen offers the whole division.
-await waitFor("!!document.querySelector('.clubpick')", 'the start screen');
+// 2. The start screen offers the whole division. The app data is cleared by
+//    apk-smoke.sh before launch; storage cannot be cleared from in here,
+//    because the app writes its save back whenever the page is hidden.
+await waitFor(
+  "!!document.querySelector('.clubpick') || !!document.querySelector('.topbar-name')",
+  'the app to boot');
+if (!(await evaluate("!!document.querySelector('.clubpick')"))) {
+  throw new Error('a career is already in progress — this test needs clean app data');
+}
 const clubs = await count('.clubopt');
 console.log('clubs offered:', clubs);
 if (clubs !== 12) throw new Error(`expected 12 clubs on the start screen, saw ${clubs}`);
@@ -170,8 +175,7 @@ await waitFor("!!document.querySelector('.topbar-name')", 'the dashboard again')
 // 6. The save survives, which is the whole reason assets are served from an
 //    https origin instead of file://.
 const before = (await text('.topbar-sub')).trim();
-await evaluate('location.reload()');
-await sleep(1500);
+await reload();
 await waitFor("!!document.querySelector('.topbar-name')", 'the reloaded dashboard');
 const after = (await text('.topbar-sub')).trim();
 console.log('before reload:', before, '| after:', after);
