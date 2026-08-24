@@ -26,7 +26,10 @@ export default [
     languageOptions: {
       ecmaVersion: 2023,
       sourceType: 'module',
-      globals: { console: 'readonly', process: 'readonly' },
+      globals: {
+        console: 'readonly', process: 'readonly', fetch: 'readonly', WebSocket: 'readonly',
+        Buffer: 'readonly', setTimeout: 'readonly', clearTimeout: 'readonly', URL: 'readonly',
+      },
     },
     rules: { 'no-unused-vars': ['warn', { args: 'none' }], 'no-undef': 'error' },
   },

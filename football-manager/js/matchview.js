@@ -262,7 +262,7 @@ export function playMatch(app) {
     root.remove();
     document.body.style.overflow = '';
     completeMatch(app.state, sim);
-    app.save();
+    app.save(true);   // ninety minutes is too much to lose to a debounce
     app.go('home');
   }
 

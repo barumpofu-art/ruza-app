@@ -38,9 +38,20 @@ const app = {
 
   refresh() { render(); },
 
-  save() {
+  // Rapid taps (swapping shirts) coalesce; anything you would hate to lose
+  // asks for an immediate write.
+  save(immediate = false) {
     clearTimeout(this.saveTimer);
-    this.saveTimer = setTimeout(() => store.save(this.state), 200);
+    this.saveTimer = null;
+    if (immediate) { store.save(this.state); return; }
+    this.saveTimer = setTimeout(() => { this.saveTimer = null; store.save(this.state); }, 200);
+  },
+
+  flush() {
+    if (!this.state) return;
+    clearTimeout(this.saveTimer);
+    this.saveTimer = null;
+    store.save(this.state);
   },
 };
 
@@ -56,6 +67,11 @@ function boot() {
     startScreen();
   }
   document.addEventListener('click', onClick);
+  // Android can stop the app the moment it leaves the screen.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') app.flush();
+  });
+  window.addEventListener('pagehide', () => app.flush());
   registerServiceWorker();
   if (!store.persistent()) {
     setTimeout(() => toast('This browser will not let the page save — progress lasts until you close it.'), 1200);
@@ -179,7 +195,7 @@ function onClick(event) {
 
     case 'quick-match': {
       const result = quickPlayRound(app.state);
-      app.save();
+      app.save(true);
       app.go('home');
       if (result) toast(`${result.outcome === 'W' ? 'Won' : result.outcome === 'D' ? 'Drew' : 'Lost'} ${result.own}-${result.opp} ${result.isHome ? 'at home to' : 'away to'} ${result.opponentName}`);
       return;
@@ -358,7 +374,7 @@ function onClick(event) {
     case 'sign': {
       const outcome = signPlayer(app.state, Number(arg));
       toast(outcome.message);
-      app.save();
+      app.save(true);
       if (outcome.ok) { closeSheet(); render(); openSheet(marketSheet(app)); }
       return;
     }
@@ -374,7 +390,7 @@ function onClick(event) {
       const outcome = sellPlayer(app.state, id, offer);
       toast(outcome.message);
       closeSheet();
-      app.save();
+      app.save(true);
       render();
       return;
     }
@@ -382,7 +398,7 @@ function onClick(event) {
     case 'renew': {
       const outcome = renewContract(app.state, Number(arg));
       toast(outcome.message);
-      app.save();
+      app.save(true);
       closeSheet();
       render();
       return;

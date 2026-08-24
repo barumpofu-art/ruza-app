@@ -36,16 +36,20 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// Network first, cache as the fallback. Cache-first would be faster by a
+// millisecond and would also keep serving last week's code after an update —
+// including inside the APK, where "the network" is just the app's own assets.
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   event.respondWith(
-    caches.match(event.request).then((hit) => hit ?? fetch(event.request).then((response) => {
-      // Keep the cache warm for anything else served from our own scope.
-      if (response.ok && new URL(event.request.url).origin === location.origin) {
-        const copy = response.clone();
-        caches.open(CACHE).then((cache) => cache.put(event.request, copy));
-      }
-      return response;
-    }).catch(() => caches.match('./index.html')))
+    fetch(event.request)
+      .then((response) => {
+        if (response.ok && new URL(event.request.url).origin === location.origin) {
+          const copy = response.clone();
+          caches.open(CACHE).then((cache) => cache.put(event.request, copy));
+        }
+        return response;
+      })
+      .catch(() => caches.match(event.request).then((hit) => hit ?? caches.match('./index.html')))
   );
 });

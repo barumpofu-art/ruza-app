@@ -3564,7 +3564,7 @@ hr.sep { border: 0; border-top: 1px solid var(--line-soft); margin: 12px 0; }
       root.remove();
       document.body.style.overflow = "";
       completeMatch(app2.state, sim);
-      app2.save();
+      app2.save(true);
       app2.go("home");
     }
     paintHead();
@@ -3617,9 +3617,25 @@ hr.sep { border: 0; border-top: 1px solid var(--line-soft); margin: 12px 0; }
     refresh() {
       render();
     },
-    save() {
+    // Rapid taps (swapping shirts) coalesce; anything you would hate to lose
+    // asks for an immediate write.
+    save(immediate = false) {
       clearTimeout(this.saveTimer);
-      this.saveTimer = setTimeout(() => save(this.state), 200);
+      this.saveTimer = null;
+      if (immediate) {
+        save(this.state);
+        return;
+      }
+      this.saveTimer = setTimeout(() => {
+        this.saveTimer = null;
+        save(this.state);
+      }, 200);
+    },
+    flush() {
+      if (!this.state) return;
+      clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+      save(this.state);
     }
   };
   function boot() {
@@ -3632,6 +3648,10 @@ hr.sep { border: 0; border-top: 1px solid var(--line-soft); margin: 12px 0; }
       startScreen();
     }
     document.addEventListener("click", onClick);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") app.flush();
+    });
+    window.addEventListener("pagehide", () => app.flush());
     registerServiceWorker();
     if (!persistent()) {
       setTimeout(() => toast("This browser will not let the page save \u2014 progress lasts until you close it."), 1200);
@@ -3739,7 +3759,7 @@ hr.sep { border: 0; border-top: 1px solid var(--line-soft); margin: 12px 0; }
         return;
       case "quick-match": {
         const result = quickPlayRound(app.state);
-        app.save();
+        app.save(true);
         app.go("home");
         if (result) toast(`${result.outcome === "W" ? "Won" : result.outcome === "D" ? "Drew" : "Lost"} ${result.own}-${result.opp} ${result.isHome ? "at home to" : "away to"} ${result.opponentName}`);
         return;
@@ -3904,7 +3924,7 @@ hr.sep { border: 0; border-top: 1px solid var(--line-soft); margin: 12px 0; }
       case "sign": {
         const outcome = signPlayer(app.state, Number(arg));
         toast(outcome.message);
-        app.save();
+        app.save(true);
         if (outcome.ok) {
           closeSheet();
           render();
@@ -3922,14 +3942,14 @@ hr.sep { border: 0; border-top: 1px solid var(--line-soft); margin: 12px 0; }
         const outcome = sellPlayer(app.state, id, offer);
         toast(outcome.message);
         closeSheet();
-        app.save();
+        app.save(true);
         render();
         return;
       }
       case "renew": {
         const outcome = renewContract(app.state, Number(arg));
         toast(outcome.message);
-        app.save();
+        app.save(true);
         closeSheet();
         render();
         return;

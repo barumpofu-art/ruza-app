@@ -28,7 +28,13 @@ echo "devtools socket: $socket"
 adb forward tcp:9222 "localabstract:$socket"
 curl -sf --retry 15 --retry-delay 1 http://127.0.0.1:9222/json/version
 
-node football-manager/test/apk-smoke.mjs
+if ! node football-manager/test/apk-smoke.mjs; then
+  echo "--- the app's own view of the failure ---"
+  adb exec-out screencap -p > apk-failure.png || true
+  adb logcat -d > apk-logcat.txt || true
+  tail -120 apk-logcat.txt || true
+  exit 1
+fi
 
 # A clean run must also be a crash-free one.
 adb logcat -d > apk-logcat.txt
