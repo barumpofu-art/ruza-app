@@ -64,14 +64,14 @@ await new Promise((resolve, reject) => {
   socket.addEventListener('error', () => reject(new Error('could not open the devtools socket')), { once: true });
 });
 
-function send(method, params = {}) {
+function send(method, params = {}, timeoutMs = 60000) {
   const id = ++nextId;
   return new Promise((resolve, reject) => {
     pending.set(id, { resolve, reject });
     socket.send(JSON.stringify({ id, method, params }));
     setTimeout(() => {
       if (pending.delete(id)) reject(new Error(`${method} timed out`));
-    }, 60000);
+    }, timeoutMs);
   });
 }
 
@@ -111,9 +111,22 @@ const text = (selector) => evaluate(
 
 const count = (selector) => evaluate(`document.querySelectorAll(${JSON.stringify(selector)}).length`);
 
+// Page.captureScreenshot is another of the CDP methods Android WebView does not
+// implement: it accepts the call and never answers. Screenshots are diagnostics,
+// not assertions, so this is bounded and never fails the run. apk-smoke.sh takes
+// a real screencap through adb, which does work.
+const SHOT_TIMEOUT_MS = Number(process.env.SCREENSHOT_TIMEOUT_MS ?? 8000);
+let shotsUnavailable = false;
+
 async function screenshot(name) {
-  const { data } = await send('Page.captureScreenshot', { format: 'png' });
-  writeFileSync(`apk-${name}.png`, Buffer.from(data, 'base64'));
+  if (shotsUnavailable) return;
+  try {
+    const { data } = await send('Page.captureScreenshot', { format: 'png' }, SHOT_TIMEOUT_MS);
+    writeFileSync(`apk-${name}.png`, Buffer.from(data, 'base64'));
+  } catch (err) {
+    shotsUnavailable = true;
+    console.log(`(no screenshots from this WebView: ${err.message} — adb screencap will cover it)`);
+  }
 }
 
 // Dismiss whatever sheet is showing — an outcome, an event, a rigging offer —
