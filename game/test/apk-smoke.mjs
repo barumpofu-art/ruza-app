@@ -10,6 +10,7 @@
 //   PAGE_ORIGIN=127.0.0.1 CDP_ENDPOINT=http://127.0.0.1:9222 node test/apk-smoke.mjs
 
 import { writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 
 const ENDPOINT = process.env.CDP_ENDPOINT ?? 'http://127.0.0.1:9222';
 const PKG_ORIGIN = process.env.PAGE_ORIGIN ?? 'appassets.androidplatform.net';
@@ -76,7 +77,7 @@ function send(method, params = {}, timeoutMs = 60000) {
 }
 
 async function evaluate(expression) {
-  const result = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
+  const result = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }, 25000);
   if (result.exceptionDetails) {
     throw new Error(`in the page: ${result.exceptionDetails.exception?.description ?? result.exceptionDetails.text}`);
   }
@@ -111,23 +112,43 @@ const text = (selector) => evaluate(
 
 const count = (selector) => evaluate(`document.querySelectorAll(${JSON.stringify(selector)}).length`);
 
-// Page.captureScreenshot is another of the CDP methods Android WebView does not
-// implement: it accepts the call and never answers. Screenshots are diagnostics,
-// not assertions, so this is bounded and never fails the run. apk-smoke.sh takes
-// a real screencap through adb, which does work.
-const SHOT_TIMEOUT_MS = Number(process.env.SCREENSHOT_TIMEOUT_MS ?? 8000);
+// Never ask a WebView for Page.captureScreenshot. It does not merely fail: the
+// call wedges the renderer and takes the emulator down with it, so every later
+// CDP call times out too. adb screencap asks the device instead of the page,
+// which costs nothing and always works. 'cdp' is for rehearsing on desktop
+// Chromium, where there is no adb.
+const SHOT_MODE = process.env.SHOT_MODE ?? 'adb';   // adb | cdp | off
 let shotsUnavailable = false;
 
 async function screenshot(name) {
-  if (shotsUnavailable) return;
+  if (SHOT_MODE === 'off' || shotsUnavailable) return;
   try {
-    const { data } = await send('Page.captureScreenshot', { format: 'png' }, SHOT_TIMEOUT_MS);
-    writeFileSync(`apk-${name}.png`, Buffer.from(data, 'base64'));
+    if (SHOT_MODE === 'cdp') {
+      const { data } = await send('Page.captureScreenshot', { format: 'png' }, 8000);
+      writeFileSync(`apk-${name}.png`, Buffer.from(data, 'base64'));
+      return;
+    }
+    const png = execFileSync('adb', ['exec-out', 'screencap', '-p'],
+      { maxBuffer: 64 * 1024 * 1024, timeout: 30000 });
+    if (!png || !png.length) throw new Error('adb returned no image');
+    writeFileSync(`apk-${name}.png`, png);
   } catch (err) {
     shotsUnavailable = true;
-    console.log(`(no screenshots from this WebView: ${err.message} — adb screencap will cover it)`);
+    console.log(`(screenshots unavailable, continuing without them: ${err.message})`);
   }
 }
+
+// A breadcrumb trail, so a log that ends abruptly still says where it stopped.
+let phase = 'connecting';
+function step(what) { phase = what; console.log('·', what); }
+
+// A top-level await that rejects otherwise prints a bare stack with no clue
+// which assertion was in flight.
+process.on('unhandledRejection', (err) => {
+  console.error(`\nfailed during: ${phase}`);
+  console.error(err instanceof Error ? (err.stack ?? err.message) : err);
+  process.exit(1);
+});
 
 // Dismiss whatever sheet is showing — an outcome, an event, a rigging offer —
 // and keep going until the screen is genuinely clear. A sheet left open
@@ -159,11 +180,13 @@ async function drainModals() {
 await send('Runtime.enable');
 await send('Page.enable');
 
+step('checking the app origin');
 // 1. The shell really loaded the packaged assets over the app's https origin.
 const href = await evaluate('location.href');
 console.log('url:', href);
 if (!href.includes(PKG_ORIGIN)) throw new Error(`the WebView is not on the app's asset origin: ${href}`);
 
+step('checking the title screen');
 // 2. The title screen. App data is cleared by apk-smoke.sh before launch, so
 //    there must be no career to continue.
 await waitFor("!!document.querySelector('[data-act=\"new-game\"]')", 'the title screen');
@@ -182,6 +205,7 @@ const reachable = await evaluate(`(() => {
 if (!reachable) throw new Error('something invisible is covering the title screen and eating taps');
 await screenshot('title');
 
+step('opening the country list');
 // 3. All ten countries are offered.
 await click('[data-act="new-game"]');
 await waitFor("!!document.querySelector('.ccard')", 'the country list');
@@ -190,6 +214,7 @@ console.log('countries offered:', countries);
 if (countries !== 10) throw new Error(`expected 10 countries, saw ${countries}`);
 await screenshot('countries');
 
+step('starting a career');
 // 4. A career starts.
 await click('[data-country="BW"]');
 await waitFor("!!document.querySelector('#btn-begin')", 'character creation');
@@ -205,6 +230,7 @@ console.log('player:', who, '|', office);
 if (!who.includes('Emulator Candidate')) throw new Error(`wrong name in the HUD: ${who}`);
 if (!office.toLowerCase().includes('activist')) throw new Error(`expected to start as an activist, got: ${office}`);
 
+step('taking an action');
 // 5. There are actions to take, and taking one produces an outcome.
 const actions = await count('#pane-desk .act');
 console.log('actions available:', actions);
@@ -218,6 +244,7 @@ const feedAfter = await count('#pane-desk .paper');
 console.log('feed entries:', feedBefore, '->', feedAfter);
 if (!(feedAfter > feedBefore)) throw new Error('taking an action did not add anything to the record');
 
+step('ending the month');
 // 6. A month passes.
 const monthBefore = await text('.hud-month');
 await click('[data-act="end-turn"]');
@@ -229,6 +256,7 @@ await waitFor(`(() => document.querySelector('.hud-month').textContent.trim() !=
 await clearModal();
 console.log('date:', monthBefore, '->', await text('.hud-month'));
 
+step('checking the stat bars');
 // 7. The stat bars have real height. They once rendered as zero-height inline
 //    spans, so every stat looked identical on every screen.
 await click('.tab[data-pane="self"]');
@@ -243,6 +271,7 @@ const widths = await evaluate(
 if (widths < 3) throw new Error(`every stat bar is the same width (${widths} distinct) — they are not being filled`);
 await screenshot('stats');
 
+step('reloading to check the save');
 // 8. The save survives, which is the whole reason assets are served from an
 //    https origin instead of file://.
 await click('.tab[data-pane="desk"]');
@@ -263,6 +292,7 @@ if (dateBefore !== dateAfter || !whoAfter.includes('Emulator Candidate')) {
 }
 await screenshot('after-reload');
 
+step('checking the back button');
 // 9. The hardware back button hook exists and refuses to quit from a sub-pane.
 const backHandled = await evaluate(`(() => {
   if (typeof window.__androidBack !== 'function') return 'missing';

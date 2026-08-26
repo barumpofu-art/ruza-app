@@ -181,8 +181,11 @@ body::after{
 .hud{
   position:sticky; top:0; z-index:30;
   padding:calc(var(--safe-t) + 10px) 14px 10px;
-  background:linear-gradient(180deg, rgba(11,16,22,.98) 72%, rgba(11,16,22,0));
-  backdrop-filter:blur(9px); -webkit-backdrop-filter:blur(9px);
+  /* No backdrop-filter: these bars are already all but opaque, so the blur is
+     invisible, but it forces a full backdrop capture on every composite —
+     which is real jank on a mid-range phone, and pathological under software
+     rendering. */
+  background:linear-gradient(180deg, var(--ink) 0 72%, rgba(11,16,22,0));
 }
 .hud-row{ display:flex; align-items:center; gap:10px; }
 .hud-portrait{
@@ -212,7 +215,7 @@ body::after{
 .tabs{
   position:sticky; bottom:0; z-index:30; display:flex;
   padding:6px 8px calc(var(--safe-b) + 6px);
-  background:rgba(14,20,27,.94); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+  background:var(--ink-2);
   border-top:1px solid var(--line-soft);
 }
 .tab{
@@ -322,8 +325,7 @@ body::after{
 /* modal */
 .modal-scrim[hidden]{ display:none !important; }
 .modal-scrim{
-  position:fixed; inset:0; z-index:100; background:rgba(6,10,14,.82);
-  backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px);
+  position:fixed; inset:0; z-index:100; background:rgba(6,10,14,.90);
   display:flex; align-items:flex-end; justify-content:center;
   animation:fade .18s ease both; overflow-y:auto;
 }
