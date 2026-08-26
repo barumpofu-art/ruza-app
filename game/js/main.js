@@ -20,6 +20,9 @@
         UI.S = S;
         if (S.over) { RZ.ui.showEnd(); return; }
         RZ.ui.renderGame(); RZ.ui.show('game');
+        // Quitting with a decision on the table leaves it in the save; put it
+        // back on screen rather than stranding it there forever.
+        if (S.pendingEvent) resumePendingEvent();
       });
     });
     document.querySelectorAll('[data-act="show-about"]').forEach(function (b) {
@@ -148,19 +151,20 @@
 
     if (out.election) { runElectionFlow(); return; }
 
-    if (S.pendingEvent) {
-      var ev = S.pendingEvent;
-      RZ.ui.showEvent(ev, function (i) {
-        var entry = RZ.engine.resolveEvent(S, i);
-        RZ.ui.closeModal();
-        RZ.ui.showOutcome(entry, function () {
-          if (S.over) { RZ.ui.showEnd(); return; }
-          RZ.ui.renderGame();
-        });
-      });
-      return;
-    }
+    if (S.pendingEvent) { resumePendingEvent(); return; }
     RZ.ui.renderGame();
+  }
+
+  function resumePendingEvent() {
+    var S = UI.S;
+    RZ.ui.showEvent(S.pendingEvent, function (i) {
+      var entry = RZ.engine.resolveEvent(S, i);
+      RZ.ui.closeModal();
+      RZ.ui.showOutcome(entry, function () {
+        if (S.over) { RZ.ui.showEnd(); return; }
+        RZ.ui.renderGame();
+      });
+    });
   }
 
   function runElectionFlow() {
@@ -203,6 +207,39 @@
     RZ.engine.save(UI.S);
     RZ.ui.showEnd();
   }
+
+  /* ----------------------------------------------------------------
+     Android hardware back button. The APK shell calls this before it
+     closes the app; returning true means "I handled it, stay open".
+     ---------------------------------------------------------------- */
+  var lastBack = 0;
+  window.__androidBack = function () {
+    // A modal is open: close it if it is dismissible, otherwise swallow the
+    // press. An event demands a choice and must not be escapable.
+    var modal = document.getElementById('modal');
+    if (modal && !modal.hidden) {
+      if (modal.dataset.dismissible) RZ.ui.closeModal();
+      return true;
+    }
+    var active = document.querySelector('.screen.is-active');
+    var id = active ? active.id : '';
+
+    if (id === 'screen-create') { RZ.ui.show('country'); return true; }
+    if (id === 'screen-country') { RZ.ui.show('title'); return true; }
+    if (id === 'screen-end' || id === 'screen-title') return false;
+
+    if (id === 'screen-game') {
+      if (UI.pane !== 'desk') { UI.pane = 'desk'; RZ.ui.renderGame(); return true; }
+      // On the desk, ask once before leaving. The career is already saved;
+      // this is only to stop a stray press closing the app mid-month.
+      var now = Date.now();
+      if (now - lastBack < 2000) return false;
+      lastBack = now;
+      RZ.ui.toast('Press back again to leave');
+      return true;
+    }
+    return false;
+  };
 
   RZ.main = { init: init, begin: begin, act: act, contest: contest, endTurn: endTurn, abandon: abandon };
   document.addEventListener('DOMContentLoaded', init);

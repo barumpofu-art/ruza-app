@@ -4,7 +4,20 @@ A text-based political career simulator set in southern Africa. You start as an 
 ward activist and try to reach the highest office your country's constitution allows.
 
 Built as a single static, offline-capable web app. No build step, no dependencies, no
-network calls. Open `index.html` — or serve the folder and add it to a phone's home screen.
+network calls.
+
+## Playing it
+
+**In a browser:** <https://barumpofu-art.github.io/ruza-app/game/> — installable from Chrome's
+*Install app* menu, or Safari's *Add to Home Screen*.
+
+**As an Android app:** download `kgosi-cadre.apk` from the
+[latest build](https://github.com/barumpofu-art/ruza-app/releases/tag/kgosi-cadre-latest),
+open it, and allow installs from your browser when asked. It is a WebView shell around the
+same web app in `android/`, so there is only ever one copy of the source. CI installs every
+build on an Android 14 emulator and plays a career through it before publishing.
+
+**Locally:** open `index.html`, or serve the folder.
 
 ## Countries
 
@@ -76,6 +89,22 @@ js/engine.js          state, the monthly loop, the action API, promotion and dan
 js/governance.js      the presidency, budgets, election night, legacy and obituary
 js/ui.js              rendering
 js/main.js            bootstrap and flow control
+android/              WebView wrapper that packages the above as an APK
+test/apk-smoke.mjs    drives the packaged app in a real WebView over devtools
+test/apk-smoke.sh     installs the APK on an emulator and hands it to that test
+```
+
+The APK serves the assets from a virtual `https://appassets.androidplatform.net` origin
+rather than `file://`, so the page stays a secure context and the save lives in a real,
+persistent `localStorage`. The hardware back button is routed through `window.__androidBack`,
+so it closes a sheet or steps back a pane instead of quitting mid-decision.
+
+`test/apk-smoke.mjs` can be rehearsed against desktop Chromium without an emulator:
+
+```
+python3 -m http.server 8899 --directory .
+chromium --headless=new --remote-debugging-port=9222 http://127.0.0.1:8899/index.html
+PAGE_ORIGIN=127.0.0.1 node test/apk-smoke.mjs
 ```
 
 Careers are saved to `localStorage` after every turn. The RNG is seeded, so a career is

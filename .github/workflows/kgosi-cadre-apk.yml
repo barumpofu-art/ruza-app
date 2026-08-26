@@ -1,0 +1,161 @@
+name: Kgosi & Cadre APK
+
+# Builds the WebView wrapper around game/, proves the APK works on an
+# emulator, and only then publishes it.
+on:
+  push:
+    paths:
+      - 'game/**'
+      - '.github/workflows/kgosi-cadre-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build debug APK
+        working-directory: game/android
+        run: ./gradlew --no-daemon assembleDebug
+
+      - name: Check what is inside the APK
+        working-directory: game/android
+        run: |
+          set -euo pipefail
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          AAPT2=$(ls -d "$ANDROID_HOME"/build-tools/*/aapt2 | sort -V | tail -1)
+          "$AAPT2" dump badging "$APK" | grep -E '^(package|application-label|sdkVersion|targetSdkVersion|uses-permission)' || true
+          # The game has to actually be in there, along with a compiled activity.
+          for entry in AndroidManifest.xml classes.dex \
+                       assets/index.html assets/app.css assets/sw.js assets/manifest.webmanifest \
+                       assets/icon-192.png assets/icon-512.png \
+                       assets/js/main.js assets/js/engine.js assets/js/ui.js \
+                       assets/js/data-countries.js assets/js/elections.js assets/js/governance.js; do
+            unzip -Z1 "$APK" | grep -qx "$entry" || { echo "missing from APK: $entry"; exit 1; }
+          done
+          # Density folders come out of AGP with a -v4 qualifier.
+          unzip -Z1 "$APK" | grep -qE '^res/mipmap-[a-z]+(-v[0-9]+)?/ic_launcher\.png$' \
+            || { echo "missing from APK: a launcher icon"; exit 1; }
+          echo "assets in APK: $(unzip -Z1 "$APK" | grep -c '^assets/')"
+          echo "apk size: $(du -h "$APK" | cut -f1)"
+
+      - name: Name the APK
+        working-directory: game/android
+        run: |
+          mkdir -p ../../out
+          cp app/build/outputs/apk/debug/app-debug.apk ../../out/kgosi-cadre.apk
+          ls -la ../../out
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: kgosi-cadre-apk
+          path: out/kgosi-cadre.apk
+          if-no-files-found: error
+
+  # Installs the APK on a real Android image and plays the game through the
+  # WebView's devtools: the only check that covers the packaged app.
+  smoke:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: kgosi-cadre-apk
+          path: out
+
+      # The smoke test speaks CDP over Node's built-in WebSocket, so there is
+      # nothing to install.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Play the game on an emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          ram-size: 4096M
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash game/test/apk-smoke.sh out/kgosi-cadre.apk
+
+      - name: Upload what the emulator saw
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: emulator-screenshots
+          path: |
+            apk-*.png
+            apk-logcat.txt
+          if-no-files-found: warn
+
+  # A release asset is a plain one-tap download on a phone, unlike the zipped,
+  # sign-in-only run artifact. The tag is rolling: the same URL always points at
+  # the newest build that passed the emulator.
+  release:
+    needs: smoke
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/claude/southern-africa-politics-game-oo6mro'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: kgosi-cadre-apk
+          path: out
+
+      - name: Publish the APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: kgosi-cadre-latest
+        run: |
+          set -euo pipefail
+          NOTES="Kgosi & Cadre — debug-signed build of game/ at ${GITHUB_SHA::7}, installed and played on an Android 14 emulator by CI.
+
+          Install on Android: download the APK, open it, and allow installs from your browser when asked.
+          It needs no account and makes no network requests; your career is saved on the device.
+
+          The same game also runs in a browser at https://barumpofu-art.github.io/ruza-app/game/"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" out/kgosi-cadre.apk --clobber
+            gh release edit "$TAG" --notes "$NOTES" --target "$GITHUB_SHA"
+          else
+            gh release create "$TAG" out/kgosi-cadre.apk \
+              --title "Kgosi & Cadre (latest build)" \
+              --notes "$NOTES" \
+              --prerelease \
+              --target "$GITHUB_SHA"
+          fi
+          gh release view "$TAG" --json assets --jq '.assets[] | "\(.name) \(.size) bytes"'
