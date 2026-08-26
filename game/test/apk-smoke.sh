@@ -15,6 +15,14 @@ adb() { timeout 120 "$ADB_BIN" "$@"; }
 
 adb wait-for-device
 adb logcat -c || true
+
+# Stream logcat to a file for the whole run. Collecting it afterwards is no use:
+# when the emulator dies the post-mortem adb call returns nothing, which is
+# exactly how three failures in a row arrived with an empty log.
+timeout 900 "$ADB_BIN" logcat -v time > apk-logcat.txt 2>&1 &
+LOGCAT_PID=$!
+trap 'kill "$LOGCAT_PID" 2>/dev/null || true' EXIT
+
 adb install -r "$APK"
 # Start from nothing. The game writes its save on every action, so clearing
 # storage from inside the page cannot give a clean slate.
@@ -56,14 +64,21 @@ set -e
 if [ "$status" -eq 124 ]; then echo "the smoke test itself timed out after 10 minutes"; fi
 
 # What the device actually looks like. adb screencap works where the WebView's
-# Page.captureScreenshot does not.
+# Page.captureScreenshot does not — when the device is still alive to answer.
 adb exec-out screencap -p > apk-final.png || true
-adb logcat -d > apk-logcat.txt || true
+
+# Stop the stream and keep what it captured before things went wrong.
+kill "$LOGCAT_PID" 2>/dev/null || true
+sleep 1
+echo "logcat captured: $(wc -l < apk-logcat.txt 2>/dev/null || echo 0) lines"
 
 if [ "$status" -ne 0 ]; then
   cp -f apk-final.png apk-failure.png 2>/dev/null || true
-  echo "--- logcat, app and WebView only ---"
-  grep -aiE 'kgosi|cadre|chromium|AndroidRuntime|WebView' apk-logcat.txt | tail -40 || true
+  echo "--- how the run ended, from the streamed log ---"
+  tail -60 apk-logcat.txt || true
+  echo "--- anything that looks like a crash ---"
+  grep -aiE 'FATAL|AndroidRuntime|tombstone|native crash|signal |lowmemorykiller|Out of memory|ANR in|died|kgosi|cadre' \
+    apk-logcat.txt | tail -40 || true
   echo "--- what the smoke test said ---"
   tail -40 apk-smoke-output.txt
   exit "$status"

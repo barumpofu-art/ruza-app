@@ -34,7 +34,6 @@ html,body{ height:100%; }
 body{
   margin:0;
   font-family:var(--font);
-  background:var(--ink);
   color:var(--text);
   -webkit-font-smoothing:antialiased;
   -webkit-tap-highlight-color:transparent;
@@ -42,21 +41,21 @@ body{
 }
 button{ font:inherit; color:inherit; }
 
-/* Ambient background: subtle veld horizon + woven band */
-body::before{
-  content:""; position:fixed; inset:0; z-index:-2;
-  background:
-    radial-gradient(120% 65% at 50% -12%, #1c2937 0%, #0f1720 45%, var(--ink) 78%),
-    var(--ink);
-}
-body::after{
-  content:""; position:fixed; inset:0; z-index:-1; opacity:.05; pointer-events:none;
+/* Ambient background: a veld horizon with a woven band over it.
+   This is painted straight onto the body rather than through two fixed
+   full-viewport pseudo-elements — one of which carried a mask-image. Those
+   were two permanently composited layers, and a masked full-screen layer is
+   an expensive thing to keep alive on a budget phone for a texture nobody
+   consciously sees. The gold is baked in at low alpha instead of being an
+   opacity layer, so it looks the same and costs one paint. */
+body{
+  background-color:var(--ink);
   background-image:
-    repeating-linear-gradient(45deg, var(--gold) 0 2px, transparent 2px 9px),
-    repeating-linear-gradient(-45deg, var(--gold) 0 2px, transparent 2px 9px);
-  background-size:18px 18px;
-  mask-image:linear-gradient(#000, transparent 40%);
-  -webkit-mask-image:linear-gradient(#000, transparent 40%);
+    repeating-linear-gradient(45deg, rgba(217,164,65,.03) 0 2px, transparent 2px 9px),
+    repeating-linear-gradient(-45deg, rgba(217,164,65,.03) 0 2px, transparent 2px 9px),
+    radial-gradient(120% 65% at 50% -12%, #1c2937 0%, #0f1720 45%, var(--ink) 78%);
+  background-size:18px 18px, 18px 18px, 100% 900px;
+  background-repeat:repeat, repeat, no-repeat;
 }
 
 .app{
