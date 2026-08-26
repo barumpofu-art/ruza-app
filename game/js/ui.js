@@ -415,6 +415,20 @@
       plainBar('International', P.standing.intl, 'b') +
       '</div></div></div>';
 
+    // Everything you said out loud in a meeting, still outstanding.
+    var proms = P.promises || [];
+    if (proms.length) {
+      h += '<div class="block"><div class="block-h">What you promised<span class="sub">' +
+        proms.length + ' outstanding</span></div><div class="card"><div class="rows">' +
+        proms.map(function (pr) {
+          var months = (S.date.year * 12 + S.date.month) - (pr.year * 12 + pr.month);
+          return '<div class="row"><span class="row-dot" style="background:' +
+            (months >= 10 ? '#d4453f' : months >= 5 ? '#d8a53f' : '#4bab84') + '"></span>' +
+            '<span class="row-n">' + esc(pr.text) + '<small>' + RZ.monthShort(pr.month) + ' ' + pr.year + '</small></span>' +
+            '<span class="row-v">' + months + 'mo</span></div>';
+        }).join('') + '</div></div></div>';
+    }
+
     h += '<div class="block"><div class="block-h">What could destroy you<span class="sub">' + P.dirt.length + ' item' + (P.dirt.length === 1 ? '' : 's') + '</span></div>';
     if (!P.dirt.length) {
       h += '<div class="card"><p class="note">Nothing. For now.</p></div>';
@@ -470,6 +484,66 @@
       '<button class="btn btn-gold btn-block" data-close>Continue</button>';
     var inner = modal(html);
     inner.querySelector('[data-close]').addEventListener('click', function () { closeModal(); if (onClose) onClose(); });
+  }
+
+  /* ---------------- conversation ---------------- */
+  // A meeting runs inside one modal that keeps growing: their questions and your
+  // answers stay on screen, so by the closing line you can read back what you
+  // committed yourself to in front of them.
+  function showDialogue(convo, onDone) {
+    var inner = modal('');
+    paint();
+
+    function paint() {
+      var sp = convo.speaker;
+      var html = '<div class="modal-kicker">' + esc(convo.where || 'A meeting') + '</div>' +
+        '<h2 class="modal-h">' + esc(sp.name) + '</h2>' +
+        '<div class="talk-role">' + esc(sp.role) +
+          (sp.org ? ' <span class="talk-org">' + esc(sp.org) + '</span>' : '') + '</div>' +
+        '<div class="talk">' + convo.transcript.map(line).join('') + '</div>';
+
+      if (convo.done) {
+        var d = convo.api.deltas;
+        html += (d && d.length ? '<div class="paper-delta talk-delta">' + d.map(function (x) {
+          return '<span class="dlt ' + (x.v > 0 ? 'p' : 'n') + '">' + esc(x.label) + ' ' + RZ.signed(x.v) + '</span>';
+        }).join('') + '</div>' : '') +
+          '<button class="btn btn-gold btn-block" data-close>Leave the room</button>';
+      } else {
+        html += '<div class="choices">' + RZ.dialogue.options(convo).map(function (o) {
+          return '<button class="choice" data-i="' + o.i + '"' + (o.ok ? '' : ' disabled') + '>' +
+            '<div class="choice-t">' + esc(o.t) + '</div>' +
+            (o.tag ? '<span class="choice-tag ' + (o.tag === 'risk' ? 'risk' : 'cost') + '">' + esc(o.tag) + '</span>' : '') +
+            '</button>';
+        }).join('') + '</div>';
+      }
+
+      inner.innerHTML = html;
+      if (convo.done) {
+        inner.querySelector('[data-close]').addEventListener('click', function () {
+          closeModal(); if (onDone) onDone(convo);
+        });
+      } else {
+        inner.querySelectorAll('[data-i]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            RZ.dialogue.choose(convo, parseInt(b.dataset.i, 10));
+            paint();
+          });
+        });
+      }
+      // Keep the newest exchange in view rather than the top of the meeting —
+      // and once it is over, what it cost you.
+      var focus = convo.done
+        ? inner.querySelector('.talk-delta') || inner.querySelector('[data-close]')
+        : inner.querySelector('.talk-l:last-child');
+      if (focus && focus.scrollIntoView) focus.scrollIntoView({ block: 'nearest' });
+    }
+
+    function line(l) {
+      return '<div class="talk-l ' + (l.who === 'me' ? 'me' : 'them') +
+        (l.closing ? ' closing' : '') + '">' +
+        '<div class="talk-nm">' + (l.who === 'me' ? 'You' : esc(convo.speaker.name.split(' ')[0])) + '</div>' +
+        '<div class="talk-tx">' + esc(l.text) + '</div></div>';
+    }
   }
 
   /* ---------------- election night ---------------- */
@@ -640,7 +714,7 @@
   RZ.ui = {
     UI: UI, show: show, toast: toast, modal: modal, closeModal: closeModal,
     renderCountries: renderCountries, renderCreate: renderCreate, renderGame: renderGame, renderHud: renderHud,
-    showEvent: showEvent, showOutcome: showOutcome, showElection: showElection,
+    showEvent: showEvent, showOutcome: showOutcome, showDialogue: showDialogue, showElection: showElection,
     showRigOffer: showRigOffer, showBudget: showBudget, showEnd: showEnd, showAbout: showAbout,
     paperCard: paperCard
   };

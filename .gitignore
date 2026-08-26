@@ -1,0 +1,4 @@
+# Emulator smoke-test output, written to the working directory by CI
+apk-*.png
+apk-*.txt
+out/

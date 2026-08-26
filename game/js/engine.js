@@ -31,7 +31,7 @@
         regionSupport: {}, money: 0, capital: 4, fame: 3, health: 92,
         rungIdx: 0, officeSince: { year: c.startYear, month: 2 },
         isLeader: false, isPresident: false, ministry: null,
-        dirt: [], allies: [], rivals: [], record: [], titles: [],
+        dirt: [], allies: [], rivals: [], record: [], titles: [], promises: [],
         yearsInOffice: 0, electionsWon: 0, electionsLost: 0
       },
       parties: {}, nation: {}, campaign: { effort: 0, delegateSpend: 0, season: false },
@@ -364,6 +364,26 @@
           body: 'The office is gone. The staff were reassigned within a day and the car was collected on Friday.', tone: 'bad' });
       },
 
+      /* --- things you said in a room, which people remember --- */
+      promise: function (id, label) {
+        P.promises = P.promises || [];
+        if (P.promises.some(function (x) { return x.id === id; })) return;
+        P.promises.push({ id: id, text: label, year: S.date.year, month: S.date.month });
+      },
+      hasPromise: function (id) { return (P.promises || []).some(function (x) { return x.id === id; }); },
+      keepPromise: function (id) {
+        P.promises = (P.promises || []).filter(function (x) { return x.id !== id; });
+      },
+      oldestPromise: function () {
+        var ps = (P.promises || []).slice().sort(function (x, y) {
+          return (x.year * 12 + x.month) - (y.year * 12 + y.month);
+        });
+        return ps[0] || null;
+      },
+      monthsSince: function (p) {
+        return (S.date.year * 12 + S.date.month) - (p.year * 12 + p.month);
+      },
+
       skipTurns: function (n) { S.skipTurns = (S.skipTurns || 0) + n; },
       campaignEffort: function (n) { S.campaign.effort = (S.campaign.effort || 0) + n; },
       spendOnDelegates: function (n) { S.campaign.delegateSpend = (S.campaign.delegateSpend || 0) + n; },
@@ -399,6 +419,16 @@
     if (S.actionsLeft <= 0) return null;
     var act = RZ.actionById[id] || RZ.gov.actionById(id);
     if (!act) return null;
+
+    // Some of these are meetings, not dice rolls. If a conversation is waiting
+    // on this topic, the player has to sit through it and answer for himself;
+    // the feed entry is written when the room empties.
+    var scene = RZ.dialogue && RZ.dialogue.sceneFor(S, id);
+    if (scene) {
+      S.actionsLeft -= (act.ap || 1);
+      return { dialogue: RZ.dialogue.begin(S, scene, act) };
+    }
+
     var api = mkApi(S);
     var res = act.run(api);
     if (!res || res.fail) return { fail: true, res: res, deltas: [] };
@@ -853,6 +883,29 @@
   /* =======================================================================
      FEED / SAVE
      ======================================================================= */
+  // Writes up a finished conversation the same way an action is written up, so
+  // it lands in the feed with everything the answers cost or bought.
+  function finishDialogue(S, convo) {
+    var tone = convo.mood >= 2 ? 'good' : (convo.mood <= -2 ? 'bad' : 'flat');
+    var entry = {
+      kind: tone === 'good' ? 'good' : (tone === 'bad' ? 'bad' : 'flat'),
+      src: convo.speaker.name + ', ' + convo.speaker.role,
+      title: convo.scene.headline
+        ? convo.scene.headline(convo.api, convo.temp, convo)
+        : HEADLINE[convo.temp],
+      body: convo.transcript[convo.transcript.length - 1].text,
+      deltas: convo.api.deltas.slice(), tone: tone
+    };
+    pushFeed(S, entry);
+    return entry;
+  }
+  var HEADLINE = {
+    warm: 'The room was with you',
+    fair: 'A civil hearing',
+    cool: 'You were heard out, no more',
+    hostile: 'It went badly'
+  };
+
   function pushFeed(S, e) {
     e.turn = S.turn;
     e.date = { year: S.date.year, month: S.date.month };
@@ -881,6 +934,7 @@
     endTurn: endTurn, rollEvent: rollEvent, resolveEvent: resolveEvent,
     contestStatus: contestStatus, contest: contest, promote: promote, nextRung: nextRung,
     meetsRequirements: meetsRequirements, pushFeed: pushFeed, endGame: endGame,
+    finishDialogue: finishDialogue,
     save: save, load: load, clearSave: clearSave, hasSave: hasSave,
     WAGE_BASE: WAGE_BASE, ELECTION_MONTH: ELECTION_MONTH, isCampaignSeason: isCampaignSeason
   };

@@ -849,6 +849,64 @@
         { t: 'Destroy them with what you have', d: 'You have a file. Everyone has a file.', tag: 'risk',
           run: function (a) { return a.doLeak(true); } }
       ]
+    }),
+
+    /* ================= what you said in a room ================= */
+    E({
+      id: 'promiseDue', w: 9, kicker: 'A word given',
+      when: function (a) {
+        var p = a.oldestPromise();
+        return !!p && a.monthsSince(p) >= 10;
+      },
+      title: function (a) {
+        return a.monthsSince(a.oldestPromise()) >= 20 ? 'They have stopped asking politely' : 'They have come to collect';
+      },
+      body: function (a) {
+        var p = a.oldestPromise();
+        var months = a.monthsSince(p);
+        return 'In ' + RZ.monthName(p.month) + ' ' + p.year + ', in a room with people in it, you said this: ' +
+          '<strong>' + RZ.esc(p.text) + '</strong>. That was ' + months + ' months ago. ' +
+          (months >= 20
+            ? 'The delegation outside your office has brought the minutes, and a photographer.'
+            : 'They have written twice. This morning they came in person and sat down without being asked.');
+      },
+      choices: [
+        { t: 'Deliver it, whatever it costs now', d: 'Late is not the same as never.', tag: 'cost',
+          when: function (a) { return a.P.money > a.wage(2) || a.P.capital > 12; },
+          run: function (a) {
+            var p = a.oldestPromise();
+            a.keepPromise(p.id);
+            if (a.P.capital > 12) a.add('capital', -a.rng(6, 12)); else a.add('money', -a.wage(a.rng(2, 4)));
+            a.add('grassroots', a.rng(5, 10)); a.addRegion(a.P.regionId, a.rng(6, 12));
+            a.add('stats.integrity', a.rng(1, 3)); a.add('media', a.rng(0, 3));
+            return { title: 'Late, and done', body: 'It took every favour you had left in that department, and it is finished. ' +
+              'People who had written you off have started saying your name differently.', tone: 'good' };
+          } },
+        { t: 'Explain honestly why you could not', d: 'No excuse, no theatre. Just the truth.',
+          run: function (a) {
+            var p = a.oldestPromise();
+            a.keepPromise(p.id);
+            var ok = a.roll('oratory', 48);
+            a.add('grassroots', ok ? -a.rng(0, 2) : -a.rng(4, 9));
+            a.add('stats.integrity', a.rng(1, 2));
+            if (!ok) a.addRegion(a.P.regionId, -a.rng(3, 7));
+            return { title: ok ? 'They did not like it, but they believed you' : 'Honesty was not enough',
+              body: ok ? 'You told them exactly where it stalled and who stopped it, and you did not promise anything new. ' +
+                'One of them said afterwards that at least you came yourself.'
+                : 'Halfway through, somebody at the back said that a man who cannot deliver should not have opened his mouth. ' +
+                  'The room agreed with him.', tone: ok ? 'flat' : 'bad' };
+          } },
+        { t: 'Promise it again, with a date this time', d: 'Buys quiet. Buys nothing else.', tag: 'risk',
+          run: function (a) {
+            var p = a.oldestPromise();
+            a.keepPromise(p.id);
+            a.promise(p.id + '-again', p.text + ' (repeated, with a date)');
+            a.add('grassroots', a.rng(1, 3)); a.add('stats.integrity', -a.rng(1, 3));
+            if (a.chance(0.4)) a.dirt('promises', 'A record of promises made and not kept, kept by somebody else', 2);
+            return { title: 'A new date', body: 'They wrote it down. So did the reporter who was standing in the corridor ' +
+              'and who you did not see until afterwards.', tone: 'flat' };
+          } }
+      ]
     })
   ];
 

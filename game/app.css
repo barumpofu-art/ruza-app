@@ -34,7 +34,6 @@ html,body{ height:100%; }
 body{
   margin:0;
   font-family:var(--font);
-  background:var(--ink);
   color:var(--text);
   -webkit-font-smoothing:antialiased;
   -webkit-tap-highlight-color:transparent;
@@ -42,21 +41,21 @@ body{
 }
 button{ font:inherit; color:inherit; }
 
-/* Ambient background: subtle veld horizon + woven band */
-body::before{
-  content:""; position:fixed; inset:0; z-index:-2;
-  background:
-    radial-gradient(120% 65% at 50% -12%, #1c2937 0%, #0f1720 45%, var(--ink) 78%),
-    var(--ink);
-}
-body::after{
-  content:""; position:fixed; inset:0; z-index:-1; opacity:.05; pointer-events:none;
+/* Ambient background: a veld horizon with a woven band over it.
+   This is painted straight onto the body rather than through two fixed
+   full-viewport pseudo-elements — one of which carried a mask-image. Those
+   were two permanently composited layers, and a masked full-screen layer is
+   an expensive thing to keep alive on a budget phone for a texture nobody
+   consciously sees. The gold is baked in at low alpha instead of being an
+   opacity layer, so it looks the same and costs one paint. */
+body{
+  background-color:var(--ink);
   background-image:
-    repeating-linear-gradient(45deg, var(--gold) 0 2px, transparent 2px 9px),
-    repeating-linear-gradient(-45deg, var(--gold) 0 2px, transparent 2px 9px);
-  background-size:18px 18px;
-  mask-image:linear-gradient(#000, transparent 40%);
-  -webkit-mask-image:linear-gradient(#000, transparent 40%);
+    repeating-linear-gradient(45deg, rgba(217,164,65,.03) 0 2px, transparent 2px 9px),
+    repeating-linear-gradient(-45deg, rgba(217,164,65,.03) 0 2px, transparent 2px 9px),
+    radial-gradient(120% 65% at 50% -12%, #1c2937 0%, #0f1720 45%, var(--ink) 78%);
+  background-size:18px 18px, 18px 18px, 100% 900px;
+  background-repeat:repeat, repeat, no-repeat;
 }
 
 .app{
@@ -181,8 +180,11 @@ body::after{
 .hud{
   position:sticky; top:0; z-index:30;
   padding:calc(var(--safe-t) + 10px) 14px 10px;
-  background:linear-gradient(180deg, rgba(11,16,22,.98) 72%, rgba(11,16,22,0));
-  backdrop-filter:blur(9px); -webkit-backdrop-filter:blur(9px);
+  /* No backdrop-filter: these bars are already all but opaque, so the blur is
+     invisible, but it forces a full backdrop capture on every composite —
+     which is real jank on a mid-range phone, and pathological under software
+     rendering. */
+  background:linear-gradient(180deg, var(--ink) 0 72%, rgba(11,16,22,0));
 }
 .hud-row{ display:flex; align-items:center; gap:10px; }
 .hud-portrait{
@@ -212,7 +214,7 @@ body::after{
 .tabs{
   position:sticky; bottom:0; z-index:30; display:flex;
   padding:6px 8px calc(var(--safe-b) + 6px);
-  background:rgba(14,20,27,.94); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+  background:var(--ink-2);
   border-top:1px solid var(--line-soft);
 }
 .tab{
@@ -322,8 +324,7 @@ body::after{
 /* modal */
 .modal-scrim[hidden]{ display:none !important; }
 .modal-scrim{
-  position:fixed; inset:0; z-index:100; background:rgba(6,10,14,.82);
-  backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px);
+  position:fixed; inset:0; z-index:100; background:rgba(6,10,14,.90);
   display:flex; align-items:flex-end; justify-content:center;
   animation:fade .18s ease both; overflow-y:auto;
 }
@@ -353,6 +354,26 @@ body::after{
 .choice-tag.risk{ color:#efb0ad; border-color:#5a2f2d; }
 .choice-tag.cost{ color:var(--gold); border-color:#54452a; }
 .choice[disabled]{ opacity:.4; }
+
+/* conversation */
+.talk-role{ font-size:.8rem; color:var(--text-dim); margin:-4px 0 14px; }
+.talk-org{ color:var(--text-faint); }
+.talk-org::before{ content:"· "; }
+.talk{ display:flex; flex-direction:column; gap:10px; margin-bottom:16px; }
+.talk-l{ display:block; max-width:88%; padding:10px 12px; border-radius:var(--radius-sm); }
+.talk-l.them{ align-self:flex-start; background:var(--panel); border:1px solid var(--line-soft); }
+.talk-l.me{ align-self:flex-end; background:#20252b; border:1px solid #3a3122; }
+.talk-l.closing{ background:transparent; border:none; border-left:2px solid var(--gold-deep); border-radius:0; padding-left:11px; }
+.talk-nm{
+  display:block; font-size:.62rem; letter-spacing:.13em; text-transform:uppercase;
+  font-weight:700; color:var(--text-faint); margin-bottom:4px;
+}
+.talk-l.me .talk-nm{ color:var(--gold-deep); text-align:right; }
+.talk-l.closing .talk-nm{ color:var(--gold); }
+.talk-tx{ display:block; font-size:.89rem; line-height:1.62; color:var(--text-dim); }
+.talk-l.me .talk-tx{ color:var(--text); text-align:right; }
+.talk-l.closing .talk-tx{ font-family:var(--serif); font-style:italic; color:var(--text); }
+.talk-delta{ margin-bottom:16px; }
 
 /* election night */
 .enight-h{ font-family:var(--serif); font-size:1.5rem; margin:0 0 3px; }
