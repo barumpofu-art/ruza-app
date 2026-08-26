@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#0b1016">
+<meta name="description" content="Kgosi &amp; Cadre — a text-based political career simulator set in southern Africa. Start as a ward activist and try to become President.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Kgosi &amp; Cadre — Southern African Politics</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<div id="app" class="app">
+
+  <!-- ============ TITLE ============ -->
+  <section class="screen is-active" id="screen-title">
+    <div class="title-wrap">
+      <div class="crest" aria-hidden="true">
+        <svg viewBox="0 0 100 100"><use href="#crest-sym"/></svg>
+      </div>
+      <h1 class="title-main">Kgosi<span class="amp">&amp;</span>Cadre</h1>
+      <p class="title-sub">A political career, from the ward to State House.</p>
+      <p class="title-blurb">
+        Ten southern African republics. Real institutions, real electoral systems,
+        real economies. Fictional people. Start as an unpaid party activist and see
+        how far the machine will carry you &mdash; and what it costs.
+      </p>
+      <div class="title-actions">
+        <button class="btn btn-gold btn-lg" data-act="new-game">New Career</button>
+        <button class="btn btn-ghost btn-lg" data-act="continue" id="btn-continue" hidden>Continue Career</button>
+        <button class="btn btn-quiet" data-act="show-about">How it works</button>
+      </div>
+      <p class="disclaimer">
+        Countries, institutions and parties are real; every person in this game is
+        invented. Nothing here describes a real individual.
+      </p>
+    </div>
+  </section>
+
+  <!-- ============ COUNTRY SELECT ============ -->
+  <section class="screen" id="screen-country">
+    <header class="sheet-head">
+      <button class="btn-back" data-act="back-title">&larr;</button>
+      <h2>Choose your country</h2>
+    </header>
+    <p class="sheet-note">Each country has its own constitution, electoral system and ceiling. Some ladders are far harder than others.</p>
+    <div class="country-list" id="country-list"></div>
+  </section>
+
+  <!-- ============ CHARACTER CREATION ============ -->
+  <section class="screen" id="screen-create">
+    <header class="sheet-head">
+      <button class="btn-back" data-act="back-country">&larr;</button>
+      <h2 id="create-title">Who are you?</h2>
+    </header>
+    <div class="create-body" id="create-body"></div>
+  </section>
+
+  <!-- ============ GAME ============ -->
+  <section class="screen screen-game" id="screen-game">
+
+    <header class="hud" id="hud"></header>
+
+    <main class="pane-wrap">
+      <div class="pane is-active" id="pane-desk"></div>
+      <div class="pane" id="pane-country"></div>
+      <div class="pane" id="pane-party"></div>
+      <div class="pane" id="pane-self"></div>
+    </main>
+
+    <nav class="tabs" id="tabs">
+      <button class="tab is-active" data-pane="desk"><span class="ti">▤</span><span>Desk</span></button>
+      <button class="tab" data-pane="country"><span class="ti">◈</span><span>Nation</span></button>
+      <button class="tab" data-pane="party"><span class="ti">✦</span><span>Party</span></button>
+      <button class="tab" data-pane="self"><span class="ti">☗</span><span>You</span></button>
+    </nav>
+  </section>
+
+  <!-- ============ END ============ -->
+  <section class="screen" id="screen-end"></section>
+
+  <!-- ============ MODAL ============ -->
+  <div class="modal-scrim" id="modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" id="modal-inner"></div>
+  </div>
+
+  <div class="toast-stack" id="toasts"></div>
+</div>
+
+<svg style="display:none" aria-hidden="true">
+  <symbol id="crest-sym" viewBox="0 0 100 100">
+    <path d="M50 6 L88 22 V50c0 22-16 36-38 44C28 86 12 72 12 50V22Z" fill="none" stroke="currentColor" stroke-width="3"/>
+    <path d="M50 22v50M32 40h36M28 56h44" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+    <circle cx="50" cy="34" r="6" fill="currentColor"/>
+  </symbol>
+</svg>
+
+<script src="js/core.js"></script>
+<script src="js/data-countries.js"></script>
+<script src="js/data-ladder.js"></script>
+<script src="js/data-actions.js"></script>
+<script src="js/data-events.js"></script>
+<script src="js/people.js"></script>
+<script src="js/elections.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/governance.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
