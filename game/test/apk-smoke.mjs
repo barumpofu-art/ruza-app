@@ -302,6 +302,38 @@ const feedAfter = await count('#pane-desk .paper');
 console.log('feed entries:', feedBefore, '->', feedAfter);
 if (!(feedAfter > feedBefore)) throw new Error('taking an action did not add anything to the record');
 
+step('holding a meeting');
+// 5b. Some actions open a conversation instead of resolving on a die roll:
+//     a named person asks you something and you answer in front of them.
+//     Tap through one and check the transcript really builds.
+await evaluate("(() => { RZ.ui.UI.S.actionsLeft = 3; RZ.ui.renderGame(); return true; })()");
+await click('#pane-desk .act[data-action="walkabout"]');
+await waitFor("!!document.querySelector('#modal-inner .talk')", 'a conversation to open');
+const speaker = await text('#modal-inner .modal-h');
+const askedBy = await text('#modal-inner .talk-role');
+console.log('meeting with:', speaker, '|', askedBy);
+if (!speaker.trim()) throw new Error('the person across the table has no name');
+
+let exchanges = 0;
+for (let round = 0; round < 8; round++) {
+  const answers = await count('#modal-inner .choice:not([disabled])');
+  if (!answers) break;
+  if (answers < 2) throw new Error(`only ${answers} answer on offer — there should be a real choice`);
+  const linesBefore = await count('#modal-inner .talk-l');
+  await click('#modal-inner .choice:not([disabled])');
+  await sleep(200);
+  const linesAfter = await count('#modal-inner .talk-l');
+  if (!(linesAfter > linesBefore)) throw new Error('answering did not add anything to the transcript');
+  exchanges++;
+}
+console.log('exchanges:', exchanges);
+if (exchanges < 2) throw new Error(`the meeting was over in ${exchanges} exchange(s)`);
+if (!(await count('#modal-inner .talk-l.closing'))) throw new Error('the meeting ended without a closing line');
+if (!(await count('#modal-inner .talk-l.me'))) throw new Error('nothing you said was kept on screen');
+await screenshot('meeting');
+await clearModal();
+if (!(await count('#pane-desk .paper'))) throw new Error('the meeting left no trace in the record');
+
 step('ending the month');
 // 6. A month passes.
 const monthBefore = await text('.hud-month');

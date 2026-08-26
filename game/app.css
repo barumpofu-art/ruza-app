@@ -355,6 +355,26 @@ body{
 .choice-tag.cost{ color:var(--gold); border-color:#54452a; }
 .choice[disabled]{ opacity:.4; }
 
+/* conversation */
+.talk-role{ font-size:.8rem; color:var(--text-dim); margin:-4px 0 14px; }
+.talk-org{ color:var(--text-faint); }
+.talk-org::before{ content:"· "; }
+.talk{ display:flex; flex-direction:column; gap:10px; margin-bottom:16px; }
+.talk-l{ display:block; max-width:88%; padding:10px 12px; border-radius:var(--radius-sm); }
+.talk-l.them{ align-self:flex-start; background:var(--panel); border:1px solid var(--line-soft); }
+.talk-l.me{ align-self:flex-end; background:#20252b; border:1px solid #3a3122; }
+.talk-l.closing{ background:transparent; border:none; border-left:2px solid var(--gold-deep); border-radius:0; padding-left:11px; }
+.talk-nm{
+  display:block; font-size:.62rem; letter-spacing:.13em; text-transform:uppercase;
+  font-weight:700; color:var(--text-faint); margin-bottom:4px;
+}
+.talk-l.me .talk-nm{ color:var(--gold-deep); text-align:right; }
+.talk-l.closing .talk-nm{ color:var(--gold); }
+.talk-tx{ display:block; font-size:.89rem; line-height:1.62; color:var(--text-dim); }
+.talk-l.me .talk-tx{ color:var(--text); text-align:right; }
+.talk-l.closing .talk-tx{ font-family:var(--serif); font-style:italic; color:var(--text); }
+.talk-delta{ margin-bottom:16px; }
+
 /* election night */
 .enight-h{ font-family:var(--serif); font-size:1.5rem; margin:0 0 3px; }
 .enight-s{ color:var(--text-faint); font-size:.8rem; margin:0 0 16px; }

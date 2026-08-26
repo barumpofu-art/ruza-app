@@ -95,6 +95,21 @@
       RZ.ui.toast(out.res ? out.res.title : 'Not possible', 'n');
       return;
     }
+
+    // This one turned out to be a room full of people rather than a die roll.
+    // Answers change the state as they are given, so the save is written as
+    // the meeting goes, not only when it ends.
+    if (out.dialogue) {
+      RZ.engine.save(S);
+      RZ.ui.renderHud();
+      RZ.ui.showDialogue(out.dialogue, function (convo) {
+        RZ.engine.finishDialogue(S, convo);
+        RZ.engine.save(S);
+        RZ.ui.renderGame();
+      });
+      return;
+    }
+
     RZ.engine.save(S);
     RZ.ui.showOutcome(out.entry, function () { RZ.ui.renderGame(); });
     RZ.ui.renderHud();
