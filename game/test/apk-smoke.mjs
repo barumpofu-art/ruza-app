@@ -21,9 +21,12 @@ if (typeof WebSocket === 'undefined') {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Ninety seconds, not thirty: on a cold-booted emulator competing with Play
+// Services' first-run work, the WebView publishes its devtools socket long
+// before it has a page to show through it.
 async function findPage() {
   let lastSeen = '(nothing)';
-  for (let attempt = 0; attempt < 30; attempt++) {
+  for (let attempt = 0; attempt < 90; attempt++) {
     try {
       const targets = await (await fetch(`${ENDPOINT}/json/list`)).json();
       const page = targets.find((t) => t.type === 'page' && String(t.url).includes(PKG_ORIGIN));
@@ -189,7 +192,14 @@ async function forwardDevtools() {
         catch { /* nothing was forwarded, which is fine */ }
         execFileSync('adb', ['forward', 'tcp:9222', `localabstract:${name}`],
           { stdio: 'ignore', timeout: 30000 });
-        return name;
+        // A listening socket is not a page. If this pid's WebView has nothing
+        // on our origin yet, go round again rather than returning a forward
+        // that findPage will then sit and stare at — the app may still be
+        // starting, or may be about to come back under a different pid.
+        try {
+          const targets = await (await fetch(`${ENDPOINT}/json/list`)).json();
+          if (targets.some((t) => t.type === 'page' && String(t.url).includes(PKG_ORIGIN))) return name;
+        } catch { /* not answering yet */ }
       }
     }
     await sleep(1000);

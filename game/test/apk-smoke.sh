@@ -9,6 +9,9 @@ set -euo pipefail
 
 APK=${1:?usage: apk-smoke.sh <path-to-apk>}
 PKG=app.kgosi.cadre
+# The origin the game is served from inside the shell. Overridable so this
+# script can be rehearsed end to end against desktop Chromium.
+ORIGIN=${PAGE_ORIGIN:-appassets.androidplatform.net}
 
 ADB_BIN=$(command -v adb)
 adb() { timeout 120 "$ADB_BIN" "$@"; }
@@ -26,7 +29,13 @@ trap 'kill "$LOGCAT_PID" 2>/dev/null || true' EXIT
 adb install -r "$APK"
 # Start from nothing. The game writes its save on every action, so clearing
 # storage from inside the page cannot give a clean slate.
+#
+# pm clear returns Success long before the framework has finished with it —
+# Icing and Blockstore were still tearing this package down eighteen seconds
+# later on one cold-booted run — and the app can be killed as part of that
+# tail. Give the clear a moment rather than launching into the middle of it.
 adb shell pm clear "$PKG"
+sleep 5
 adb shell am start -W -n "$PKG/.MainActivity"
 
 # The devtools socket is named after the owning process, and more than one
@@ -34,26 +43,42 @@ adb shell am start -W -n "$PKG/.MainActivity"
 # the background for its own broadcasts. Grepping for any socket can forward to
 # that one instead, which answers /json/version perfectly well and then offers
 # no page on our origin. Resolve it from our own pid.
+#
+# A socket is still not a page. The WebView publishes its socket as soon as the
+# process initialises, but the page can take far longer to arrive on a cold-
+# booted emulator busy with Play Services' first-run work — and if the app is
+# killed and restarted in the meantime it comes back under a new pid behind a
+# new socket, leaving a forward pinned to the old one pointing at nothing.
+# So wait for a page on our own origin, re-resolving and re-pointing the
+# forward whenever the pid changes.
 socket=""
-for _ in $(seq 1 40); do
+page=""
+for _ in $(seq 1 60); do
   pid=$(adb shell pidof "$PKG" | tr -d '\r' | awk '{print $1}')
   if [ -n "$pid" ] && adb shell cat /proc/net/unix | tr -d '\r' | grep -q "webview_devtools_remote_${pid}\b"; then
-    socket="webview_devtools_remote_${pid}"
-    break
+    if [ "webview_devtools_remote_${pid}" != "$socket" ]; then
+      socket="webview_devtools_remote_${pid}"
+      adb forward --remove tcp:9222 >/dev/null 2>&1 || true
+      adb forward tcp:9222 "localabstract:$socket" >/dev/null
+      echo "devtools socket: $socket"
+    fi
+    page=$(curl -sf --max-time 5 http://127.0.0.1:9222/json/list 2>/dev/null \
+      | grep -cF "$ORIGIN" || true)
+    if [ "${page:-0}" -gt 0 ]; then break; fi
   fi
   sleep 2
 done
 
-if [ -z "$socket" ]; then
-  echo "No devtools socket appeared for $PKG — the app never got that far."
+if [ -z "$socket" ] || [ "${page:-0}" -eq 0 ]; then
+  echo "The app never put a page on its own origin in front of devtools."
+  echo "socket: ${socket:-none}"
   echo "sockets currently present:"
   adb shell cat /proc/net/unix | tr -d '\r' | grep -o 'webview_devtools_remote_[0-9]*' || echo "  (none)"
-  adb logcat -d | tail -120 || true
+  echo "what devtools is offering:"
+  curl -sf --max-time 5 http://127.0.0.1:9222/json/list || echo "  (nothing)"
   exit 1
 fi
 
-echo "devtools socket: $socket"
-adb forward tcp:9222 "localabstract:$socket"
 curl -sf --retry 15 --retry-delay 1 http://127.0.0.1:9222/json/version
 
 # A hung CDP call must not eat the job's whole budget.
