@@ -47,8 +47,12 @@
 
     if (RZ.engine.hasSave()) document.getElementById('btn-continue').hidden = false;
 
-    // service worker (only meaningful over http/https)
-    if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
+    // Service worker: only meaningful for the web build. Inside the Android APK
+    // every asset is already local and served by the shell, so registering one
+    // buys nothing and adds a WebView failure surface — its interception layer
+    // is fragile across a reload.
+    var packaged = location.hostname === 'appassets.androidplatform.net';
+    if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0 && !packaged) {
       navigator.serviceWorker.register('sw.js').catch(function () {});
     }
   }

@@ -33,15 +33,12 @@ async function findPage() {
   throw new Error('no page on the app origin was exposed by devtools');
 }
 
-const target = await findPage();
-console.log('target:', target.title, '|', target.url);
-
-const socket = new WebSocket(target.webSocketDebuggerUrl);
 const pending = new Map();
 const pageProblems = [];
+let socket = null;
 let nextId = 0;
 
-socket.addEventListener('message', (event) => {
+function onMessage(event) {
   const message = JSON.parse(event.data);
   if (message.id != null) {
     const waiter = pending.get(message.id);
@@ -58,12 +55,24 @@ socket.addEventListener('message', (event) => {
   if (message.method === 'Runtime.consoleAPICalled' && message.params.type === 'error') {
     pageProblems.push(message.params.args.map((a) => a.value ?? a.description).join(' '));
   }
-});
+}
 
-await new Promise((resolve, reject) => {
-  socket.addEventListener('open', resolve, { once: true });
-  socket.addEventListener('error', () => reject(new Error('could not open the devtools socket')), { once: true });
-});
+// Restarting the app gives a new devtools target, so connecting has to be
+// repeatable rather than something that happens once at the top.
+async function connect(label) {
+  const target = await findPage();
+  console.log(label, target.title, '|', target.url);
+  const sock = new WebSocket(target.webSocketDebuggerUrl);
+  sock.addEventListener('message', onMessage);
+  await new Promise((resolve, reject) => {
+    sock.addEventListener('open', resolve, { once: true });
+    sock.addEventListener('error', () => reject(new Error('could not open the devtools socket')), { once: true });
+  });
+  socket = sock;
+  pending.clear();
+  await send('Runtime.enable');
+  await send('Page.enable');
+}
 
 function send(method, params = {}, timeoutMs = 60000) {
   const id = ++nextId;
@@ -117,7 +126,16 @@ const count = (selector) => evaluate(`document.querySelectorAll(${JSON.stringify
 // CDP call times out too. adb screencap asks the device instead of the page,
 // which costs nothing and always works. 'cdp' is for rehearsing on desktop
 // Chromium, where there is no adb.
-const SHOT_MODE = process.env.SHOT_MODE ?? 'adb';   // adb | cdp | off
+const PKG = process.env.APP_PKG ?? 'app.kgosi.cadre';
+
+function adbWorks() {
+  if (process.env.USE_ADB === 'no') return false;
+  try { execFileSync('adb', ['version'], { stdio: 'ignore', timeout: 10000 }); return true; }
+  catch { return false; }
+}
+const useAdb = adbWorks();
+
+const SHOT_MODE = process.env.SHOT_MODE ?? (useAdb ? 'adb' : 'cdp');   // adb | cdp | off
 let shotsUnavailable = false;
 
 async function screenshot(name) {
@@ -177,8 +195,7 @@ async function drainModals() {
   }
 }
 
-await send('Runtime.enable');
-await send('Page.enable');
+await connect('target:');
 
 step('checking the app origin');
 // 1. The shell really loaded the packaged assets over the app's https origin.
@@ -271,16 +288,36 @@ const widths = await evaluate(
 if (widths < 3) throw new Error(`every stat bar is the same width (${widths} distinct) — they are not being filled`);
 await screenshot('stats');
 
-step('reloading to check the save');
-// 8. The save survives, which is the whole reason assets are served from an
-//    https origin instead of file://.
+step('restarting the app to check the save');
+// 8. The save survives being closed and reopened, which is the whole reason
+//    assets are served from an https origin instead of file://.
+//
+//    This closes and relaunches the app through Android rather than calling
+//    Page.reload: it is what a player actually does, and a devtools-driven
+//    reload of a WebView is its own source of trouble.
 await click('.tab[data-pane="desk"]');
 const dateBefore = await text('.hud-month');
-await send('Page.reload', { ignoreCache: false });
-await sleep(1500);
-await waitFor("!!document.querySelector('[data-act=\"continue\"]')", 'the title screen after reload');
+
+if (useAdb) {
+  execFileSync('adb', ['shell', 'am', 'force-stop', PKG], { timeout: 30000 });
+  await sleep(1000);
+  execFileSync('adb', ['shell', 'am', 'start', '-W', '-n', `${PKG}/.MainActivity`],
+    { stdio: 'ignore', timeout: 60000 });
+  await sleep(2500);
+  try { socket?.close(); } catch { /* already gone */ }
+  await connect('reattached to:');
+} else {
+  // Desktop rehearsal: reload, then reconnect anyway so this run still covers
+  // the reattach path that the emulator depends on.
+  await send('Page.reload', { ignoreCache: false });
+  await sleep(1500);
+  try { socket?.close(); } catch { /* already gone */ }
+  await connect('reattached to:');
+}
+
+await waitFor("!!document.querySelector('[data-act=\"continue\"]')", 'the title screen after restart');
 if (await evaluate("document.getElementById('btn-continue').hidden")) {
-  throw new Error('the career did not survive a reload inside the WebView');
+  throw new Error('the career did not survive the app being closed and reopened');
 }
 await click('[data-act="continue"]');
 await waitFor("!!document.querySelector('.hud-name')", 'the restored desk');
