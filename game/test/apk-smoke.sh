@@ -21,16 +21,25 @@ adb install -r "$APK"
 adb shell pm clear "$PKG"
 adb shell am start -W -n "$PKG/.MainActivity"
 
-# The devtools socket only appears once the WebView is up.
+# The devtools socket is named after the owning process, and more than one
+# WebView process can be alive: Android starts com.google.android.webview in
+# the background for its own broadcasts. Grepping for any socket can forward to
+# that one instead, which answers /json/version perfectly well and then offers
+# no page on our origin. Resolve it from our own pid.
 socket=""
 for _ in $(seq 1 40); do
-  socket=$(adb shell cat /proc/net/unix | tr -d '\r' | grep -o 'webview_devtools_remote_[0-9]*' | head -1 || true)
-  [ -n "$socket" ] && break
+  pid=$(adb shell pidof "$PKG" | tr -d '\r' | awk '{print $1}')
+  if [ -n "$pid" ] && adb shell cat /proc/net/unix | tr -d '\r' | grep -q "webview_devtools_remote_${pid}\b"; then
+    socket="webview_devtools_remote_${pid}"
+    break
+  fi
   sleep 2
 done
 
 if [ -z "$socket" ]; then
-  echo "No WebView devtools socket appeared — the app never got that far."
+  echo "No devtools socket appeared for $PKG — the app never got that far."
+  echo "sockets currently present:"
+  adb shell cat /proc/net/unix | tr -d '\r' | grep -o 'webview_devtools_remote_[0-9]*' || echo "  (none)"
   adb logcat -d | tail -120 || true
   exit 1
 fi

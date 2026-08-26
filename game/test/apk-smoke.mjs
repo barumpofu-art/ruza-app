@@ -22,15 +22,22 @@ if (typeof WebSocket === 'undefined') {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function findPage() {
+  let lastSeen = '(nothing)';
   for (let attempt = 0; attempt < 30; attempt++) {
     try {
       const targets = await (await fetch(`${ENDPOINT}/json/list`)).json();
       const page = targets.find((t) => t.type === 'page' && String(t.url).includes(PKG_ORIGIN));
       if (page?.webSocketDebuggerUrl) return page;
-    } catch { /* the socket may not be up yet */ }
+      lastSeen = targets.length
+        ? targets.map((t) => `${t.type} ${t.url}`).join(', ')
+        : '(no targets at all)';
+    } catch (err) { lastSeen = `(could not read /json/list: ${err.message})`; }
     await sleep(1000);
   }
-  throw new Error('no page on the app origin was exposed by devtools');
+  // Say what was actually on the other end — usually this means the forward is
+  // pointed at a different WebView process than the one running the app.
+  throw new Error(
+    `no page on ${PKG_ORIGIN} was exposed by devtools at ${ENDPOINT}; targets seen: ${lastSeen}`);
 }
 
 const pending = new Map();
@@ -154,6 +161,40 @@ async function screenshot(name) {
     shotsUnavailable = true;
     console.log(`(screenshots unavailable, continuing without them: ${err.message})`);
   }
+}
+
+// The WebView's devtools socket is webview_devtools_remote_<pid>, so it changes
+// every time the app restarts. adb forward has to be re-pointed at the new one
+// or the endpoint this test talks to is left dangling.
+async function forwardDevtools() {
+  for (let attempt = 0; attempt < 40; attempt++) {
+    let name = null;
+    try {
+      const pid = execFileSync('adb', ['shell', 'pidof', PKG], { encoding: 'utf8', timeout: 30000 })
+        .trim().split(/\s+/)[0];
+      if (pid) name = `webview_devtools_remote_${pid}`;
+    } catch { /* the app may not be up yet */ }
+
+    if (name) {
+      // Confirm the socket is actually listening before pointing the forward at it.
+      let listening = false;
+      try {
+        const unix = execFileSync('adb', ['shell', 'cat', '/proc/net/unix'],
+          { encoding: 'utf8', timeout: 30000 });
+        listening = unix.includes(name);
+      } catch { /* transient */ }
+
+      if (listening) {
+        try { execFileSync('adb', ['forward', '--remove', 'tcp:9222'], { stdio: 'ignore', timeout: 30000 }); }
+        catch { /* nothing was forwarded, which is fine */ }
+        execFileSync('adb', ['forward', 'tcp:9222', `localabstract:${name}`],
+          { stdio: 'ignore', timeout: 30000 });
+        return name;
+      }
+    }
+    await sleep(1000);
+  }
+  throw new Error('the restarted app never exposed a devtools socket');
 }
 
 // A breadcrumb trail, so a log that ends abruptly still says where it stopped.
@@ -303,7 +344,11 @@ if (useAdb) {
   await sleep(1000);
   execFileSync('adb', ['shell', 'am', 'start', '-W', '-n', `${PKG}/.MainActivity`],
     { stdio: 'ignore', timeout: 60000 });
-  await sleep(2500);
+  // The devtools socket is named after the app's pid, so a restarted app is
+  // behind a different socket and the forward set up before this test ran now
+  // points at nothing. Re-point it before trying to reattach.
+  const sock = await forwardDevtools();
+  console.log('devtools socket after restart:', sock);
   try { socket?.close(); } catch { /* already gone */ }
   await connect('reattached to:');
 } else {
@@ -315,10 +360,14 @@ if (useAdb) {
   await connect('reattached to:');
 }
 
-await waitFor("!!document.querySelector('[data-act=\"continue\"]')", 'the title screen after restart');
-if (await evaluate("document.getElementById('btn-continue').hidden")) {
-  throw new Error('the career did not survive the app being closed and reopened');
-}
+// The continue button is always in the DOM — it is hidden when there is no
+// save — so waiting for the element to exist proves nothing. Wait for the title
+// screen to be the active one AND that button to be showing.
+await waitFor(`(() => {
+  const title = document.querySelector('#screen-title.is-active');
+  const cont = document.getElementById('btn-continue');
+  return !!title && !!cont && !cont.hidden;
+})()`, 'the title screen to come back offering the saved career');
 await click('[data-act="continue"]');
 await waitFor("!!document.querySelector('.hud-name')", 'the restored desk');
 const dateAfter = await text('.hud-month');
