@@ -33,11 +33,22 @@ SERVER=$!
   "http://127.0.0.1:$PORT/index.html" >"$PROFILE/chrome.log" 2>&1 &
 BROWSER=$!
 
+# Tearing down must never decide whether the run passed. Chromium leaves
+# renderer and zygote children writing into the profile after the parent is
+# killed, so the removal can lose a race and fail — which, under `set -e` in an
+# EXIT trap, silently turned a green run red. Keep the status the run actually
+# earned, and treat a leftover temp directory as the non-event it is.
 cleanup() {
+  local status=$?
+  # Kill the children too, not just the browser process we started.
+  pkill -P "$BROWSER" 2>/dev/null || true
   kill "$BROWSER" "$SERVER" 2>/dev/null || true
-  # Wait for the browser to let go of its profile before removing it.
-  wait "$BROWSER" 2>/dev/null || true
-  rm -rf "$PROFILE"
+  wait "$BROWSER" "$SERVER" 2>/dev/null || true
+  for _ in 1 2 3; do
+    rm -rf "$PROFILE" 2>/dev/null && break
+    sleep 1
+  done
+  exit "$status"
 }
 trap cleanup EXIT
 
