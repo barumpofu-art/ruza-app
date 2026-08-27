@@ -248,6 +248,13 @@ body{
 .paper.good{ border-left-color:var(--green); }
 .paper.bad{ border-left-color:var(--red); }
 .paper.big{ border-left-color:var(--gold); background:linear-gradient(180deg,#241f14,#161c25); }
+/* A shock, a collapse, a purge, a brigade on the border. */
+.paper.big.bad{
+  border-left-color:var(--red); border-left-width:4px;
+  background:linear-gradient(180deg,#2a1618,#161c25);
+}
+.paper.big.bad .paper-h{ color:#f0c3c1; }
+.paper.big.bad .paper-src{ color:var(--red); }
 .paper-src{
   font-size:.63rem; letter-spacing:.14em; text-transform:uppercase;
   color:var(--text-faint); margin-bottom:5px; display:flex; gap:8px;
@@ -354,6 +361,7 @@ body{
 .choice-tag.risk{ color:#efb0ad; border-color:#5a2f2d; }
 .choice-tag.cost{ color:var(--gold); border-color:#54452a; }
 .choice[disabled]{ opacity:.4; }
+.choice.is-on{ border-color:var(--gold); background:#221d13; }
 
 /* conversation */
 .talk-role{ font-size:.8rem; color:var(--text-dim); margin:-4px 0 14px; }

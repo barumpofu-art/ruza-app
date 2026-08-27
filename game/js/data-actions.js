@@ -9,6 +9,16 @@
 
   function A(o) { return o; }
 
+  // Nobody crosses to a party that cannot win. The best target is the biggest
+  // one that is not your own, weighted by whether it is going anywhere.
+  function bestRivalParty(a) {
+    var others = a.C.parties.filter(function (p) { return p.id !== a.P.partyId; });
+    if (!others.length) return null;
+    return others.slice().sort(function (x, y) {
+      return (a.S.parties[y.id].vote || 0) - (a.S.parties[x.id].vote || 0);
+    })[0];
+  }
+
   var ACTIONS = [
 
     /* ---------------- ground game ---------------- */
@@ -163,6 +173,9 @@
         a.add('money', take); a.add('leader', a.rng(2, 5)); a.add('party', a.rng(1, 3));
         a.add('stats.integrity', -a.rng(1.5, 3.5));
         a.dirt('patron', 'A standing obligation to a businessman who expects to be repaid', 2);
+        // The obligation is now a line in a ledger that he keeps, and he will
+        // come back to it. The bigger the cheque, the sooner.
+        a.owePatron(RZ.makeName(a.C), 3 + a.tier() * 0.8);
         return {
           title: P(['Nothing was written down', 'A long lunch at the farm', 'He asked about your mother by name']),
           body: P(['He has funded four ministers and buried two careers. He did not ask for anything today, which is how it always starts.',
@@ -200,6 +213,7 @@
         a.add('money', take); a.add('business', a.rng(3, 7)); a.add('capital', a.rng(2, 6));
         a.add('stats.integrity', -a.rng(4, 8));
         a.dirt('tender', 'A ministry contract awarded to a company connected to you', 4);
+        a.owePatron(RZ.makeName(a.C), 5);
         a.nation('corruption', a.rng(.6, 1.8));
         return {
           title: P(['The evaluation committee found in favour', 'A consortium nobody had heard of', 'Signed on a Friday afternoon']),
@@ -523,6 +537,60 @@
     }),
 
     /* ---------------- self ---------------- */
+    /* ---------------- crossing the floor ---------------- */
+    A({
+      id: 'defect', ico: '🚪', ap: 1, tier: [2, 12], risky: true,
+      name: 'Cross the floor',
+      desc: function (a) {
+        var to = bestRivalParty(a);
+        return to ? 'Leave for ' + to.abbr + '. Everything you built here stays here.'
+                  : 'There is nowhere to go.';
+      },
+      when: function (a) { return !a.P.isPresident && !!bestRivalParty(a); },
+      run: function (a) {
+        var to = bestRivalParty(a);
+        if (!to) return { fail: true, title: 'There is nobody to cross to' };
+        var from = a.C.partyById[a.P.partyId];
+
+        // Loyalty is not transferable. Whatever you were owed here is written
+        // off the moment you walk, and the people who own you now owe you nothing.
+        a.P.standing.leader = 0;
+        a.add('party', -(a.P.standing.party * RZ.range(0.55, 0.8)));
+
+        // What you do get is a fortnight of being the only story in the country.
+        var media = a.rng(14, 26), grass = a.rng(8, 16);
+        a.add('media', media); a.add('grassroots', grass); a.add('fame', a.rng(6, 14));
+        if (RZ.crisis) {
+          RZ.crisis.addBuff(a.S, 'media', media, 5, 'crossed the floor');
+          RZ.crisis.addBuff(a.S, 'grassroots', grass, 5, 'crossed the floor');
+        }
+
+        a.P.partyId = to.id;
+        a.S.flags.crossings = (a.S.flags.crossings || 0) + 1;
+        a.P.record.push({ year: a.S.date.year, text: 'Left ' + from.abbr + ' for ' + to.abbr + '.' });
+        a.dirt('crossed', 'Crossed the floor from ' + from.abbr + ' to ' + to.abbr, 2);
+        a.makeRival();
+
+        // In most of these systems the seat belongs to the party, not to you.
+        var lostSeat = a.tier() >= 4 && RZ.chance(0.55);
+        if (lostSeat) a.demote();
+
+        return {
+          title: lostSeat ? 'You crossed, and the seat did not come with you'
+                          : 'You crossed the floor',
+          body: (a.S.flags.crossings > 1
+            ? 'The second crossing is not a conviction, it is a habit, and the press said so within the hour. '
+            : 'It was done at a press conference at eleven, in front of a banner that had been printed the night before. ') +
+            (lostSeat
+              ? 'The seat was the party’s, not yours. The Speaker declared it vacant on Thursday and you are outside the House ' +
+                'looking in — famous, and without a vote.'
+              : 'For about three weeks you will be the most interesting person in the country. ' +
+                'After that you will be a new member of a party that watched you leave your last one.'),
+          tone: lostSeat ? 'bad' : 'flat'
+        };
+      }
+    }),
+
     A({
       id: 'study', ico: '🎓', ap: 1, tier: [0, 13],
       name: 'Take a course',

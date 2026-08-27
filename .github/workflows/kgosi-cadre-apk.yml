@@ -13,9 +13,10 @@ permissions:
   contents: write
 
 jobs:
-  # Every branch of every conversation, played headlessly. Scene data is only
-  # otherwise exercised by a player tapping through it on a phone.
-  dialogue:
+  # The rules, exercised headlessly: every branch of every conversation, every
+  # new mechanic, and a batch of simulated careers. None of this is otherwise
+  # covered by a player tapping through the app on a phone.
+  rules:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,8 +26,16 @@ jobs:
       - name: Play every conversation
         run: node game/test/dialogue-sim.mjs
 
+      - name: Check every mechanic still fires
+        run: node game/test/mechanics.mjs
+
+      # A short run: enough to catch a career that throws, without holding the
+      # APK build behind ten minutes of simulation. Run it long by hand.
+      - name: Simulate careers
+        run: node game/test/monte-carlo.mjs --runs 120 --turns 300
+
   build:
-    needs: dialogue
+    needs: rules
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -57,7 +66,7 @@ jobs:
                        assets/icon-192.png assets/icon-512.png \
                        assets/js/main.js assets/js/engine.js assets/js/ui.js \
                        assets/js/data-countries.js assets/js/elections.js assets/js/governance.js \
-                       assets/js/dialogue.js assets/js/data-dialogue.js; do
+                       assets/js/dialogue.js assets/js/data-dialogue.js assets/js/crisis.js; do
             unzip -Z1 "$APK" | grep -qx "$entry" || { echo "missing from APK: $entry"; exit 1; }
           done
           # Density folders come out of AGP with a -v4 qualifier.

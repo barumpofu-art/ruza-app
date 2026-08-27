@@ -72,9 +72,28 @@
   }
 
   /* ---------------- actions ---------------- */
+  function c() { return RZ.COUNTRIES[UI.S.countryId]; }
+
   function act(id) {
     var S = UI.S;
     if (S.actionsLeft <= 0) { RZ.ui.toast('No actions left this month', 'n'); return; }
+
+    if (id === 'amend') {
+      RZ.ui.showAmend(function (res, api) {
+        if (res.fail) { RZ.ui.toast(res.title || 'Not possible', 'n'); return; }
+        S.actionsLeft--;
+        S.actionsThisMonth = (S.actionsThisMonth || 0) + 1;
+        var entry = {
+          kind: res.passed ? 'big' : 'bad', alert: !res.passed,
+          src: 'The ' + c().house.name, title: res.title, body: res.body,
+          deltas: api.deltas.slice(), tone: res.tone
+        };
+        RZ.engine.pushFeed(S, entry);
+        RZ.engine.save(S);
+        RZ.ui.showOutcome(entry, function () { RZ.ui.renderGame(); });
+      });
+      return;
+    }
 
     if (id === 'budget') {
       RZ.ui.showBudget(function (b) {
@@ -159,6 +178,11 @@
     if (out.promo && out.promo.promoted) {
       RZ.ui.toast('Appointed: ' + out.promo.rung.title, 'p');
     }
+
+    // A collapse costs you the coming month, so say so rather than leaving the
+    // player to notice they have no actions.
+    if (out.collapsed) RZ.ui.toast('You are signed off — next month is gone', 'n');
+    if (out.purge && out.purge.purged) RZ.ui.toast('Purged from the slate', 'n');
 
     if (out.conference) {
       RZ.engine.pushFeed(S, { kind: 'big', src: c.terms.conference,

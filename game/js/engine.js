@@ -36,7 +36,8 @@
       },
       parties: {}, nation: {}, campaign: { effort: 0, delegateSpend: 0, season: false },
       flags: {}, feed: [], pendingEvent: null, seenEvents: {},
-      actionsLeft: 3, actionsPerTurn: 3, skipTurns: 0,
+      actionsLeft: 3, actionsPerTurn: 3, skipTurns: 0, actionsThisMonth: 0,
+      buffs: [], capture: { patrons: [], granted: 0, refused: 0 },
       over: false, ending: null, legacyMarks: {}
     };
 
@@ -365,14 +366,29 @@
       },
 
       /* --- things you said in a room, which people remember --- */
-      promise: function (id, label) {
+      // opts: { due } months before it starts costing you, { kind } 'policy'
+      // or 'cabinet' (a cabinet promise comes due when the posts are handed
+      // out, not on a timer), { to } who you said it to.
+      promise: function (id, label, opts) {
         P.promises = P.promises || [];
         if (P.promises.some(function (x) { return x.id === id; })) return;
-        P.promises.push({ id: id, text: label, year: S.date.year, month: S.date.month });
+        opts = opts || {};
+        P.promises.push({
+          id: id, text: label, year: S.date.year, month: S.date.month,
+          due: opts.due || (opts.kind === 'cabinet' ? 60 : 18),
+          kind: opts.kind || 'policy', to: opts.to || null,
+          bites: 0, settled: false
+        });
       },
       hasPromise: function (id) { return (P.promises || []).some(function (x) { return x.id === id; }); },
       keepPromise: function (id) {
         P.promises = (P.promises || []).filter(function (x) { return x.id !== id; });
+      },
+      brokenPromises: function () {
+        return (P.promises || []).filter(function (x) { return (x.bites || 0) > 0; }).length;
+      },
+      owePatron: function (name, weight) {
+        return RZ.crisis ? RZ.crisis.owe(S, name, weight) : null;
       },
       oldestPromise: function () {
         var ps = (P.promises || []).slice().sort(function (x, y) {
@@ -426,6 +442,7 @@
     var scene = RZ.dialogue && RZ.dialogue.sceneFor(S, id);
     if (scene) {
       S.actionsLeft -= (act.ap || 1);
+      S.actionsThisMonth = (S.actionsThisMonth || 0) + (act.ap || 1);
       return { dialogue: RZ.dialogue.begin(S, scene, act) };
     }
 
@@ -433,6 +450,7 @@
     var res = act.run(api);
     if (!res || res.fail) return { fail: true, res: res, deltas: [] };
     S.actionsLeft -= (act.ap || 1);
+    S.actionsThisMonth = (S.actionsThisMonth || 0) + (act.ap || 1);
     var entry = {
       kind: res.tone === 'good' ? 'good' : (res.tone === 'bad' ? 'bad' : 'flat'),
       src: (typeof act.name === 'function' ? act.name(api) : act.name),
@@ -549,13 +567,24 @@
       if (ev) S.pendingEvent = ev;
     }
 
+    // ---- the things that happen to you ----
+    // Burnout, market shocks, patrons calling in what they are owed, promises
+    // coming due, and the regional brigade. Returns true when it has ended the
+    // career, in which case nothing after it matters.
+    if (RZ.crisis && RZ.crisis.monthly(S, out)) { save(S); return out; }
+
     // ---- danger checks ----
     checkDangers(S, out);
+    if (S.over) { save(S); return out; }
+
+    // ---- the slate is drawn up before the country votes ----
+    if (out.election && RZ.crisis) out.purge = RZ.crisis.congressPurge(S);
 
     // ---- new turn ----
     S.actionsPerTurn = Math.max(2, (rung.ap || 3) - (P.health < 40 ? 1 : 0));
     S.actionsLeft = S.actionsPerTurn;
-    if (S.skipTurns > 0) { S.skipTurns--; S.actionsLeft = 1; }
+    if (S.skipTurns > 0) { S.skipTurns--; S.actionsLeft = 0; }
+    S.actionsThisMonth = 0;
 
     save(S);
     return out;
@@ -620,6 +649,22 @@
   function resolveEvent(S, choiceIndex) {
     var ev = S.pendingEvent;
     if (!ev) return null;
+
+    // A patron's demand is built at the moment it is asked rather than defined
+    // in the events table, so it resolves through crisis.js instead.
+    if (ev.patron) {
+      var capRes = RZ.crisis.resolveDemand(S, ev, choiceIndex);
+      S.pendingEvent = null;
+      var capEntry = {
+        kind: capRes.tone === 'bad' ? 'bad' : 'flat', src: ev.patron,
+        title: capRes.title, body: capRes.body,
+        deltas: capRes.deltas || [], tone: capRes.tone
+      };
+      pushFeed(S, capEntry);
+      save(S);
+      return { res: capRes, entry: capEntry };
+    }
+
     var def = RZ.EVENTS.filter(function (e) { return e.id === ev.id; })[0];
     var api = mkApi(S);
     var res = def.choices[choiceIndex].run(api);

@@ -59,6 +59,7 @@
           return { title: 'Terms that survive publication', body: 'Local beneficiation, a published royalty schedule, and a sovereign fund clause. It took nine months and it will outlive you.', tone: 'good' }; }
         a.add('money', a.wage(20)); a.add('business', a.rng(4, 9)); a.add('stats.integrity', -a.rng(3, 7));
         a.dirt('resource', 'A resource concession signed on terms that were never published', 4);
+        a.owePatron(RZ.makeName(a.C), 9);
         return { title: 'Signed, and sealed', body: 'The agreement is confidential on the grounds of commercial sensitivity. So is the clause about the intermediary company.', tone: 'flat' };
       } },
 
@@ -92,6 +93,14 @@
         a.S.campaign.season = true;
         return { title: 'Parliament dissolved', body: 'The proclamation was signed this morning. Everybody in the country now has one job and about five months to do it.', tone: 'flat' };
       } },
+
+    { id: 'amend', ico: '📜', ap: 1, name: 'Amend the constitution', special: 'amend',
+      desc: 'Two-thirds of the House. Nothing less will do it.',
+      risky: true,
+      when: function (a) {
+        return a.P.isPresident && a.S.nation.termNumber >= 1 && amendmentsFor(a).length > 0;
+      },
+      run: function (a) { return { title: '', body: '', special: 'amend' }; } },
 
     { id: 'budget', ico: '💰', ap: 1, name: 'Table the national budget', special: 'budget',
       desc: 'Divide a fixed amount between things that all matter.',
@@ -130,6 +139,122 @@
     S.player.standing.intl = C100(S.player.standing.intl + (b.debtsvc - 14) * 0.4);
     S.player.standing.security = C100(S.player.standing.security + (b.security - 13) * 0.7);
     S.player.standing.grassroots = C100(S.player.standing.grassroots + (b.social - 12) * 0.5 + (b.health - 12) * 0.3);
+  }
+
+  /* ================= constitutional engineering ================= */
+  // How many votes you actually have in the House, as opposed to how many
+  // people say they are with you.
+  function assemblySupport(S) {
+    var c = RZ.COUNTRIES[S.countryId];
+    var total = 0, mine = 0;
+    c.parties.forEach(function (p) {
+      var seats = (S.parties[p.id] && S.parties[p.id].seats) || 0;
+      total += seats;
+      if (S.nation.govParties.indexOf(p.id) >= 0) mine += seats;
+    });
+    if (!total) { total = c.house.seats; mine = Math.round(total * 0.5); }
+    return { total: total, gov: mine, needed: Math.ceil(total * 2 / 3) };
+  }
+
+  var AMENDMENTS = [
+    { id: 'termlimit', name: 'Abolish the term limit',
+      blurb: 'Strike the two-term clause. Everything else in the document stays as it is.',
+      when: function (a) { return !!a.C.termLimit && !a.S.flags.termLimitRemoved; },
+      pass: function (a) {
+        a.S.flags.termLimitRemoved = true;
+        a.add('intl', -RZ.range(10, 22)); a.add('media', -RZ.range(8, 18));
+        a.nation('unrest', RZ.range(8, 18)); a.nation('judiciary', -RZ.range(4, 12));
+        a.add('stats.integrity', -RZ.range(6, 12));
+        a.legacyMark('removedTermLimit');
+        return 'You may stand again, for as long as you can keep winning. Something has been spent that cannot be earned back.';
+      } },
+    { id: 'termlength', name: 'Extend the presidential term to seven years',
+      blurb: 'Not a third term. Simply a longer first one, and a longer second.',
+      when: function (a) { return !a.S.flags.termExtended; },
+      pass: function (a) {
+        a.S.flags.termExtended = true;
+        a.S.nextElection += 2;
+        a.add('intl', -RZ.range(5, 14)); a.add('media', -RZ.range(4, 12));
+        a.nation('unrest', RZ.range(4, 11));
+        a.legacyMark('extendedTerm');
+        return 'The next ballot moves two years to the right. It was presented as a saving on the cost of elections.';
+      } },
+    { id: 'courts', name: 'Give the executive the power to appoint the Chief Justice alone',
+      blurb: 'Remove the commission from the process. It was only ever advisory.',
+      when: function (a) { return a.C.inst.judiciary > 35; },
+      pass: function (a) {
+        a.nation('judiciary', -RZ.range(10, 22));
+        a.add('capital', RZ.range(6, 14));
+        a.add('intl', -RZ.range(8, 18)); a.add('media', -RZ.range(6, 15));
+        a.add('stats.integrity', -RZ.range(4, 10));
+        a.nation('corruption', RZ.range(1, 4));
+        a.legacyMark('capturedCourts');
+        return 'The commission has been thanked for its service. The bench is now an appointment like any other.';
+      } },
+    { id: 'devolve', name: 'Entrench the provinces and devolve the budget',
+      blurb: 'Give the regions a constitutional share. It cannot be taken back by a later president.',
+      when: function (a) { return true; },
+      pass: function (a) {
+        a.add('grassroots', RZ.range(6, 14)); a.add('intl', RZ.range(4, 10));
+        a.add('media', RZ.range(3, 9)); a.add('capital', -RZ.range(8, 16));
+        a.nation('stability', RZ.range(3, 9)); a.nation('unrest', -RZ.range(3, 8));
+        a.add('stats.integrity', RZ.range(2, 5));
+        a.legacyMark('devolved');
+        return 'You have permanently reduced the power of your own office, which is the rarest thing a president ever does.';
+      } }
+  ];
+
+  function amendmentsFor(a) { return AMENDMENTS.filter(function (x) { return !x.when || x.when(a); }); }
+
+  // Two-thirds is arithmetic. The gap between what the government holds and
+  // what the constitution demands has to be bought, one member at a time.
+  function attemptAmendment(a, amendId, spend) {
+    var S = a.S, c = a.C;
+    var sup = assemblySupport(S);
+    var am = AMENDMENTS.filter(function (x) { return x.id === amendId; })[0];
+    if (!am) return { fail: true, title: 'No such amendment' };
+
+    var gap = Math.max(0, sup.needed - sup.gov);
+    // Your own benches are not automatic either — a bad amendment loses you some.
+    var rebels = Math.round(sup.gov * clamp((45 - a.P.standing.party) / 160, 0, 0.28) *
+                            (amendId === 'devolve' ? 0.4 : 1));
+    var need = gap + rebels;
+
+    // Crossbenchers are bought with patronage, money, and the sense that you
+    // are going to win anyway.
+    var reach = a.P.standing.leader * 0.10 + a.P.standing.party * 0.06 +
+                a.P.capital * 0.12 + (spend || 0) * 0.9 +
+                c.inst.patronage * 0.07 - c.inst.judiciary * 0.03;
+    var won = Math.round(Math.max(0, reach) * RZ.range(0.7, 1.35));
+
+    S.flags.amendmentsTried = (S.flags.amendmentsTried || 0) + 1;
+    a.add('capital', -Math.min(a.P.capital, 8 + need * 0.4));
+    if (spend) a.add('money', -a.wage(spend));
+
+    var res = { needed: sup.needed, gov: sup.gov, total: sup.total, rebels: rebels, short: need, won: won };
+
+    if (won >= need) {
+      S.flags['amended_' + amendId] = true;
+      var line = am.pass(a);
+      a.P.record.push({ year: S.date.year, text: am.name + ' — carried.' });
+      res.passed = true;
+      res.title = 'Carried, with ' + Math.min(sup.total, sup.gov + won) + ' of ' + sup.total;
+      res.body = 'Two-thirds, on a division, after eleven days of a whipping operation that will be written about for ' +
+                 'years. ' + line;
+      res.tone = 'flat';
+      return res;
+    }
+
+    a.add('party', -RZ.range(6, 15)); a.add('leader', -RZ.range(4, 11));
+    a.nation('unrest', RZ.range(2, 9)); a.add('media', -RZ.range(3, 9));
+    a.makeRival();
+    res.passed = false;
+    res.title = 'It failed on the floor, ' + (need - won) + ' short';
+    res.body = 'You needed ' + sup.needed + ' of ' + sup.total + ' and the government benches carry ' + sup.gov + '. ' +
+               (rebels ? rebels + ' of your own abstained rather than be recorded voting for it. ' : '') +
+               'A president who tries this and misses is a president everybody now knows the ceiling of.';
+    res.tone = 'bad';
+    return res;
   }
 
   /* ================= third term ================= */
@@ -180,6 +305,9 @@
 
     var alloc = RZ.elections.allocateSeats(S, vote);
     var gov = RZ.elections.formGovernment(S, alloc.seats);
+    // Whatever you promised people in exchange for their support is now
+    // payable: the posts exist and everybody can see who got them.
+    if (RZ.crisis) RZ.crisis.cabinetReckoning(S);
 
     out.vote = vote; out.seats = alloc.seats; out.regionSeats = alloc.regionSeats; out.gov = gov;
 
@@ -293,6 +421,19 @@
     }
 
     // 2) Ordinary seat contests. The top office is never won this way.
+    //    Unless the party left you off the slate, in which case there is no
+    //    contest to have: the ballot is printed and your name is not on it.
+    if (S.flags.purged) {
+      S.flags.purged = false;
+      pl.electionsLost++;
+      res.purged = true;
+      res.messages.push('You were not on the ballot. There was nothing to win.');
+      api.add('fame', -RZ.range(2, 6));
+      api.add('party', -RZ.range(2, 7));
+      if (pl.rungIdx >= 4) RZ.engine.mkApi(S).demote();
+      return res;
+    }
+
     var nominated = (S.flags.nominatedFor && S.flags.nominatedFor !== 'hos') ? S.flags.nominatedFor : null;
     if (rung.tier >= 4 || nominated) {
       var contestRung = nominated ? lad.filter(function (r) { return r.id === nominated; })[0] : rung;
@@ -418,7 +559,8 @@
       stepdown: 'You resigned, and handed over the instruments of state on a Tuesday morning.',
       noconfidence: 'The House removed you on a Thursday afternoon, by six votes.',
       dismissed: 'The King relieved you of your duties. No reason was given, and none was required.',
-      termlimit: 'You served your terms, and then you left.'
+      termlimit: 'You served your terms, and then you left.',
+      sadc: 'A regional standby brigade crossed the border at first light and the communiqué thanked you for your co-operation with the transition.'
     }[S.ending] || 'The career ended.';
 
     out.push('<p class="lede">' + RZ.esc(pl.name) + ' of ' + RZ.esc(c.regionById[pl.regionId].name) +
@@ -466,6 +608,8 @@
 
   RZ.gov = {
     presidentialActions: presidentialActions, actionById: actionById,
+    assemblySupport: assemblySupport, amendmentsFor: amendmentsFor,
+    attemptAmendment: attemptAmendment, AMENDMENTS: AMENDMENTS,
     BUDGET_LINES: BUDGET_LINES, applyBudget: applyBudget,
     attemptThirdTerm: attemptThirdTerm, canRig: canRig, runElection: runElection,
     conferenceDue: conferenceDue, afterConference: afterConference,

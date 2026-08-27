@@ -551,7 +551,7 @@
               run: function (a) { a.add('money', a.wage(4)); a.add('business', a.rng(3, 6)); },
               reply: '"Read properly." He nods. "You would be amazed how much that is worth on its own."' },
             { t: 'You will find me a friend.', mood: 3,
-              run: function (a) { a.add('money', a.wage(9)); a.add('business', a.rng(5, 9)); a.add('stats.integrity', -a.rng(3, 6)); a.dirt('capture', 'A construction financier who was promised more than access', 3); },
+              run: function (a, convo) { a.add('money', a.wage(9)); a.add('business', a.rng(5, 9)); a.add('stats.integrity', -a.rng(3, 6)); a.dirt('capture', 'A construction financier who was promised more than access', 3); a.owePatron(convo.speaker.name, 7); },
               reply: '"A friend." He writes a number with more digits than you expected, and now you are one.' }
           ]
         },
@@ -593,7 +593,7 @@
               run: function (a) { a.add('money', a.wage(2)); a.add('stats.integrity', a.rng(0, 2)); },
               reply: '"That is what the last one said." He sighs. "He believed it too."' },
             { t: 'I would rather not guess. I would rather know your terms.', mood: 1,
-              run: function (a) { a.add('money', a.wage(6)); a.add('business', a.rng(3, 6)); a.add('stats.integrity', -a.rng(1, 3)); a.dirt('patron', 'An unwritten obligation to a man who keeps records', 2); },
+              run: function (a, convo) { a.add('money', a.wage(6)); a.add('business', a.rng(3, 6)); a.add('stats.integrity', -a.rng(1, 3)); a.dirt('patron', 'An unwritten obligation to a man who keeps records', 2); a.owePatron(convo.speaker.name, 5); },
               reply: '"No terms." He pats your hand. "Only a memory. Mine is very good."' }
           ]
         },
@@ -800,7 +800,7 @@
           q: '"When you get there — and you might — do we get positions, or do we get a thank you?"',
           answers: [
             { t: 'You get positions. Let us be honest about what this is.', mood: 3,
-              run: function (a) { a.add('party', a.rng(4, 8)); a.recruitAlly(); a.add('stats.integrity', -a.rng(2, 4)); a.promise('slate', 'Positions for three provincial chairpersons who backed you'); },
+              run: function (a) { a.add('party', a.rng(4, 8)); a.recruitAlly(); a.add('stats.integrity', -a.rng(2, 4)); a.promise('slate', 'Positions for three provincial chairpersons who backed you', { kind: 'cabinet', to: 'The provinces' }); },
               reply: '"Good." He relaxes for the first time. "Now we can actually talk."' },
             { t: 'You get a government that works. Some of you will be in it. Not all.', mood: 1,
               run: function (a) { a.add('party', a.rng(2, 5)); a.add('stats.integrity', a.rng(0, 2)); },

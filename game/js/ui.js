@@ -205,6 +205,9 @@
 
   function paperCard(e) {
     var cls = e.kind === 'good' ? 'good' : (e.kind === 'bad' ? 'bad' : (e.kind === 'big' ? 'big' : ''));
+    // A shock, a collapse, a purge, a brigade on the border: big and bad at
+    // once, which is a louder card than either on its own.
+    if (e.alert) cls = 'big bad';
     return '<div class="paper ' + cls + '">' +
       '<div class="paper-src"><span>' + esc(e.src || '') + '</span><span class="when">' +
         RZ.monthShort(e.date.month) + ' ' + e.date.year + '</span></div>' +
@@ -429,6 +432,21 @@
         }).join('') + '</div></div></div>';
     }
 
+    // Money taken during a campaign, and what is still owed on it.
+    var pats = (S.capture && S.capture.patrons || []).filter(function (x) { return x.owed > 0.5; });
+    if (pats.length) {
+      h += '<div class="block"><div class="block-h">Who owns a piece of you<span class="sub">' +
+        pats.length + '</span></div><div class="card"><div class="rows">' +
+        pats.slice().sort(function (a, b) { return b.owed - a.owed; }).map(function (x) {
+          var hot = x.owed > 8 ? '#d4453f' : x.owed > 4 ? '#d8a53f' : '#4bab84';
+          return '<div class="row"><span class="row-dot" style="background:' + hot + '"></span>' +
+            '<span class="row-n">' + esc(x.name) + '<small>' +
+              (x.granted ? x.granted + ' favour' + (x.granted === 1 ? '' : 's') + ' done' : 'nothing asked yet') +
+              (x.refused ? ' · ' + x.refused + ' refused' : '') + '</small></span>' +
+            '<span class="row-v">' + '◆'.repeat(Math.min(5, Math.ceil(x.owed / 3))) + '</span></div>';
+        }).join('') + '</div></div></div>';
+    }
+
     h += '<div class="block"><div class="block-h">What could destroy you<span class="sub">' + P.dirt.length + ' item' + (P.dirt.length === 1 ? '' : 's') + '</span></div>';
     if (!P.dirt.length) {
       h += '<div class="card"><p class="note">Nothing. For now.</p></div>';
@@ -484,6 +502,57 @@
       '<button class="btn btn-gold btn-block" data-close>Continue</button>';
     var inner = modal(html);
     inner.querySelector('[data-close]').addEventListener('click', function () { closeModal(); if (onClose) onClose(); });
+  }
+
+  /* ---------------- constitutional amendment ---------------- */
+  // The arithmetic is shown before the decision, because a president who tries
+  // this and misses should have been able to count first.
+  function showAmend(onDone) {
+    var S = UI.S, c = RZ.COUNTRIES[S.countryId];
+    var api = RZ.engine.mkApi(S);
+    var sup = RZ.gov.assemblySupport(S);
+    var list = RZ.gov.amendmentsFor(api);
+    var pickId = list[0] && list[0].id;
+    var spend = 0;
+    var inner = modal('');
+
+    paint();
+
+    function paint() {
+      var gap = Math.max(0, sup.needed - sup.gov);
+      var h = '<div class="modal-kicker">The ' + esc(c.house.name) + '</div>' +
+        '<h2 class="modal-h">Amend the constitution</h2>' +
+        '<p class="modal-b">An amendment needs <strong>' + sup.needed + ' of ' + sup.total + '</strong> — two-thirds. ' +
+        'The government benches carry <strong>' + sup.gov + '</strong>' +
+        (gap ? ', which leaves you <strong>' + gap + '</strong> short before anybody on your own side abstains.'
+             : ', which is enough on paper. Your own side is the risk.') + '</p>' +
+        '<div class="choices" style="margin-bottom:16px">' + list.map(function (am) {
+          return '<button class="choice' + (am.id === pickId ? ' is-on' : '') + '" data-am="' + esc(am.id) + '">' +
+            '<div class="choice-t">' + esc(am.name) + '</div>' +
+            '<div class="choice-d">' + esc(am.blurb) + '</div></button>';
+        }).join('') + '</div>' +
+        '<div class="block-h">The whipping operation<span class="sub">' +
+          (spend ? RZ.money(api.wage(spend), c.cur.sym) : 'nothing yet') + '</span></div>' +
+        '<input id="amend-spend" type="range" min="0" max="40" step="2" value="' + spend + '" ' +
+          'style="width:100%;accent-color:#d9a441">' +
+        '<p class="note" style="margin:6px 0 16px">Constituency offices, provincial conferences, and a great many ' +
+        'flights. It buys crossbenchers. It is also the thing that gets written about afterwards.</p>' +
+        '<button class="btn btn-gold btn-block" data-go>Put it to the House</button>' +
+        '<button class="btn btn-ghost btn-block" style="margin-top:8px" data-cancel>Not yet</button>';
+      inner.innerHTML = h;
+
+      inner.querySelectorAll('[data-am]').forEach(function (b) {
+        b.addEventListener('click', function () { pickId = b.dataset.am; paint(); });
+      });
+      var sl = inner.querySelector('#amend-spend');
+      sl.addEventListener('input', function () { spend = parseInt(sl.value, 10); paint(); });
+      inner.querySelector('[data-cancel]').addEventListener('click', function () { closeModal(); });
+      inner.querySelector('[data-go]').addEventListener('click', function () {
+        var res = RZ.gov.attemptAmendment(api, pickId, spend);
+        closeModal();
+        onDone(res, api);
+      });
+    }
   }
 
   /* ---------------- conversation ---------------- */
@@ -715,6 +784,7 @@
     UI: UI, show: show, toast: toast, modal: modal, closeModal: closeModal,
     renderCountries: renderCountries, renderCreate: renderCreate, renderGame: renderGame, renderHud: renderHud,
     showEvent: showEvent, showOutcome: showOutcome, showDialogue: showDialogue, showElection: showElection,
+    showAmend: showAmend,
     showRigOffer: showRigOffer, showBudget: showBudget, showEnd: showEnd, showAbout: showAbout,
     paperCard: paperCard
   };
