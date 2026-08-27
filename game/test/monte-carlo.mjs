@@ -22,7 +22,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FILES = [
   'core.js', 'data-countries.js', 'data-ladder.js', 'data-actions.js',
   'data-events.js', 'data-dialogue.js', 'data-origins.js', 'people.js', 'elections.js',
-  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js', 'constituency.js', 'statecraft.js', 'legislation.js'
+  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js', 'constituency.js', 'statecraft.js', 'legislation.js', 'contender.js'
 ];
 
 function loadGame() {
@@ -138,6 +138,20 @@ function chooseAction(RZ, S, acts, policy) {
     if (whip.length) return whip[0];
   }
 
+  // The other one is not scenery: when they are standing on the rung you want,
+  // the file in the drawer is worth more spent than kept.
+  if (RZ.contender) {
+    const ct = RZ.contender.get(S);
+    if (ct && !ct.ascended) {
+      const blocking = ct.rungIdx === S.player.rungIdx + 1;
+      if (blocking && ct.dirt.length) {
+        RZ.contender.spendFile(S, RZ.engine.mkApi(S));
+      }
+      const look = acts.filter((a) => a.id === 'theother');
+      if (look.length && (blocking || ct.rungIdx > S.player.rungIdx) && RZ.rnd() < 0.3) return look[0];
+    }
+  }
+
   // A member with capital and a majority in reach puts their own name on
   // something. It is the only way the record ever says what you were for.
   if (RZ.bill && RZ.bill.canDraft(S) && S.player.capital >= 30 && RZ.rnd() < 0.35) {
@@ -217,6 +231,8 @@ function playCareer(seed, { trace = false, policy = 'random' } = {}) {
     coalitionCollapses: 0, elections: 0, promisesMade: 0, promisesBroken: 0,
     sprints: 0, blitzes: 0, weeklyTurns: 0, bestPoll: 0, swings: [],
     billsTabled: 0, billsPassed: 0, billsLost: 0, billsLapsed: 0,
+    contenderRung: 0, contenderGap: 0, contenderThrone: 0, contenderAllied: 0,
+    contenderFiles: 0, readings: 0,
     blocsWorked: 0, blocsPledged: 0, concessions: 0,
     revolts: 0, revoltsWon: 0, exiled: 0, apologies: 0, blackmails: 0,
     raised: 0, spentOwn: 0, dirtyShares: [], audits: 0, brokeWeeks: 0, cheques: 0, favours: 0,
@@ -344,6 +360,7 @@ function playCareer(seed, { trace = false, policy = 'random' } = {}) {
       if (pick.id === 'defect') { r.crossings++; say('crossed the floor'); }
       if (pick.id === 'revolt') { r.revolts++; say('challenged the incumbent'); }
       if (pick.id === 'cheque') r.cheques++;
+      if (pick.id === 'theother') r.readings++;
       if (pick.id === 'favours') r.favours++;
       if (S.sprint && RZ.sprint.warFunds(S) <= 0) r.brokeWeeks++;
       if (pick.id === 'blackmail') { r.blackmails++; say('traded the file for the seat'); }
@@ -362,6 +379,7 @@ function playCareer(seed, { trace = false, policy = 'random' } = {}) {
       else { r.billsLost++; say(turnOut.billResult.name + ' lost'); }
     }
     if (turnOut.billLapsed) { r.billsLapsed++; say('a bill fell with the House'); }
+    if (turnOut.contenderAscended) { r.contenderThrone = 1; say('the other one took the top'); }
     if (turnOut.sprintResult && turnOut.sprintResult.finalTally) {
       r.bestPoll = Math.max(r.bestPoll, turnOut.sprintResult.finalTally.support);
       if (typeof turnOut.sprintResult.swing === 'number') r.swings.push(turnOut.sprintResult.swing);
@@ -427,6 +445,12 @@ function playCareer(seed, { trace = false, policy = 'random' } = {}) {
   r.tendersRefused = S.capture ? S.capture.refused : 0;
   r.patronsAtEnd = S.capture ? S.capture.patrons.filter((x) => x.owed > 0.5).length : 0;
   r.capital = Math.round(P.capital);
+  if (S.contender) {
+    r.contenderRung = S.contender.rungIdx;
+    r.contenderGap = S.contender.rungIdx - P.rungIdx;
+    r.contenderAllied = S.contender.relation === 'allied' ? 1 : 0;
+    r.contenderFiles = S.contender.dirt.length;
+  }
   r.integrity = Math.round(P.stats.integrity);
   r.money = Math.round(P.money);
   r.dirt = P.dirt.length;
@@ -591,9 +615,15 @@ console.log(`  bills  tabled ${fmt(mean((r) => r.billsTabled), 2)}/career, carri
     ? fmt((100 * sum((r) => r.billsPassed)) / (sum((r) => r.billsPassed) + sum((r) => r.billsLost))) + '%'
     : 'n/a'}${sum((r) => r.billsLapsed) ? ', ' + sum((r) => r.billsLapsed) + ' fell with the House' : ''}`);
 if (sum((r) => r.billsTabled)) {
-  console.log(`  the whipping             ${fmt(mean((r) => r.blocsWorked), 1)} blocs worked, ${
-    fmt(mean((r) => r.blocsPledged), 1)} pledged, ${fmt(mean((r) => r.concessions), 2)} clauses dropped per career`);
+  const worked = sum((r) => r.blocsWorked);
+  console.log(`  the whipping             ${fmt(mean((r) => r.blocsWorked), 1)} blocs worked per career, ${
+    worked ? fmt((100 * sum((r) => r.blocsPledged)) / worked) + '% of them pledged' : 'none pledged'}, ${
+    fmt(mean((r) => r.concessions), 2)} clauses dropped`);
 }
+console.log(`  the other one            ends on rung ${fmt(mean((r) => r.contenderRung), 1)}, ${
+  fmt(mean((r) => r.contenderGap), 1)} rungs from you; ahead of you in ${fmt(pct((r) => r.contenderGap > 0))}% of careers`);
+console.log(`  they reached the top     ${fmt(pct((r) => r.contenderThrone))}% of careers${
+  mean((r) => r.contenderAllied) ? ', allied with you in ' + fmt(pct((r) => r.contenderAllied)) + '%' : ''}`);
 console.log(`  amendments  tried ${fmt(mean((r) => r.amendmentsTried), 2)}/career, carried ${
   sum((r) => r.amendmentsTried) ? fmt((100 * sum((r) => r.amendmentsPassed)) / sum((r) => r.amendmentsTried)) + '%' : 'n/a'}`);
 console.log(`  promises made ${fmt(mean((r) => r.promisesMade), 2)}, broken ${fmt(mean((r) => r.promisesBroken), 2)} per career`);
@@ -647,6 +677,15 @@ if (pct((r) => r.purges > 0) > 85) w('the congress purge hits nearly everybody')
 if (mean((r) => r.promisesMade) === 0) w('no promises were ever made — the ledger is unreachable');
 if (mean((r) => r.sprints) === 0) w('the campaign sprint never started — its trigger may be unreachable');
 if (mean((r) => r.sprints) > 0 && mean((r) => r.blitzes) === 0) w('the sprint runs but no ward was ever blitzed');
+{
+  const gap = mean((r) => r.contenderGap);
+  const throne = pct((r) => r.contenderThrone);
+  if (mean((r) => r.contenderRung) < 1) w('the contender barely climbs — they are scenery, not a race');
+  if (throne > 60) w('the contender takes the top in most careers — they are unbeatable');
+  if (policy === 'directed' && throne < 1 && gap < -4) {
+    w('a directed player leaves the contender far behind — the race never happens');
+  }
+}
 if (policy === 'directed' && mean((r) => r.billsTabled) === 0) {
   w('no bill was ever tabled — the order paper may be unreachable');
 }
@@ -655,7 +694,9 @@ if (policy === 'directed' && mean((r) => r.billsTabled) === 0) {
   if (tried >= 20) {
     const rate = sum((r) => r.billsPassed) / tried;
     if (rate > 0.95) w('almost every bill carries — four weeks of whipping is not a real fight');
-    if (rate < 0.06) w('almost no bill carries — the House may be unwinnable');
+    // A coin that tables a bill and then wanders off is supposed to lose it.
+    // Only the cohort that actually whips says anything about the House.
+    if (policy === 'directed' && rate < 0.25) w('almost no bill carries even when whipped — the House may be unwinnable');
   }
 }
 }

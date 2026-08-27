@@ -75,6 +75,10 @@
       return r.alive !== false && r.partyId === S.player.partyId;
     });
     if (!mine.length) return null;
+    // Unless somebody has been explicitly put in the way — the other one, once
+    // they have taken the office you were climbing towards.
+    var named = mine.filter(function (r) { return r.incumbent; });
+    if (named.length) return named[0];
     var home = mine.filter(function (r) { return r.regionId === S.player.regionId; });
     var pool = home.length ? home : mine;
     return pool.slice().sort(function (a, b) { return b.power - a.power; })[0];

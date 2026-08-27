@@ -418,6 +418,24 @@ body{
 .chest-d{ font-size:.72rem; color:var(--text-faint); margin-top:5px; line-height:1.45; }
 .chest-own{ color:#e0b06f; }
 .chest-warn{ color:#d99a97; }
+/* the race: your climb and theirs, on the same axis */
+.race-top{ display:flex; align-items:flex-start; gap:12px; margin-bottom:12px; }
+.race-n{ font-family:var(--serif); font-size:1.06rem; font-weight:600; }
+.race-r{ font-size:.74rem; color:var(--text-faint); margin-top:2px; }
+.race-gap{ margin-left:auto; text-align:right; font-family:var(--mono); font-size:1.35rem; font-weight:700; line-height:1; }
+.race-gap.good{ color:var(--green); }
+.race-gap.mid{ color:var(--gold); }
+.race-gap.bad{ color:var(--red); }
+.race-gap small{ display:block; font-family:var(--font); font-size:.58rem; letter-spacing:.1em;
+  text-transform:uppercase; font-weight:700; opacity:.8; margin-top:4px; white-space:nowrap; }
+.race-lane{ position:relative; display:block; height:18px; border-radius:5px; background:#1b2530;
+  margin-top:6px; overflow:hidden; }
+.race-lane span{ display:block; height:100%; }
+.race-lane span.me{ background:linear-gradient(90deg,var(--gold-deep),var(--gold)); }
+.race-lane span.them{ background:linear-gradient(90deg,#6a3a3a,#c2615c); }
+.race-lane b{ position:absolute; left:8px; top:0; line-height:18px; font-size:.62rem;
+  letter-spacing:.12em; text-transform:uppercase; color:#0d1219; font-weight:800; }
+
 /* the order paper: a bill in committee, counted bloc by bloc */
 .bill{
   border:1px solid #3a4a63; border-radius:var(--radius); padding:14px;

@@ -25,7 +25,7 @@
       // One turn is a month, except in the last eight weeks before a ballot,
       // when it is a week. `span` is the fraction of a month a turn covers, so
       // every monthly rate below can be written once and scaled.
-      tempo: 'month', sprint: null, bill: null,
+      tempo: 'month', sprint: null, bill: null, contender: null,
       ladder: ladder.map(function (r) { return r.id; }),
       player: {
         name: cfg.name, gender: cfg.gender, age: cfg.age || 34,
@@ -155,6 +155,24 @@
         S.player.standing[k] = C100(S.player.standing[k]);
       });
       Object.keys(S.player.stats).forEach(function (k) { S.player.stats[k] = C100(S.player.stats[k]); });
+    }
+
+    // Somebody else started this year too, with the opposite talent. Made
+    // after the origin scene, because which one you get is decided by what
+    // the answers in it made you.
+    if (RZ.contender) {
+      RZ.contender.init(S);
+      var ct0 = S.contender;
+      pushFeed(S, {
+        kind: 'flat', src: c.regionById[ct0.regionId].name,
+        title: 'A name you will hear again: ' + ct0.name,
+        body: (ct0.sameParty
+          ? 'Same party card, same year, a ' + c.terms.region + ' away. '
+          : 'The other side of the aisle, same year, a ' + c.terms.region + ' away. ') +
+          'They climb ' + RZ.contender.STYLES[ct0.trait].climbs + ', which is the one thing you cannot do, ' +
+          'and there is exactly one of each of these jobs.',
+        tone: 'flat'
+      });
     }
 
     if (cfg.startAs === 'candidate') {
@@ -729,6 +747,8 @@
     // career, in which case nothing after it matters.
     if (RZ.crisis && RZ.crisis.monthly(S, out)) { save(S); return out; }
     if (RZ.revolt) out.nemesis = RZ.revolt.nemesisTurn(S);
+    // The other one moves whether or not you did anything this month.
+    if (RZ.contender) RZ.contender.tick(S, span, out);
     // The ward keeps its own opinion of you, and the sites keep building or
     // stop, whether or not you spent an action on them this month.
     if (RZ.ward && mkApi(S).tier() >= 4) RZ.ward.tick(S, span, out);
@@ -926,6 +946,16 @@
     return { ok: missing.length === 0, missing: missing };
   }
 
+  // Above a certain height there is one of each job, and if somebody else is
+  // in it your problem is not your standing, it is them.
+  function contestedBy(S, rung) {
+    if (!RZ.contender || !rung || rung.tier < 10) return null;
+    var ct = RZ.contender.get(S);
+    if (!ct || ct.ascended) return null;
+    var lad = RZ.ladderFor(S.countryId);
+    return (lad[ct.rungIdx] && lad[ct.rungIdx].id === rung.id) ? ct : null;
+  }
+
   // Can you contest the next rung right now?
   function contestStatus(S) {
     var c = RZ.COUNTRIES[S.countryId];
@@ -935,6 +965,7 @@
     var st = { rung: rung, req: req, available: false, reason: '', how: rung.how };
 
     if (!req.ok) { st.reason = 'You are not yet credible enough to be considered.'; return st; }
+    st.against = contestedBy(S, rung);
 
     if (rung.how === 'internal') {
       if (S.flags['lastInternal'] && S.turn - S.flags['lastInternal'] < 4) { st.reason = 'The structures have only just met. Wait a few months.'; return st; }
@@ -1002,10 +1033,26 @@
         if (!pst.gov && S.player.electionsLost > 0) diff2 -= 8;
         if (S.flags.leaderWounded) diff2 -= 18;
       }
+      // If the other one already holds it, you are not contesting a vacancy.
+      // You are asking a hall to remove somebody who is standing in front of it.
+      var held = contestedBy(S, rung);
+      if (held) diff2 += 10 + held.power * 0.22;
       var cv = RZ.elections.conferenceVote(S, diff2);
       if (cv.won) {
-        promote(S, 'The ' + c.terms.conference + ' elected you.');
+        promote(S, 'The ' + c.terms.conference + ' elected you' + (held ? ', over ' + held.name + '.' : '.'));
         if (rung.id === 'leader') { S.player.isLeader = true; S.parties[S.player.partyId].leaderName = S.player.name; }
+        // There is one of these. Taking it takes it off somebody.
+        if (held) {
+          held.rungIdx = Math.max(0, held.rungIdx - 1);
+          held.progress = 0;
+          held.relation = 'hostile';
+          held.power = Math.max(8, held.power - RZ.range(8, 20));
+          S.player.contenderBeaten = (S.player.contenderBeaten || 0) + 1;
+          pushFeed(S, { kind: 'good', src: c.terms.conference,
+            title: 'You took it off ' + held.name,
+            body: 'They congratulated you at the podium with both hands and one of the photographs of it ' +
+                  'will be used against one of you for the rest of your lives.', tone: 'good' });
+        }
       } else {
         api.add('party', -RZ.range(3, 8)); api.add('leader', -RZ.range(2, 6));
         S.player.electionsLost++;
@@ -1069,6 +1116,20 @@
     if (!req.ok) return null;
     if (!S.parties[S.player.partyId].gov && rung.tier >= 5) return null; // must be in government
     if (rung.id === 'hos' && !S.flags.postVacant) return null;            // the office must be open
+    // Somebody else is already in the chair, and nobody is appointed to a
+    // chair that is not empty.
+    var occupied = contestedBy(S, rung);
+    if (occupied) {
+      if (!S.flags.toldBlockedBy || S.turn - S.flags.toldBlockedBy > 24) {
+        S.flags.toldBlockedBy = S.turn;
+        pushFeed(S, { kind: 'bad', src: 'The appointments list',
+          title: 'You were considered for ' + rung.title,
+          body: 'Your name went up and came back down again, because ' + occupied.name + ' is already ' +
+                'sitting in it and nobody is going to be asked to move. The job comes free when they ' +
+                'leave it, and they are not leaving it.', tone: 'bad' });
+      }
+      return null;
+    }
     var P = S.player;
     var scandal = Math.min(34, RZ.sum(P.dirt.filter(function (d) { return d.exposed; }), function (d) { return d.severity * 3.5; }));
     var score = P.standing.leader * 0.5 + P.standing.party * 0.28 + P.fame * 0.22 -
@@ -1228,7 +1289,8 @@
     newGame: newGame, mkApi: mkApi, availableActions: availableActions, doAction: doAction,
     endTurn: endTurn, rollEvent: rollEvent, resolveEvent: resolveEvent,
     contestStatus: contestStatus, contest: contest, promote: promote, nextRung: nextRung,
-    meetsRequirements: meetsRequirements, pushFeed: pushFeed, endGame: endGame,
+    meetsRequirements: meetsRequirements, considerAppointment: considerAppointment,
+    contestedBy: contestedBy, pushFeed: pushFeed, endGame: endGame,
     finishDialogue: finishDialogue,
     save: save, load: load, clearSave: clearSave, hasSave: hasSave,
     WAGE_BASE: WAGE_BASE, ELECTION_MONTH: ELECTION_MONTH, isCampaignSeason: isCampaignSeason

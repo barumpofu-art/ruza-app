@@ -2058,6 +2058,160 @@
           ]
         }
       ]
+    },
+
+    /* ==================== THE OTHER ONE ==================== */
+    // The whole race in one room. They are not a villain and they are not a
+    // friend; they are the person who wants the job you want, and there is
+    // one of it.
+    {
+      id: 'the-other-one', topic: 'theother', weight: 14,
+      when: function (a) { return !!(RZ.contender && RZ.contender.get(a.S) && !RZ.contender.get(a.S).ascended); },
+      speaker: function (a) {
+        var ct = RZ.contender.get(a.S);
+        var sm = RZ.contender.summary(a.S);
+        return { name: ct.name, role: sm.title, org: sm.sameParty ? 'the same party card as you' : sm.regionName };
+      },
+      where: 'A hotel breakfast room, both of you early, neither of you surprised',
+      settleOn: 'party',
+      opening: function (a) {
+        var sm = RZ.contender.summary(a.S);
+        return 'They see you before you see them and do not pretend otherwise. "' +
+          (sm.gap > 0
+            ? 'Sit down. I have been reading about you, which is more than most people in this room have done.'
+            : sm.gap < 0
+              ? 'Sit down. You are ahead of me. I am aware of the number and so are you.'
+              : 'Sit down. We are exactly level, which neither of us finds comfortable.') + '"';
+      },
+      beats: [
+        {
+          q: function (a) {
+            var sm = RZ.contender.summary(a.S);
+            return '"Here is the arithmetic and then we can talk about the weather. There is one ' +
+              cap(a.C.terms.hos) + '. There is one ' + cap(a.C.terms.leaderTitle) + '. We are the same age and we ' +
+              'joined the same year and there are two of us. ' +
+              (sm.relation === 'allied' ? 'We have been friendly. Friendly is not a plan.' :
+               sm.relation === 'hostile' ? 'You have already decided what I am. Say it out loud.' :
+               'So what is it going to be?') + '"';
+          },
+          answers: [
+            { t: 'Run together. You take the deputy and I take the top', mood: 2,
+              when: function (a) { return RZ.contender.canApproach(a.S); },
+              run: function (a) {
+                RZ.contender.ally(a.S, a);
+                a.add('party', a.rng(2, 6));
+              },
+              reply: '"Deputy." They repeat it the way you repeat a price you have decided to pay. "For now, ' +
+                     'and only because your grassroots numbers are better than mine and we both know why."' },
+            { t: 'One of us is going to lose. I would rather it were said now', mood: -2,
+              run: function (a) {
+                RZ.contender.turnHostile(a.S);
+                a.add('stats.integrity', a.rng(1, 3)); a.add('leader', a.rng(1, 4));
+              },
+              reply: '"Good." They fold the napkin. "I dislike the pretending far more than I dislike you. ' +
+                     'Now at least we can both stop wasting Sundays."' },
+            { t: 'There is no arithmetic. There is only who works harder', mood: 0,
+              run: function (a) { a.add('grassroots', a.rng(1, 4)); a.add('health', -a.rng(1, 4)); },
+              reply: '"That is the sort of thing people say in the second row." They are not being cruel. ' +
+                     '"You will stop saying it. I stopped saying it in March."' }
+          ]
+        },
+        {
+          q: function (a) {
+            var ct = RZ.contender.get(a.S);
+            return '"Second thing, and then I have a car. ' +
+              (ct.dirt.length
+                ? 'You have been asking about me. I know because three people told me on the same afternoon, ' +
+                  'which is how I know they are not really my people. What are you going to do with it?"'
+                : 'People will bring you things about me. They will bring me things about you. ' +
+                  'Do we use them, or do we agree not to?"');
+          },
+          answers: [
+            { t: 'Nothing. It stays in a drawer and you know it is there', mood: 2,
+              run: function (a) { a.add('stats.cunning', a.rng(1, 3)); a.add('leader', a.rng(1, 3)); },
+              reply: '"In a drawer." They almost smile. "That is worse than using it and you know that, which ' +
+                     'is the first genuinely impressive thing you have done."' },
+            { t: 'I will use it the day it is worth more than this conversation', mood: -1,
+              run: function (a) {
+                RZ.contender.turnHostile(a.S);
+                a.add('media', a.rng(1, 4)); a.add('party', -a.rng(1, 4));
+              },
+              reply: '"Then so will I, and mine is better than yours." They stand. "Enjoy the rest of your breakfast."' },
+            { t: 'Use it. Now, across this table, while you can answer it', mood: -3, tag: 'dirty',
+              when: function (a) { var ct = RZ.contender.get(a.S); return !!(ct && ct.dirt.length); },
+              run: function (a) { RZ.contender.spendFile(a.S, a); },
+              reply: 'You say the name of the company and they stop with the cup halfway up. Two weeks later ' +
+                     'it is a headline and their people are briefing that it is nothing. It is not nothing, ' +
+                     'and it will never again be possible for either of you to be in a room alone.' }
+          ]
+        }
+      ]
+    },
+
+    // Summoned the day they are sworn in. The ladder is finished and somebody
+    // else is standing on the top of it.
+    {
+      id: 'contender-throne', topic: 'crisis', weight: 0,
+      speaker: function (a) {
+        var ct = RZ.contender.get(a.S);
+        return { name: ct ? ct.name : 'The President', role: cap(a.C.terms.hos), org: a.C.capital };
+      },
+      where: 'The office at the end of the corridor, three days after the inauguration',
+      settleOn: 'leader',
+      opening: function (a) {
+        return 'The room has been redecorated already, which tells you something about how long this was ' +
+          'planned for. They do not get up. "You came. I did wonder whether you would make me send for you twice."';
+      },
+      beats: [
+        {
+          q: '"Let us do this properly. You wanted this office and you did not get it, and there is nothing ' +
+             'either of us can do about that now. So: are you in my government, or are you in the country?"',
+          answers: [
+            { t: 'In your government. Give me something that matters', mood: 3,
+              run: function (a) {
+                a.add('leader', a.rng(6, 14)); a.add('party', a.rng(3, 8));
+                a.add('stats.integrity', -a.rng(1, 4)); a.add('media', -a.rng(2, 6));
+                a.S.flags.servingThem = true;
+              },
+              reply: '"Something that matters." They write one word down. "You will have it by Friday and you ' +
+                     'will be photographed accepting it from me, and that photograph is the actual price."' },
+            { t: 'In the country. I will oppose you from my own benches', mood: -3,
+              run: function (a) {
+                a.add('media', a.rng(6, 14)); a.add('grassroots', a.rng(4, 10));
+                a.add('leader', -a.rng(8, 16)); a.add('party', -a.rng(4, 10));
+                a.S.flags.opposingThem = true;
+              },
+              reply: '"From your own benches." They nod slowly. "Then I will not have you arrested, because ' +
+                     'that is what people expect, and I would rather do the thing they do not expect."' },
+            { t: 'Neither. I am going to take it off you', mood: -2,
+              run: function (a) {
+                a.add('leader', -a.rng(4, 10)); a.add('fame', a.rng(4, 9));
+                a.add('stats.cunning', a.rng(1, 3));
+                a.S.flags.opposingThem = true;
+              },
+              reply: 'The first genuine expression of the meeting crosses their face and it is delight. ' +
+                     '"There you are," they say. "I was worried you had stopped."' }
+          ]
+        },
+        {
+          q: '"One more thing, and it is the only part of this I have thought about properly. Twenty years ago ' +
+             'we were both nobody. Do you remember what you wanted it for? Because I have stopped being able to."',
+          answers: [
+            { t: 'Yes. And I am going to be the one who remembers for both of us', mood: 2,
+              run: function (a) { a.add('stats.integrity', a.rng(2, 5)); a.add('grassroots', a.rng(2, 6)); a.legacyMark('rememberedWhy'); },
+              reply: 'A very long pause in a room that has just been repainted. "Then write it down somewhere," ' +
+                     'they say. "Mine is in a drawer in a house I do not live in any more."' },
+            { t: 'No. Neither of us has for a very long time', mood: 1,
+              run: function (a) { a.add('stats.integrity', -a.rng(1, 3)); a.add('leader', a.rng(2, 6)); },
+              reply: '"No." They seem relieved rather than disappointed. "Good. It is much easier to work with ' +
+                     'people who have stopped."' },
+            { t: 'I wanted your job. That has not changed since I was nineteen', mood: 0,
+              run: function (a) { a.add('fame', a.rng(2, 6)); a.add('leader', -a.rng(1, 4)); a.add('stats.cunning', a.rng(.5, 2)); },
+              reply: '"At least it is honest." They stand, finally, and walk you to a door they now own. ' +
+                     '"Most people lie about that one and I have never understood why."' }
+          ]
+        }
+      ]
     }
   ];
 

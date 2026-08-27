@@ -823,6 +823,41 @@
     when: function (a) { return !!(RZ.bill && RZ.bill.canDraft(a.S)); }
   });
 
+  // The other one. Almost always a meeting; the roll below is what happens
+  // when there is nothing to say to each other this month.
+  ACTIONS.push({
+    id: 'theother', ico: '🪞', ap: 1,
+    name: function (a) {
+      var ct = RZ.contender && RZ.contender.get(a.S);
+      return ct ? 'Take a reading on ' + ct.name : 'Take a reading on the other one';
+    },
+    desc: function (a) {
+      var sm = RZ.contender && RZ.contender.summary(a.S);
+      if (!sm) return 'Somebody started the same year you did.';
+      return sm.title + ', ' + sm.standing + '. They climb ' + sm.climbs + '.';
+    },
+    when: function (a) { return !!(RZ.contender && RZ.contender.get(a.S) && !RZ.contender.get(a.S).ascended); },
+    run: function (a) {
+      var ct = RZ.contender.get(a.S);
+      var sm = RZ.contender.summary(a.S);
+      // Watching costs an afternoon and tells you where they are. Occasionally
+      // an afternoon of watching finds something.
+      a.add('stats.cunning', a.rng(.2, .8));
+      if (a.roll('cunning', 55)) {
+        RZ.contender.fileOn(a.S, 'Something ' + ct.name + ' would rather you had not found');
+        return { title: 'There is something there',
+          body: 'Two afternoons with somebody who used to work for them and a company registration that ' +
+                'has the wrong surname on it. You have not used it. You have it, which is a different ' +
+                'and better thing to have.', tone: 'good' };
+      }
+      return { title: sm.name + ' is ' + sm.title,
+        body: 'They are ' + sm.standing + ' and climbing ' + sm.climbs + '. ' +
+              (sm.lastMove ? cap1(sm.name + ' ' + sm.lastMove + '.') : 'Nothing this month, which for them is unusual.'),
+        tone: sm.gap > 0 ? 'bad' : 'flat' };
+    }
+  });
+  function cap1(x) { return x.charAt(0).toUpperCase() + x.slice(1); }
+
   ACTIONS.forEach(function (act) {
     if (act.id === 'church') {
       act.name = function (a) { return 'Work the churches'; };

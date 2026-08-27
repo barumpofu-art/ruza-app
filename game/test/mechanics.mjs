@@ -17,7 +17,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FILES = [
   'core.js', 'data-countries.js', 'data-ladder.js', 'data-actions.js',
   'data-events.js', 'data-dialogue.js', 'data-origins.js', 'people.js', 'elections.js',
-  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js', 'constituency.js', 'statecraft.js', 'legislation.js'
+  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js', 'constituency.js', 'statecraft.js', 'legislation.js', 'contender.js'
 ];
 
 function loadGame() {
@@ -621,6 +621,9 @@ section('11. Mandate, revolt, the file and the nemesis');
     ok('winning a contest grants a mandate', RZ.revolt.mandateActive(S));
     const withM = mk(202, 3), without = mk(203, 3);
     RZ.revolt.grantMandate(withM, RZ.ladderFor('ZA')[3]);
+    // The other one's monthly drag is real but it is not what is under test
+    // here, and two careers draw two different contenders.
+    [withM, without].forEach((T) => { T.contender = null; });
     [withM, without].forEach((T) => { T.player.standing.party = 60; T.player.standing.leader = 60; });
     for (let i = 0; i < 10; i++) {
       [withM, without].forEach((T) => { T.actionsLeft = 0; T.pendingEvent = null; RZ.engine.endTurn(T); T.pendingEvent = null; });
@@ -1904,6 +1907,227 @@ section('17. Proactive legislation');
     const back = RZ.engine.load();
     ok('a bill in committee round-trips', back && back.bill && back.bill.id === 'mines');
     ok('with its blocs and its pledges', back.bill.blocs.length === S.bill.blocs.length && back.bill.blocs[0].pledged === true);
+  }
+}
+
+
+/* ================= 18. the other one ================= */
+section('18. The climbing contender');
+{
+  // Made against your trait, not at random.
+  {
+    Object.keys(RZ.TRAITS).forEach((t) => {
+      const S = career('ZA', 1200, 2);
+      S.contender = null;
+      S.player.trait = t;
+      const ct = RZ.contender.init(S);
+      ok('a ' + t + ' draws a ' + RZ.contender.COUNTER[t],
+        ct.trait === RZ.contender.COUNTER[t], ct.trait);
+    });
+    const S = career('ZA', 1201, 2);
+    ok('a career comes with one already', !!S.contender);
+    ok('and only ever one', RZ.contender.init(S) === S.contender);
+    ok('they start at the bottom with you', S.contender.rungIdx === 0);
+    ok('and somewhere else on the map', S.contender.regionId !== S.player.regionId);
+  }
+
+  // They climb on their own, over a career's worth of months.
+  {
+    const S = career('ZA', 1210, 2);
+    S.player.trait = 'firebrand';
+    S.contender = null;
+    RZ.contender.init(S);
+    S.contender.drive = 1.2;
+    for (let i = 0; i < 180; i++) { S.actionsLeft = 0; S.pendingEvent = null; S.pendingScene = null; RZ.contender.tick(S, 1, {}); S.turn++; }
+    ok('fifteen years of not being watched gets them up the ladder',
+      S.contender.rungIdx >= 4, 'rung ' + S.contender.rungIdx);
+    ok('and it reaches the feed', S.feed.some((e) => /is now/.test(e.title || '')));
+  }
+
+  // Standing on the rung above them slows them down; ignoring them does not.
+  {
+    function climbOver(months, setup) {
+      const S = career('ZA', 1220, 2);
+      S.player.trait = 'mandarin';
+      S.contender = null;
+      RZ.contender.init(S);
+      S.contender.drive = 1;
+      setup(S);
+      RZ.seed(99);
+      let p = 0;
+      for (let i = 0; i < months; i++) p += RZ.contender.rate(S, S.contender);
+      return p;
+    }
+    const blocked = climbOver(60, (S) => { S.player.rungIdx = S.contender.rungIdx + 1; S.player.fame = 40; });
+    const shadow = climbOver(60, (S) => { S.player.rungIdx = S.contender.rungIdx + 4; S.player.fame = 40; });
+    ok('standing directly on top of them holds them back', blocked < shadow,
+      RZ.round(blocked, 1) + ' vs ' + RZ.round(shadow, 1));
+
+    const famous = climbOver(60, (S) => { S.player.rungIdx = 3; S.player.fame = 95; });
+    const unknown = climbOver(60, (S) => { S.player.rungIdx = 3; S.player.fame = 5; });
+    ok('a player nobody is talking about is a contender everybody is', unknown > famous,
+      RZ.round(unknown, 1) + ' vs ' + RZ.round(famous, 1));
+
+    const friend = climbOver(60, (S) => { S.player.rungIdx = 3; S.player.fame = 40; S.contender.relation = 'allied'; });
+    const enemy = climbOver(60, (S) => { S.player.rungIdx = 3; S.player.fame = 40; S.contender.relation = 'hostile'; });
+    ok('an ally slows down for you and an enemy does not', friend < enemy,
+      RZ.round(friend, 1) + ' vs ' + RZ.round(enemy, 1));
+
+    const held = climbOver(60, (S) => { S.player.rungIdx = 3; S.player.fame = 40; RZ.contender.fileOn(S, 'a file'); RZ.contender.fileOn(S, 'another'); });
+    const free = climbOver(60, (S) => { S.player.rungIdx = 3; S.player.fame = 40; });
+    ok('and a file in a drawer is a brake', held < free, RZ.round(held, 1) + ' vs ' + RZ.round(free, 1));
+  }
+
+  // What you can do about them.
+  {
+    const S = career('ZA', 1230, 6);
+    RZ.contender.ally(S, RZ.engine.mkApi(S));
+    ok('you can run together', S.contender.relation === 'allied');
+    ok('and it is no longer on offer', RZ.contender.canApproach(S) === false);
+
+    const T = career('ZA', 1231, 6);
+    ok('spending a file you do not have does nothing', RZ.contender.spendFile(T, RZ.engine.mkApi(T)) === null);
+    RZ.contender.fileOn(T, 'A company registration with the wrong surname');
+    T.contender.rungIdx = 4;
+    T.contender.power = 30;
+    T.contender.progress = 30;
+    const r = RZ.contender.spendFile(T, RZ.engine.mkApi(T));
+    ok('spending one knocks them back', r && T.contender.progress < 30 && T.contender.power < 30);
+    ok('and it makes an enemy of them for good', T.contender.relation === 'hostile');
+    ok('and the drawer is emptier', T.contender.dirt.length === 0);
+  }
+
+  // The rungs there is only one of.
+  {
+    const lad = RZ.ladderFor('ZA');
+    // Stand one below the first singular rung that is in somebody's gift.
+    const appointIdx = lad.findIndex((r) => r.how === 'appoint' && r.tier >= 10);
+    const S = career('ZA', 1240, appointIdx - 1);
+    // Put them exactly in the chair the player is next in line for.
+    S.contender.rungIdx = S.player.rungIdx + 1;
+    const rung = lad[S.player.rungIdx + 1];
+    Object.keys(S.player.standing).forEach((k) => { S.player.standing[k] = 95; });
+    S.player.fame = 95;
+    if (rung.how === 'appoint') {
+      S.parties[S.player.partyId].gov = true;
+      const got = RZ.engine.considerAppointment(S);
+      ok('nobody is appointed to a chair somebody is sitting in', got === null, rung.title);
+      ok('and you are told why', S.feed.some((e) => /already/.test(e.body || '')));
+    } else {
+      ok('the contested rung is a vote, not an appointment', true);
+    }
+
+    // Below the singular tiers there is room for both of you.
+    const L = career('ZA', 1241, 4);
+    L.contender.rungIdx = L.player.rungIdx + 1;
+    L.parties[L.player.partyId].gov = true;
+    Object.keys(L.player.standing).forEach((k) => { L.player.standing[k] = 95; });
+    L.player.fame = 95;
+    const low = lad[L.player.rungIdx + 1];
+    if (low.how === 'appoint') {
+      ok('there are many of the junior jobs', RZ.engine.considerAppointment(L) !== null, low.title);
+    } else {
+      ok('the junior rung is not an appointment here', true);
+    }
+  }
+
+  // If they get to the top first, the game changes shape.
+  {
+    const S = career('ZA', 1250, 8);
+    const lad = RZ.ladderFor('ZA');
+    S.contender.rungIdx = lad.length - 2;
+    S.contender.progress = 1e6;
+    const out = {};
+    RZ.contender.tick(S, 1, out);
+    ok('they can reach the top', S.contender.rungIdx === lad.length - 1);
+    ok('and the country now has their name on it', S.nation.presidentName === S.contender.name);
+    ok('you are not the president', S.player.isPresident === false);
+    ok('they become the nemesis every other mechanic already understands',
+      S.flags.nemesisId && S.player.rivals.some((r) => r.id === S.flags.nemesisId && r.nemesis));
+    ok('and somebody sends for you', S.pendingScene === 'contender-throne');
+    ok('the feed says so, loudly', S.feed[0] && S.feed[0].alert === true);
+    ok('the throne scene exists', !!RZ.dialogue.byId('contender-throne'));
+    // And it happens once.
+    S.pendingScene = null;
+    RZ.contender.tick(S, 1, {});
+    ok('and it only happens once', S.pendingScene === null);
+  }
+
+  // Taking the job off them on a conference floor.
+  {
+    const S = career('ZA', 1260, 9);
+    const lad = RZ.ladderFor('ZA');
+    const rung = lad[S.player.rungIdx + 1];
+    S.contender.rungIdx = S.player.rungIdx + 1;
+    S.contender.power = 60;
+    Object.keys(S.player.standing).forEach((k) => { S.player.standing[k] = 99; });
+    S.player.fame = 99;
+    S.nextConference = S.date.year; S.date.month = 7;
+    const st = RZ.engine.contestStatus(S);
+    if (rung.how === 'conference' && st.available) {
+      ok('the hall knows who you are standing against', st.against && st.against.name === S.contender.name);
+      const before = S.contender.rungIdx;
+      let won = false;
+      for (let i = 0; i < 30 && !won; i++) {
+        const T = career('ZA', 1260 + i, 9);
+        T.contender.rungIdx = T.player.rungIdx + 1;
+        T.contender.power = 20;
+        Object.keys(T.player.standing).forEach((k) => { T.player.standing[k] = 99; });
+        T.player.fame = 99; T.player.capital = 200;
+        T.nextConference = T.date.year; T.date.month = 7;
+        T.campaign.delegateSpend = 200;
+        const r = RZ.engine.contest(T);
+        if (r && r.won) {
+          won = true;
+          ok('winning it takes it off them', T.contender.rungIdx < T.player.rungIdx);
+          ok('and they do not forgive it', T.contender.relation === 'hostile');
+        }
+      }
+      ok('a strong player can take a contested rung', won);
+    } else {
+      ok('this rung is not contested on a conference floor', true);
+    }
+  }
+
+  // Everything survives a save.
+  {
+    const S = career('ZA', 1270, 6);
+    RZ.contender.fileOn(S, 'A file');
+    S.contender.relation = 'hostile';
+    S.contender.rungIdx = 5;
+    RZ.engine.save(S);
+    const back = RZ.engine.load();
+    ok('the contender round-trips', back && back.contender && back.contender.name === S.contender.name);
+    ok('with their rung, their mood and your file',
+      back.contender.rungIdx === 5 && back.contender.relation === 'hostile' && back.contender.dirt.length === 1);
+    ok('and the summary reads off the saved state', RZ.contender.summary(back).title.length > 0);
+  }
+
+  // Every country, every trait, a whole career, without throwing.
+  {
+    let ran = 0;
+    Object.keys(RZ.COUNTRIES).forEach((cid, i) => {
+      const S = career(cid, 1300 + i, 2);
+      S.contender = null;
+      S.player.trait = Object.keys(RZ.TRAITS)[i % Object.keys(RZ.TRAITS).length];
+      RZ.contender.init(S);
+      for (let t = 0; t < 240; t++) { RZ.contender.tick(S, 1, {}); S.turn++; }
+      if (!RZ.contender.summary(S).title) throw new Error('no title in ' + cid);
+      ran++;
+    });
+    ok('twenty years of contender in all ten countries, cleanly', ran === Object.keys(RZ.COUNTRIES).length);
+  }
+
+  // The action that looks at them.
+  {
+    const S = career('ZA', 1400, 4);
+    ok('the reading is on the desk', RZ.engine.availableActions(S).some((a) => a.id === 'theother'));
+    const out = RZ.engine.doAction(S, 'theother');
+    ok('and it is usually a meeting', !!(out && (out.dialogue || out.entry)));
+    const gone = career('ZA', 1401, 4);
+    gone.contender.ascended = true;
+    ok('and it goes away once they are on the throne',
+      !RZ.engine.availableActions(gone).some((a) => a.id === 'theother'));
   }
 }
 

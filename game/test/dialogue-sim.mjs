@@ -18,7 +18,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FILES = [
   'core.js', 'data-countries.js', 'data-ladder.js', 'data-actions.js',
   'data-events.js', 'data-dialogue.js', 'data-origins.js', 'people.js', 'elections.js',
-  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js', 'constituency.js', 'statecraft.js', 'legislation.js'
+  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js', 'constituency.js', 'statecraft.js', 'legislation.js', 'contender.js'
 ];
 
 function loadGame() {
@@ -71,7 +71,8 @@ for (const sc of RZ.DIALOGUE) {
   // content, which is the failure this check exists to catch.
   if (sc.topic === 'crisis') {
     const summoned = (RZ.state?.CRISES || []).some((cr) => cr.scene === sc.id) ||
-                     (RZ.bill?.VISITS || []).some((v) => v.id === sc.id);
+                     (RZ.bill?.VISITS || []).some((v) => v.id === sc.id) ||
+                     (RZ.contender?.SUMMONS || []).includes(sc.id);
     if (!summoned) fail(sc.id, 'a crisis scene that no trigger ever summons');
   } else if (!actionFor(sc.topic)) {
     fail(sc.id, `topic "${sc.topic}" is not an action id`);
@@ -118,6 +119,7 @@ function career(countryId, seed, tier) {
 // Build that machine rather than making the scene defensive about a state the
 // game never actually produces.
 function prepare(S, sc) {
+  if (RZ.contender && !S.contender) { S.player.trait = S.player.trait || 'firebrand'; RZ.contender.init(S); }
   const needsBill = sc.topic === 'billcount' || sc.id.indexOf('bill-') === 0;
   if (needsBill && RZ.bill) {
     S.player.capital = 120;

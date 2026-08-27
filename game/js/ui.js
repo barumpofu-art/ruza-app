@@ -551,6 +551,8 @@
       '<p class="note mt">Led by <strong>' + esc(P.isLeader ? P.name : S.parties[P.partyId].leaderName) + '</strong>.</p>' +
       '</div></div>';
 
+    h += raceCard(S, c);
+
     h += '<div class="block"><div class="block-h">The ladder<span class="sub">' + esc(c.name) + '</span></div><div class="card"><div class="ladder">' +
       lad.map(function (r, i) {
         var cls = i < P.rungIdx ? 'done' : (i === P.rungIdx ? 'now' : 'future');
@@ -583,6 +585,38 @@
   }
 
   /* ---------------- self pane ---------------- */
+  // Two bars on one axis. A number for your own climb tells you nothing; a
+  // number next to somebody else's tells you everything.
+  function raceCard(S, c) {
+    if (!RZ.contender) return '';
+    var sm = RZ.contender.summary(S);
+    if (!sm) return '';
+    var cls = sm.gap > 0 ? 'bad' : sm.gap < 0 ? 'good' : 'mid';
+    var rel = sm.ascended ? 'they got there first'
+      : sm.relation === 'allied' ? 'running together, for now'
+      : sm.relation === 'hostile' ? 'openly against you'
+      : sm.sameParty ? 'same party card, same year' : 'the other side, same year';
+
+    return '<div class="block"><div class="block-h">The other one' +
+      '<span class="sub">' + esc(rel) + '</span></div>' +
+      '<div class="card race">' +
+        '<div class="race-top">' +
+          '<div><div class="race-n">' + sm.ico + ' ' + esc(sm.name) + '</div>' +
+          '<div class="race-r">' + esc(sm.title) + ' · ' + esc(sm.regionName) + '</div></div>' +
+          '<div class="race-gap ' + cls + '">' + (sm.gap > 0 ? '+' + sm.gap : sm.gap) +
+          '<small>' + esc(sm.standing) + '</small></div>' +
+        '</div>' +
+        '<div class="race-lane"><span class="me" style="width:' + Math.max(2, sm.yourPct) + '%"></span>' +
+          '<b>you</b></div>' +
+        '<div class="race-lane"><span class="them" style="width:' + Math.max(2, sm.pct) + '%"></span>' +
+          '<b>' + esc(sm.name.split(' ')[0]) + '</b></div>' +
+        '<p class="note" style="margin:10px 0 0">They climb ' + esc(sm.climbs) + ', which is the one thing ' +
+          'you cannot do.' + (sm.files ? ' You are holding <span class="gold">' + sm.files +
+          ' file' + (sm.files === 1 ? '' : 's') + '</span> on them.' : '') + '</p>' +
+        (sm.lastMove ? '<p class="note" style="margin:6px 0 0;opacity:.8">Last month: ' + esc(sm.lastMove) + '.</p>' : '') +
+      '</div></div>';
+  }
+
   function renderSelf() {
     var S = UI.S, c = RZ.COUNTRIES[S.countryId], P = S.player;
     var lad = RZ.ladderFor(c.id), rung = lad[P.rungIdx];
@@ -755,6 +789,9 @@
             '<div class="origin-trait-n">' + tr.ico + ' ' + esc(tr.name) + '</div>' +
             '<div class="origin-trait-d">' + esc(tr.note) + '</div>' +
           '</div>' +
+          // The answer decides who else is starting this year. You are told
+          // now, so that the first feed entry about them is not a surprise.
+          counterNote(chosen.trait) +
           '<button class="btn btn-gold btn-block" data-go>This is where it starts</button>' +
           '<button class="btn btn-ghost btn-block" style="margin-top:8px" data-back>Answer differently</button>';
       }
@@ -785,6 +822,20 @@
   /* ---------------- the ward blitz ---------------- */
   // Which afternoon, in which place. The list is sorted worst-first, because
   // the ward you are losing is the one worth the argument.
+  // What the answer just made somebody else. There is one of each of the jobs
+  // at the top and there are two of you starting today.
+  function counterNote(trait) {
+    if (!RZ.contender) return '';
+    var other = RZ.TRAITS[RZ.contender.COUNTER[trait]];
+    if (!other) return '';
+    var climbs = RZ.contender.STYLES[other.id] ? RZ.contender.STYLES[other.id].climbs : '';
+    return '<p class="note" style="margin:12px 0 0">And somewhere else in the country, in a ' +
+      'different ' + esc(RZ.COUNTRIES[UI.draft.countryId].terms.region) + ', somebody the same age as you is ' +
+      'starting today as a <strong>' + other.ico + ' ' + esc(other.name) + '</strong> — they climb ' +
+      esc(climbs) + ', which is the one thing you have just decided you cannot do. ' +
+      'You will hear the name within the month.</p>';
+  }
+
   function showBlitz(onDone, mode) {
     var S = UI.S;
     var api = RZ.engine.mkApi(S);
