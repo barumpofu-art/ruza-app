@@ -205,10 +205,15 @@
     var worst = null;
     BLOCS.forEach(function (b) {
       var x = S.blocs[b.id];
-      var d = b.reads(n, c) * span;
-      // Everybody drifts back towards indifference when nothing is happening.
-      var pull = (48 - x.mood) * 0.012 * span;
-      x.mood = C100(x.mood + d + pull);
+      // What the conditions alone would make them think of you. This is a
+      // ceiling and a floor, not a push: an unbounded monthly drift meant that
+      // in any country with unemployment over thirty the young sat at zero
+      // permanently and nothing the player did could hold them, which is not a
+      // trade, it is a tax. Bad conditions now make a bloc expensive to keep
+      // rather than impossible to have.
+      var target = clamp(48 + b.reads(n, c) * 9, 14, 84);
+      x.target = RZ.round(target, 1);
+      x.mood = C100(x.mood + (target - x.mood) * 0.05 * span);
       x.moved = 0;
       if (!worst || x.mood < worst.mood) worst = x;
     });
@@ -267,6 +272,8 @@
         return {
           id: b.id, name: b.name, ico: b.ico, note: b.note,
           size: Math.round(x.size), mood: Math.round(x.mood),
+          // Where the country's own numbers are pulling them, regardless of you.
+          target: Math.round(x.target === undefined ? 48 : x.target),
           turnout: b.turnout,
           mood_label: x.mood >= 68 ? 'with you' : x.mood >= 52 ? 'winnable' :
                       x.mood >= 36 ? 'drifting' : x.mood >= 22 ? 'lost to you' : 'hostile'
