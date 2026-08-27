@@ -17,7 +17,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FILES = [
   'core.js', 'data-countries.js', 'data-ladder.js', 'data-actions.js',
   'data-events.js', 'data-dialogue.js', 'people.js', 'elections.js',
-  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js'
+  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js'
 ];
 
 function loadGame() {
@@ -387,6 +387,202 @@ section('8. Constitutional engineering');
     } catch (e) { bad.push(`${am.id}: ${e.message}`); }
   });
   ok('every amendment in the table runs cleanly', bad.length === 0, bad.join('; '));
+}
+
+/* ================= 10. the campaign sprint ================= */
+section('10. The eight-week campaign sprint');
+{
+  // A candidate opens inside the sprint.
+  RZ.seed(101);
+  const c = RZ.COUNTRIES.ZA;
+  const S = RZ.engine.newGame({
+    countryId: 'ZA', seed: 101, name: 'Candidate', gender: 'f',
+    regionId: c.regions[0].id, bgId: RZ.BACKGROUNDS[0].id, partyId: c.parties[0].id,
+    startAs: 'candidate'
+  });
+  ok('a candidate starts in weekly tempo', S.tempo === 'week', S.tempo);
+  ok('with eight weeks on the clock', S.sprint && S.sprint.weeksLeft === 8, String(S.sprint && S.sprint.weeksLeft));
+  ok('and a seat already fought for', RZ.ladderFor('ZA')[S.player.rungIdx].tier >= 3,
+    'tier ' + RZ.ladderFor('ZA')[S.player.rungIdx].tier);
+  ok('two months before the ballot', S.date.month === RZ.engine.ELECTION_MONTH.ZA - 2,
+    `month ${S.date.month} vs ballot ${RZ.engine.ELECTION_MONTH.ZA}`);
+  ok('the constituency has wards', S.sprint.wards.length >= 5, String(S.sprint.wards.length));
+  ok('each ward has a name, a turnout and voters',
+    S.sprint.wards.every((w) => w.name && w.turnout > 0 && w.voters > 0));
+  ok('and fewer actions than a month gets', S.actionsPerTurn < 3, String(S.actionsPerTurn));
+
+  // An activist does not.
+  const act = RZ.engine.newGame({
+    countryId: 'ZA', seed: 102, name: 'Activist', gender: 'f',
+    regionId: c.regions[0].id, bgId: RZ.BACKGROUNDS[0].id, partyId: c.parties[0].id
+  });
+  ok('an activist starts monthly, at the bottom', act.tempo === 'month' && act.rungIdx !== 4 && !act.sprint);
+
+  // Blitzing moves the ward it is aimed at, and only that one.
+  const target = S.sprint.wards[0];
+  const other = S.sprint.wards[1];
+  const before = { t: target.support, o: other.support, money: S.player.money };
+  const api = RZ.engine.mkApi(S);
+  const r = RZ.sprint.blitz(S, target.id, api);
+  ok('a blitz moves the ward you chose', target.support > before.t,
+    `${Math.round(before.t)} -> ${Math.round(target.support)}`);
+  ok('and leaves the others alone', other.support === before.o);
+  ok('and costs money', S.player.money < before.money);
+  ok('and raises turnout there', r.ward.turnout > 0 && r.ward.visits === 1);
+
+  // Diminishing returns, so blitzing one ward eight times is not the answer.
+  const gains = [];
+  for (let i = 0; i < 4; i++) {
+    const a2 = RZ.engine.mkApi(S);
+    const g = RZ.sprint.blitz(S, target.id, a2);
+    gains.push(g.gain);
+    S.turn++;
+  }
+  ok('repeat visits pay less each time', gains[3] < gains[0], gains.map((g) => g.toFixed(1)).join(' → '));
+
+  // The clock runs down, and the ballot arrives.
+  const S2 = RZ.engine.newGame({
+    countryId: 'ZA', seed: 103, name: 'Candidate', gender: 'm',
+    regionId: c.regions[0].id, bgId: RZ.BACKGROUNDS[0].id, partyId: c.parties[0].id,
+    startAs: 'candidate'
+  });
+  const startMonth = S2.date.month;
+  let weeks = 0, elected = false;
+  for (let i = 0; i < 12 && !elected; i++) {
+    S2.actionsLeft = 0;
+    // Count the tempo the turn was taken AT, not the tempo it left behind: the
+    // last weekly turn is the one that ends the sprint.
+    const wasWeek = S2.tempo === 'week';
+    const o = RZ.engine.endTurn(S2);
+    if (wasWeek) weeks++;
+    if (o.election) elected = true;
+    if (S2.pendingEvent) S2.pendingEvent = null;
+  }
+  ok('the ballot arrives after eight weekly turns', weeks === 8, `${weeks} weeks`);
+  ok('and the election fires', elected);
+  ok('two calendar months passed, not eight', S2.date.month === startMonth + 2,
+    `${startMonth} -> ${S2.date.month}`);
+  ok('the sprint is over once the polls open', S2.tempo === 'month' && !S2.sprint);
+
+  // The ward result has to reach the count, or the whole thing was theatre.
+  const S3 = RZ.engine.newGame({
+    countryId: 'ZA', seed: 104, name: 'Candidate', gender: 'f',
+    regionId: c.regions[0].id, bgId: RZ.BACKGROUNDS[0].id, partyId: c.parties[0].id,
+    startAs: 'candidate'
+  });
+  S3.player.money = 5_000_000;
+  const homeBefore = S3.player.regionSupport[S3.player.regionId];
+  S3.sprint.wards.forEach((w) => { w.support = 88; });
+  const effortBefore = S3.campaign.effort || 0;
+  RZ.sprint.end(S3);
+  ok('a won campaign lifts home support', S3.player.regionSupport[S3.player.regionId] > homeBefore,
+    `${Math.round(homeBefore)} -> ${Math.round(S3.player.regionSupport[S3.player.regionId])}`);
+  ok('and feeds campaign effort into the count', S3.campaign.effort > effortBefore);
+
+  const S4 = RZ.engine.newGame({
+    countryId: 'ZA', seed: 105, name: 'Candidate', gender: 'f',
+    regionId: c.regions[0].id, bgId: RZ.BACKGROUNDS[0].id, partyId: c.parties[0].id,
+    startAs: 'candidate'
+  });
+  S4.sprint.wards.forEach((w) => { w.support = 12; });
+  const lostHome = S4.player.regionSupport[S4.player.regionId];
+  RZ.sprint.end(S4);
+  ok('a lost campaign drags it down', S4.player.regionSupport[S4.player.regionId] < lostHome,
+    `${Math.round(lostHome)} -> ${Math.round(S4.player.regionSupport[S4.player.regionId])}`);
+
+  // Every country has to open as a contest. Anchoring the wards to the party's
+  // nominal share handed Eswatini — where no party contests the ballot — a 99%
+  // opening poll and no campaign at all.
+  const openings = [];
+  RZ.COUNTRY_ORDER.forEach((cid) => {
+    const cc = RZ.COUNTRIES[cid];
+    const polls = [];
+    for (let i = 0; i < 25; i++) {
+      const T = RZ.engine.newGame({
+        countryId: cid, seed: i + 1, name: 'C', gender: 'f',
+        regionId: cc.regions[0].id, bgId: RZ.BACKGROUNDS[0].id, partyId: cc.parties[0].id,
+        startAs: 'candidate'
+      });
+      polls.push(RZ.sprint.tally(T).support);
+    }
+    polls.sort((a, b) => a - b);
+    openings.push({ cid, median: polls[12] });
+  });
+  const runaway = openings.filter((o) => o.median > 75 || o.median < 20);
+  ok('every country opens as a contest, not a coronation', runaway.length === 0,
+    runaway.map((o) => `${o.cid} ${o.median.toFixed(0)}%`).join(', '));
+
+  // Weekly actions exist and run.
+  const S5 = RZ.engine.newGame({
+    countryId: 'ZA', seed: 106, name: 'Candidate', gender: 'f',
+    regionId: c.regions[0].id, bgId: RZ.BACKGROUNDS[0].id, partyId: c.parties[0].id,
+    startAs: 'candidate'
+  });
+  S5.player.money = 5_000_000;
+  const deck = RZ.engine.availableActions(S5).map((a) => a.id);
+  ok('the tactical deck is on the desk', deck.includes('blitz') && deck.includes('transport') && deck.includes('agents'),
+    deck.slice(0, 6).join(', '));
+  const badWeek = [];
+  RZ.sprint.weekActions(S5).forEach((wa) => {
+    if (wa.special) return;
+    const T = RZ.engine.newGame({
+      countryId: 'ZA', seed: 107, name: 'C', gender: 'f',
+      regionId: c.regions[0].id, bgId: RZ.BACKGROUNDS[0].id, partyId: c.parties[0].id, startAs: 'candidate'
+    });
+    T.player.money = 5_000_000;
+    const a3 = RZ.engine.mkApi(T);
+    try {
+      const res = wa.run(a3);
+      if (!res || !res.title || !res.body) badWeek.push(`${wa.id}: no text`);
+    } catch (e) { badWeek.push(`${wa.id}: ${e.message}`); }
+  });
+  ok('every weekly action runs cleanly', badWeek.length === 0, badWeek.join('; '));
+
+  // Weekly events: every branch of every one.
+  const badEv = [];
+  RZ.sprint.WEEKLY.forEach((ev) => {
+    ev.choices.forEach((ch, i) => {
+      const T = RZ.engine.newGame({
+        countryId: 'ZA', seed: 108, name: 'C', gender: 'f',
+        regionId: c.regions[0].id, bgId: RZ.BACKGROUNDS[0].id, partyId: c.parties[0].id, startAs: 'candidate'
+      });
+      T.player.money = 5_000_000;
+      const a4 = RZ.engine.mkApi(T);
+      if (ch.when && !ch.when(a4)) return;
+      try {
+        const res = ch.run(a4);
+        if (!res || !res.title || !res.body) badEv.push(`${ev.id}[${i}]: no text`);
+      } catch (e) { badEv.push(`${ev.id}[${i}]: ${e.message}`); }
+    });
+    const T2 = RZ.engine.newGame({
+      countryId: 'ZA', seed: 109, name: 'C', gender: 'f',
+      regionId: c.regions[0].id, bgId: RZ.BACKGROUNDS[0].id, partyId: c.parties[0].id, startAs: 'candidate'
+    });
+    const a5 = RZ.engine.mkApi(T2);
+    const title = typeof ev.title === 'function' ? ev.title(a5) : ev.title;
+    const body = typeof ev.body === 'function' ? ev.body(a5) : ev.body;
+    if (/undefined|NaN|\[object/.test(String(title) + String(body))) badEv.push(`${ev.id}: bad interpolation`);
+  });
+  ok('every weekly event branch runs cleanly', badEv.length === 0, badEv.join('; '));
+
+  // The tempo must not distort the world: four weeks should land roughly where
+  // one month does, or the sprint quietly rewrites the economy.
+  function drift(tempo, turns) {
+    const T = RZ.engine.newGame({
+      countryId: 'ZA', seed: 110, name: 'C', gender: 'f',
+      regionId: c.regions[0].id, bgId: RZ.BACKGROUNDS[0].id, partyId: c.parties[0].id
+    });
+    T.tempo = tempo;
+    const h0 = T.player.health, g0 = T.nation.economy.growth;
+    for (let i = 0; i < turns; i++) { T.actionsLeft = 0; T.pendingEvent = null; RZ.engine.endTurn(T); T.pendingEvent = null; }
+    return { health: T.player.health - h0, growth: T.nation.economy.growth - g0, month: T.date.month };
+  }
+  const m = drift('month', 3), w = drift('week', 12);
+  ok('twelve weeks advance the calendar like three months', w.month === m.month, `${w.month} vs ${m.month}`);
+  ok('and move health by a comparable amount', Math.abs(w.health - m.health) < 6,
+    `${w.health.toFixed(1)} vs ${m.health.toFixed(1)}`);
+  ok('and the economy too', Math.abs(w.growth - m.growth) < 1.5,
+    `${w.growth.toFixed(2)} vs ${m.growth.toFixed(2)}`);
 }
 
 /* ================= 9. it all still saves ================= */

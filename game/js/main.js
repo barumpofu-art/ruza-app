@@ -64,7 +64,9 @@
     var name = (d.name || '').trim() || RZ.makeName(c);
     UI.S = RZ.engine.newGame({
       countryId: d.countryId, name: name, gender: d.gender || 'f',
-      regionId: d.regionId, bgId: d.bgId, partyId: d.partyId, age: 34
+      regionId: d.regionId, bgId: d.bgId, partyId: d.partyId,
+      age: d.startAs === 'candidate' ? 41 : 34,
+      startAs: d.startAs || 'activist'
     });
     UI.pane = 'desk';
     RZ.ui.renderGame();
@@ -110,6 +112,33 @@
 
     var out = RZ.engine.doAction(S, id);
     if (!out) return;
+
+    // Blitzing is the only action that needs a target before it can resolve.
+    if (out.special === 'blitz') {
+      RZ.ui.showBlitz(function (wardId) {
+        if (!wardId) return;
+        var api = RZ.engine.mkApi(S);
+        var r = RZ.sprint.blitz(S, wardId, api);
+        if (!r) return;
+        S.actionsLeft--;
+        S.actionsThisMonth = (S.actionsThisMonth || 0) + 1;
+        var entry = {
+          kind: r.ok ? 'good' : 'flat', src: r.ward.name,
+          title: r.ok ? 'A good week in ' + r.ward.name : 'A hard week in ' + r.ward.name,
+          body: (r.ok
+            ? 'Four days of doors, two taxi ranks and a hall you had to argue for. They know your name here now, ' +
+              'and more importantly they know your face.'
+            : 'Long days and thin crowds. You were argued with at the rank and had no good answer about the water. ' +
+              'It still moved, a little.') +
+            (r.broke ? ' You are spending money the campaign does not have, and it shows in what you could not print.' : ''),
+          deltas: api.deltas.slice(), tone: r.ok ? 'good' : 'flat'
+        };
+        RZ.engine.pushFeed(S, entry);
+        RZ.engine.save(S);
+        RZ.ui.showOutcome(entry, function () { RZ.ui.renderGame(); });
+      });
+      return;
+    }
     if (out.fail) {
       RZ.ui.toast(out.res ? out.res.title : 'Not possible', 'n');
       return;
@@ -190,6 +219,10 @@
         body: 'Delegates from every ' + c.terms.region + ' are arriving. Leadership positions are on the ballot this year, ' +
               'and everything decided here will hold for five years.', tone: 'good' });
       RZ.ui.toast('Conference year — leadership is contestable', 'p');
+    }
+
+    if (out.sprintStarted) {
+      RZ.ui.toast('Eight weeks to the ballot — turns are now weekly', 'p');
     }
 
     if (out.election) { runElectionFlow(); return; }

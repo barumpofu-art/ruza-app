@@ -363,6 +363,41 @@ body{
 .choice[disabled]{ opacity:.4; }
 .choice.is-on{ border-color:var(--gold); background:#221d13; }
 
+/* the campaign sprint */
+.hud-month.sprinting{ color:var(--gold); font-weight:800; }
+.sprint{
+  border:1px solid #54452a; border-radius:var(--radius); padding:14px;
+  background:linear-gradient(180deg,#241f14,#161c25); margin-bottom:14px;
+}
+.sprint-top{ display:flex; align-items:flex-start; gap:12px; }
+.sprint-k{ font-size:.62rem; letter-spacing:.15em; text-transform:uppercase; color:var(--gold); font-weight:700; }
+.sprint-h{ font-family:var(--serif); font-size:1.16rem; font-weight:600; margin-top:2px; }
+.sprint-poll{ margin-left:auto; text-align:right; font-size:1.5rem; font-weight:700; font-family:var(--mono); line-height:1; }
+.sprint-poll.up{ color:var(--green); }
+.sprint-poll.down{ color:var(--red); }
+.sprint-poll small{ display:block; font-family:var(--font); font-size:.62rem; letter-spacing:.12em;
+  text-transform:uppercase; font-weight:700; opacity:.8; margin-top:4px; }
+.sprint-bar{ display:block; height:7px; border-radius:4px; background:#1b2530; margin-top:11px; overflow:hidden; }
+.sprint-bar span{ display:block; height:100%; background:linear-gradient(90deg,var(--gold-deep),var(--gold)); }
+.wards{ display:flex; flex-direction:column; gap:8px; margin-top:12px; }
+.ward{
+  display:block; width:100%; text-align:left; padding:10px 11px; cursor:pointer;
+  border:1px solid var(--line-soft); border-left-width:3px; border-radius:var(--radius-sm); background:var(--panel);
+}
+.ward:active{ transform:scale(.995); }
+.ward.safe{ border-left-color:var(--green); }
+.ward.close{ border-left-color:var(--gold); }
+.ward.losing{ border-left-color:var(--red); }
+.ward-top{ display:flex; align-items:baseline; gap:8px; }
+.ward-n{ font-weight:650; font-size:.88rem; }
+.ward-p{ margin-left:auto; font-family:var(--mono); font-size:.82rem; color:var(--text-dim); }
+.ward-bar{ display:block; height:4px; border-radius:3px; background:#1b2530; margin:7px 0 6px; overflow:hidden; }
+.ward-bar span{ display:block; height:100%; background:var(--text-faint); }
+.ward.safe .ward-bar span{ background:var(--green); }
+.ward.close .ward-bar span{ background:var(--gold); }
+.ward.losing .ward-bar span{ background:var(--red); }
+.ward-d{ display:block; font-size:.72rem; color:var(--text-faint); line-height:1.45; }
+
 /* conversation */
 .talk-role{ font-size:.8rem; color:var(--text-dim); margin:-4px 0 14px; }
 .talk-org{ color:var(--text-faint); }

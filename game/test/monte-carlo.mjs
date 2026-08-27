@@ -22,7 +22,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FILES = [
   'core.js', 'data-countries.js', 'data-ladder.js', 'data-actions.js',
   'data-events.js', 'data-dialogue.js', 'people.js', 'elections.js',
-  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js'
+  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js'
 ];
 
 function loadGame() {
@@ -92,6 +92,19 @@ const DIRTY = new Set(['patron', 'tender', 'leak', 'oppo']);
 function chooseAction(RZ, S, acts, policy) {
   if (policy === 'random') return acts[Math.floor(RZ.rnd() * acts.length)];
 
+  // Eight weeks out, the seat is the only thing that matters. Blitz the ward
+  // you are losing, and keep the taxis booked.
+  if (S.tempo === 'week' && S.sprint) {
+    const blitz = acts.filter((a) => a.id === 'blitz');
+    const logistics = acts.filter((a) => a.id === 'transport' || a.id === 'agents');
+    if (S.player.health < 30) {
+      const sleep = acts.filter((a) => a.id === 'sleep');
+      if (sleep.length) return sleep[0];
+    }
+    if (logistics.length && RZ.rnd() < 0.25) return logistics[Math.floor(RZ.rnd() * logistics.length)];
+    if (blitz.length) return blitz[0];
+  }
+
   // Go home before the body makes the decision for you.
   if (S.player.health < 34) {
     const rest = acts.filter((a) => a.id === 'rest');
@@ -139,6 +152,7 @@ function playCareer(seed, { trace = false, policy = 'random' } = {}) {
     ending: null, sadcTurn: null, collapses: 0, shocks: 0,
     crossings: 0, purges: 0, amendmentsTried: 0, amendmentsPassed: 0,
     coalitionCollapses: 0, elections: 0, promisesMade: 0, promisesBroken: 0,
+    sprints: 0, blitzes: 0, weeklyTurns: 0, bestPoll: 0, swings: [],
     tendersGranted: 0, tendersRefused: 0, patronsAtEnd: 0,
     capital: 0, integrity: 0, money: 0, dirt: 0, health: 0, age: 0,
     log: []
@@ -167,6 +181,19 @@ function playCareer(seed, { trace = false, policy = 'random' } = {}) {
         const res = RZ.gov.attemptAmendment(api, am.id, Math.floor(RZ.rnd() * 40));
         r.amendmentsTried++;
         if (res.passed) { r.amendmentsPassed++; say(`amendment ${am.id} carried`); }
+        S.actionsLeft--; S.actionsThisMonth = (S.actionsThisMonth || 0) + 1;
+        continue;
+      }
+      // Blitzing needs a ward chosen before it resolves. A directed player
+      // goes where it is losing; a coin goes anywhere.
+      if (pick.id === 'blitz') {
+        const wards = (S.sprint && S.sprint.wards) || [];
+        if (!wards.length) { S.actionsLeft--; continue; }
+        const w = policy === 'directed'
+          ? wards.slice().sort((a, b) => a.support - b.support)[0]
+          : wards[Math.floor(RZ.rnd() * wards.length)];
+        RZ.sprint.blitz(S, w.id, RZ.engine.mkApi(S));
+        r.blitzes++;
         S.actionsLeft--; S.actionsThisMonth = (S.actionsThisMonth || 0) + 1;
         continue;
       }
@@ -202,6 +229,12 @@ function playCareer(seed, { trace = false, policy = 'random' } = {}) {
     catch (e) { throw new Error(`endTurn threw in ${cid} at turn ${S.turn}: ${e.message}`); }
     r.turns++;
 
+    if (S.tempo === 'week') r.weeklyTurns++;
+    if (turnOut.sprintStarted) { r.sprints++; say('the sprint began'); }
+    if (turnOut.sprintResult && turnOut.sprintResult.finalTally) {
+      r.bestPoll = Math.max(r.bestPoll, turnOut.sprintResult.finalTally.support);
+      if (typeof turnOut.sprintResult.swing === 'number') r.swings.push(turnOut.sprintResult.swing);
+    }
     if (turnOut.collapsed) { r.collapses++; say('medical collapse'); }
     if (turnOut.purge && turnOut.purge.purged) { r.purges++; say('purged from the slate'); }
 
@@ -371,6 +404,14 @@ console.log(`  black swan shock         ${fmt(pct((r) => r.shocks > 0))}% of car
 console.log(`  congress purge           ${fmt(pct((r) => r.purges > 0))}% of careers, ${fmt(mean((r) => r.purges), 2)} per career`);
 console.log(`  crossed the floor        ${fmt(pct((r) => r.crossings > 0))}%`);
 console.log(`  coalition collapses      ${fmt(mean((r) => r.coalitionCollapses), 2)} per career`);
+console.log(`  campaign sprints         ${fmt(mean((r) => r.sprints), 2)} per career, ${fmt(mean((r) => r.weeklyTurns), 1)} weekly turns`);
+console.log(`  ward blitzes             ${fmt(mean((r) => r.blitzes), 1)} per career`);
+console.log(`  campaign poll at close   ${fmt(quantile((r) => r.bestPoll, 0.5), 1)}% median, ${fmt(quantile((r) => r.bestPoll, 0.1), 1)}% p10, ${fmt(quantile((r) => r.bestPoll, 0.9), 1)}% p90`);
+{
+  const sw = results.flatMap((r) => r.swings).sort((a, b) => a - b);
+  console.log(`  swing over the 8 weeks   ${sw.length ? fmt(sw[Math.floor(sw.length / 2)], 1) + ' pts median, ' +
+    fmt(sw[0], 1) + ' worst, ' + fmt(sw[sw.length - 1], 1) + ' best' : 'none recorded'}`);
+}
 console.log(`  amendments  tried ${fmt(mean((r) => r.amendmentsTried), 2)}/career, carried ${
   sum((r) => r.amendmentsTried) ? fmt((100 * sum((r) => r.amendmentsPassed)) / sum((r) => r.amendmentsTried)) + '%' : 'n/a'}`);
 console.log(`  promises made ${fmt(mean((r) => r.promisesMade), 2)}, broken ${fmt(mean((r) => r.promisesBroken), 2)} per career`);
@@ -427,4 +468,6 @@ if (policy === 'directed' && pct((r) => r.collapses > 0) < 5) {
 }
 if (pct((r) => r.purges > 0) > 85) w('the congress purge hits nearly everybody');
 if (mean((r) => r.promisesMade) === 0) w('no promises were ever made — the ledger is unreachable');
+if (mean((r) => r.sprints) === 0) w('the campaign sprint never started — its trigger may be unreachable');
+if (mean((r) => r.sprints) > 0 && mean((r) => r.blitzes) === 0) w('the sprint runs but no ward was ever blitzed');
 }

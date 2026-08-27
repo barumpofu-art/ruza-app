@@ -21,7 +21,11 @@
 
     var S = {
       v: 1, seed: RZ.getSeed(), countryId: c.id,
-      date: { year: c.startYear, month: 2 }, turn: 0,
+      date: { year: c.startYear, month: 2, week: 1 }, turn: 0,
+      // One turn is a month, except in the last eight weeks before a ballot,
+      // when it is a week. `span` is the fraction of a month a turn covers, so
+      // every monthly rate below can be written once and scaled.
+      tempo: 'month', sprint: null,
       ladder: ladder.map(function (r) { return r.id; }),
       player: {
         name: cfg.name, gender: cfg.gender, age: cfg.age || 34,
@@ -35,11 +39,25 @@
         yearsInOffice: 0, electionsWon: 0, electionsLost: 0
       },
       parties: {}, nation: {}, campaign: { effort: 0, delegateSpend: 0, season: false },
+      startAs: cfg.startAs || 'activist',
       flags: {}, feed: [], pendingEvent: null, seenEvents: {},
       actionsLeft: 3, actionsPerTurn: 3, skipTurns: 0, actionsThisMonth: 0,
       buffs: [], capture: { patrons: [], granted: 0, refused: 0 },
       over: false, ending: null, legacyMarks: {}
     };
+
+    // A candidate has already done the climb; they start where it got them,
+    // with a nomination in hand and a ballot eight weeks out.
+    if (cfg.startAs === 'candidate') {
+      var mpIdx = 0;
+      ladder.forEach(function (r, i) { if (r.tier <= 4) mpIdx = i; });
+      S.player.rungIdx = Math.max(0, mpIdx - 1);
+      S.player.age = cfg.age || 41;
+      S.player.standing = { grassroots: 46, party: 34, leader: 18, media: 16, business: 14, security: 8, intl: 6 };
+      S.player.stats = { oratory: 48, charisma: 48, intellect: 46, cunning: 45, grit: 47, integrity: 52 };
+      S.player.fame = 18; S.player.capital = 10; S.player.health = 84;
+      S.player.record = [{ year: c.startYear - RZ.irange(6, 12), text: 'Elected to the branch, and then the region.' }];
+    }
 
     // apply background
     Object.keys(bg.stats || {}).forEach(function (k) { S.player.stats[k] = C100(S.player.stats[k] + bg.stats[k]); });
@@ -47,6 +65,9 @@
     S.player.money = Math.round(WAGE_BASE[c.id] * (bg.money || 1) * 2);
 
     c.regions.forEach(function (r) { S.player.regionSupport[r.id] = r.id === cfg.regionId ? 14 : 1; });
+    // Eleven years of branch meetings bought a name in the constituency. The
+    // campaign opens close, not hopeless — the eight weeks are the argument.
+    if (cfg.startAs === 'candidate') S.player.regionSupport[cfg.regionId] = 52;
 
     // parties
     c.parties.forEach(function (p) {
@@ -94,6 +115,21 @@
     S.lastElectionYear = c.startYear - 1;
     S.lastConferenceYear = c.startYear - 1;
 
+    // A candidate does not wait four years for the good part. Wind the clock
+    // to exactly eight weeks out and open on the sprint.
+    if (cfg.startAs === 'candidate') {
+      var em = ELECTION_MONTH[c.id];
+      S.nextElection = c.startYear + (em > 3 ? 0 : 1);
+      S.date.year = S.nextElection;
+      S.date.month = em - 2;
+      if (S.date.month < 1) { S.date.month += 12; S.date.year--; }
+      S.date.week = 1;
+      S.lastElectionYear = S.nextElection - 1;
+      S.player.officeSince = { year: S.date.year, month: S.date.month };
+      S.campaign.season = true;
+      S.flags.nominatedFor = ladder[S.player.rungIdx + 1] ? ladder[S.player.rungIdx + 1].id : null;
+    }
+
     // rivals & the people above you
     for (var i = 0; i < 4; i++) {
       var n = RZ.makeNpc(c, { partyId: cfg.partyId, power: Math.round(RZ.range(35, 75)) });
@@ -101,13 +137,27 @@
     }
     S.player.rivals[0].regionId = cfg.regionId;
 
-    pushFeed(S, {
-      kind: 'big', src: 'Your first entry in the register',
-      title: cfg.name + ' joins the ' + (c.partyById[cfg.partyId] ? c.partyById[cfg.partyId].name : 'movement'),
-      body: 'A ' + bg.name.toLowerCase() + ' from ' + c.regionById[cfg.regionId].name + ', signed up at a ' +
-            c.terms.branch + ' meeting on a Tuesday evening. Nobody present will remember it.',
-      tone: 'good'
-    });
+    if (cfg.startAs === 'candidate') {
+      pushFeed(S, {
+        kind: 'big', src: 'The nomination',
+        title: cfg.name + ' is the candidate for ' + c.regionById[cfg.regionId].name,
+        body: 'It took eleven years of branch meetings and one very long provincial general council to get your name ' +
+              'onto that list. The ballot is in eight weeks. Everything before this was the qualifying round.',
+        tone: 'good'
+      });
+      // Open directly on the sprint rather than making the player skip a month
+      // into it.
+      if (RZ.sprint) RZ.sprint.begin(S);
+      S.actionsPerTurn = 2; S.actionsLeft = 2;
+    } else {
+      pushFeed(S, {
+        kind: 'big', src: 'Your first entry in the register',
+        title: cfg.name + ' joins the ' + (c.partyById[cfg.partyId] ? c.partyById[cfg.partyId].name : 'movement'),
+        body: 'A ' + bg.name.toLowerCase() + ' from ' + c.regionById[cfg.regionId].name + ', signed up at a ' +
+              c.terms.branch + ' meeting on a Tuesday evening. Nobody present will remember it.',
+        tone: 'good'
+      });
+    }
 
     return S;
   }
@@ -421,6 +471,9 @@
       return true;
     });
     if (S.player.isPresident) list = list.concat(RZ.gov.presidentialActions(S));
+    // In the sprint the tactical deck comes first: a week is spent in a ward,
+    // not on a five-year plan.
+    if (S.tempo === 'week' && RZ.sprint) list = RZ.sprint.weekActions(S).concat(list);
     return list.map(function (act) {
       return {
         id: act.id, ico: act.ico,
@@ -433,8 +486,11 @@
 
   function doAction(S, id) {
     if (S.actionsLeft <= 0) return null;
-    var act = RZ.actionById[id] || RZ.gov.actionById(id);
+    var act = (S.tempo === 'week' && RZ.sprint && RZ.sprint.weekActionById(id)) ||
+              RZ.actionById[id] || RZ.gov.actionById(id);
     if (!act) return null;
+    // A ward blitz needs to know which ward; main.js asks, then calls back.
+    if (act.special) return { special: act.special, act: act };
 
     // Some of these are meetings, not dice rolls. If a conversation is waiting
     // on this topic, the player has to sit through it and answer for himself;
@@ -467,6 +523,11 @@
     var c = RZ.COUNTRIES[S.countryId];
     var P = S.player;
     var out = { events: [], election: null, conference: null, promo: null };
+    // What fraction of a month this turn covers. Everything below is written as
+    // a monthly rate and multiplied by it, so a weekly turn is a quarter of a
+    // month in every respect rather than a month that happens to be short.
+    var span = S.tempo === 'week' ? 0.25 : 1;
+    out.span = span;
 
     // ---- income & costs ----
     var lad = RZ.ladderFor(c.id);
@@ -476,8 +537,8 @@
     var bgIncome = rung.sal ? 0 : w * 1.3;         // the day job you still have
     // constituency office, funerals, school fees, and the relatives who now visit
     var costs = w * (0.85 + (rung.sal || 0) * 0.62 + P.fame / 110 + (rung.tier >= 4 ? 1.1 : 0.15));
-    P.money = Math.round(P.money + income + bgIncome - costs);
-    P.capital = Math.min(200, P.capital + (rung.cap || 0) * 0.25);
+    P.money = Math.round(P.money + (income + bgIncome - costs) * span);
+    P.capital = Math.min(200, P.capital + (rung.cap || 0) * 0.25 * span);
 
     // ---- health & decay ----
     // the body recovers between exertions when young, and stops doing so later
@@ -485,20 +546,20 @@
                : P.age < 58 ? RZ.range(0.1, 1.0)
                : P.age < 68 ? RZ.range(-0.5, 0.4)
                : RZ.range(-1.5, -0.2);
-    P.health = C100(P.health + hDrift);
+    P.health = C100(P.health + hDrift * span);
     // Standing is rented, not owned: the higher it is, the more it costs to hold.
     ['grassroots', 'media', 'leader', 'business', 'security', 'intl'].forEach(function (k) {
-      P.standing[k] = C100(P.standing[k] - (0.15 + P.standing[k] * 0.012) * RZ.range(0.7, 1.3));
+      P.standing[k] = C100(P.standing[k] - (0.15 + P.standing[k] * 0.012) * RZ.range(0.7, 1.3) * span);
     });
-    P.standing.party = C100(P.standing.party - (0.06 + P.standing.party * 0.005) * RZ.range(0.7, 1.3));
-    P.fame = C100(P.fame - (0.10 + P.fame * 0.007) * RZ.range(0.7, 1.3));
+    P.standing.party = C100(P.standing.party - (0.06 + P.standing.party * 0.005) * RZ.range(0.7, 1.3) * span);
+    P.fame = C100(P.fame - (0.10 + P.fame * 0.007) * RZ.range(0.7, 1.3) * span);
     Object.keys(P.regionSupport).forEach(function (k) {
-      P.regionSupport[k] = C100(P.regionSupport[k] - (0.08 + P.regionSupport[k] * 0.008) * RZ.range(0.7, 1.3));
+      P.regionSupport[k] = C100(P.regionSupport[k] - (0.08 + P.regionSupport[k] * 0.008) * RZ.range(0.7, 1.3) * span);
     });
 
     // ---- scandals fade (slowly, and more slowly where the press has a memory) ----
     if (P.dirt.length) {
-      var forget = 0.022 * (1 - c.inst.media / 260);
+      var forget = 0.022 * (1 - c.inst.media / 260) * span;
       P.dirt.forEach(function (d) { if (d.exposed && RZ.chance(forget)) d.severity -= 1; });
       var before = P.dirt.length;
       P.dirt = P.dirt.filter(function (d) { return d.severity > 0; });
@@ -510,21 +571,35 @@
     }
 
     // ---- economy tick ----
-    tickEconomy(S);
+    tickEconomy(S, span);
 
     // ---- rivals move ----
-    if (RZ.chance(0.25)) {
+    if (RZ.chance(0.25 * span)) {
       P.rivals.forEach(function (r) { r.power = clamp(r.power + RZ.range(-3, 4), 5, 100); });
     }
 
     // ---- calendar ----
-    S.date.month++;
-    if (S.date.month > 12) { S.date.month = 1; S.date.year++; P.age++; P.yearsInOffice++;
-      if (S.parties[P.partyId] && S.parties[P.partyId].gov) S.nation.yearsInPower++; }
+    if (S.tempo === 'week') {
+      // Four weeks to a month. The month only turns when the fourth one does,
+      // so every date-based rule downstream still sees an ordinary calendar.
+      S.date.week = (S.date.week || 1) + 1;
+      if (S.date.week > 4) { S.date.week = 1; advanceMonth(S); }
+      if (S.sprint) S.sprint.weeksLeft = Math.max(0, S.sprint.weeksLeft - 1);
+    } else {
+      S.date.week = 1;
+      advanceMonth(S);
+    }
     S.turn++;
 
     S.campaign.season = isCampaignSeason(S);
-    if (!S.campaign.season) { S.campaign.effort *= 0.9; S.campaign.delegateSpend *= 0.85; }
+    if (!S.campaign.season) { S.campaign.effort *= Math.pow(0.9, span); S.campaign.delegateSpend *= Math.pow(0.85, span); }
+
+    // ---- gear change ----
+    // Eight weeks out the game stops being a career and becomes a campaign.
+    if (RZ.sprint) {
+      if (S.tempo === 'month' && RZ.sprint.due(S)) { RZ.sprint.begin(S); out.sprintStarted = true; }
+      else if (S.tempo === 'week') { out.sprintWeek = RZ.sprint.tickWeek(S); }
+    }
 
     // ---- scheduled politics ----
     if (S.lastConferenceYear === undefined) S.lastConferenceYear = c.startYear - 1;
@@ -541,6 +616,9 @@
                   (S.date.year === S.nextElection && S.date.month >= ELECTION_MONTH[c.id]);
     if (elecDue && S.lastElectionYear < S.nextElection) {
       S.lastElectionYear = S.nextElection; out.election = true;
+      // The campaign is over the moment the polls open; fold the ward result
+      // back into the numbers the count actually reads.
+      if (S.tempo === 'week' && RZ.sprint) out.sprintResult = RZ.sprint.end(S);
     }
 
     // ---- the top post falls vacant every few years where it is appointed ----
@@ -562,7 +640,7 @@
     }
 
     // ---- event roll ----
-    if (!out.election && !out.conference && RZ.chance(0.62)) {
+    if (!out.election && !out.conference && RZ.chance(0.62 * span)) {
       var ev = rollEvent(S);
       if (ev) S.pendingEvent = ev;
     }
@@ -581,7 +659,11 @@
     if (out.election && RZ.crisis) out.purge = RZ.crisis.congressPurge(S);
 
     // ---- new turn ----
-    S.actionsPerTurn = Math.max(2, (rung.ap || 3) - (P.health < 40 ? 1 : 0));
+    var base = Math.max(2, (rung.ap || 3) - (P.health < 40 ? 1 : 0));
+    // A week is not a month. Two things a week is more agency than three a
+    // month, which is the point of the sprint — but it is paid for in money
+    // and health rather than granted free.
+    S.actionsPerTurn = S.tempo === 'week' ? Math.max(1, base - 1) : base;
     S.actionsLeft = S.actionsPerTurn;
     if (S.skipTurns > 0) { S.skipTurns--; S.actionsLeft = 0; }
     S.actionsThisMonth = 0;
@@ -590,26 +672,41 @@
     return out;
   }
 
-  function tickEconomy(S) {
+  function advanceMonth(S) {
+    var P = S.player;
+    S.date.month++;
+    if (S.date.month > 12) {
+      S.date.month = 1; S.date.year++; P.age++; P.yearsInOffice++;
+      if (S.parties[P.partyId] && S.parties[P.partyId].gov) S.nation.yearsInPower++;
+    }
+  }
+
+  // `span` is the fraction of a month elapsed: the mean-reversion weights and
+  // the drifts are both scaled by it, so four weekly ticks land in the same
+  // place a single monthly tick would.
+  function tickEconomy(S, span) {
     var c = RZ.COUNTRIES[S.countryId];
     var e = S.nation.economy, s = S.nation.society;
-    e.staplePrice = clamp(e.staplePrice + RZ.noise(4), 40, 190);
-    var shock = (e.staplePrice - 100) / 100;
-    e.growth = clamp(e.growth * 0.90 + (c.econ.growth + shock * 3.2) * 0.10 + RZ.noise(0.25), -8, 12);
-    e.inflation = Math.max(0.5, e.inflation * 0.92 + c.econ.inflation * 0.08 - shock * 0.8 + RZ.noise(0.7));
-    e.unemployment = clamp(e.unemployment - (e.growth - 2.5) * 0.06 + RZ.noise(0.15), 3, 60);
-    e.debt = clamp(e.debt + (S.nation.budget.debtsvc < 10 ? 0.25 : -0.05) - e.growth * 0.05 + RZ.noise(0.15), 5, 220);
-    e.reserves = clamp(e.reserves + shock * 0.06 - (e.inflation > 20 ? 0.05 : 0) + RZ.noise(0.05), 0.1, 20);
+    span = span === undefined ? 1 : span;
+    var pull = function (w) { return w * span; };
 
-    s.unrest = C100(s.unrest + (e.inflation > 15 ? 0.7 : -0.35) + (e.unemployment > 30 ? 0.4 : -0.2) +
-                    (S.nation.govApproval < 35 ? 0.5 : -0.3) + RZ.noise(0.5));
-    s.corruption = C100(s.corruption + RZ.noise(0.3) - (s.judiciary > 65 ? 0.12 : -0.06));
-    s.coup = C100(s.coup + (s.unrest > 60 ? 0.4 : -0.25) + (c.inst.security > 60 ? 0.12 : -0.1) + RZ.noise(0.2));
+    e.staplePrice = clamp(e.staplePrice + RZ.noise(4) * span, 40, 190);
+    var shock = (e.staplePrice - 100) / 100;
+    e.growth = clamp(e.growth + (((c.econ.growth + shock * 3.2) - e.growth) * pull(0.10)) + RZ.noise(0.25) * span, -8, 12);
+    e.inflation = Math.max(0.5, e.inflation + ((c.econ.inflation - e.inflation) * pull(0.08)) - shock * 0.8 * span + RZ.noise(0.7) * span);
+    e.unemployment = clamp(e.unemployment - (e.growth - 2.5) * 0.06 * span + RZ.noise(0.15) * span, 3, 60);
+    e.debt = clamp(e.debt + ((S.nation.budget.debtsvc < 10 ? 0.25 : -0.05) - e.growth * 0.05) * span + RZ.noise(0.15) * span, 5, 220);
+    e.reserves = clamp(e.reserves + (shock * 0.06 - (e.inflation > 20 ? 0.05 : 0)) * span + RZ.noise(0.05) * span, 0.1, 20);
+
+    s.unrest = C100(s.unrest + ((e.inflation > 15 ? 0.7 : -0.35) + (e.unemployment > 30 ? 0.4 : -0.2) +
+                    (S.nation.govApproval < 35 ? 0.5 : -0.3)) * span + RZ.noise(0.5) * span);
+    s.corruption = C100(s.corruption + RZ.noise(0.3) * span - (s.judiciary > 65 ? 0.12 : -0.06) * span);
+    s.coup = C100(s.coup + ((s.unrest > 60 ? 0.4 : -0.25) + (c.inst.security > 60 ? 0.12 : -0.1)) * span + RZ.noise(0.2) * span);
 
     var target = C100(52 + (e.growth - 2.5) * 3 - Math.max(0, e.inflation - 6) * 0.7 -
                       Math.max(0, e.unemployment - 20) * 0.35 - s.unrest * 0.15 - s.corruption * 0.12 +
                       (s.health + s.education + s.infra - 135) * 0.06);
-    S.nation.govApproval = clamp(S.nation.govApproval * 0.90 + target * 0.10, 3, 95);
+    S.nation.govApproval = clamp(S.nation.govApproval + (target - S.nation.govApproval) * pull(0.10), 3, 95);
   }
 
   function isCampaignSeason(S) {
@@ -649,6 +746,21 @@
   function resolveEvent(S, choiceIndex) {
     var ev = S.pendingEvent;
     if (!ev) return null;
+
+    // Campaign-week events live in sprint.js, built when the week turns.
+    if (ev.weekly) {
+      var wkRes = RZ.sprint.resolveWeekly(S, ev, choiceIndex);
+      S.pendingEvent = null;
+      var wkEntry = {
+        kind: wkRes.tone === 'good' ? 'good' : (wkRes.tone === 'bad' ? 'bad' : 'flat'),
+        src: 'Week ' + (S.sprint ? S.sprint.week : '') + ' of the campaign',
+        title: wkRes.title, body: wkRes.body,
+        deltas: wkRes.deltas || [], tone: wkRes.tone
+      };
+      pushFeed(S, wkEntry);
+      save(S);
+      return { res: wkRes, entry: wkEntry };
+    }
 
     // A patron's demand is built at the moment it is asked rather than defined
     // in the events table, so it resolves through crisis.js instead.

@@ -114,8 +114,23 @@
           '</button>';
       }).join('') + '</div></div>';
 
+    d.startAs = d.startAs || 'activist';
+    html += '<div><p class="field-label">Where you come in</p><div class="opt-grid" id="row-start">' +
+      [['activist', '🚩', 'Party activist',
+        'Start at the bottom in ' + c.regionById[d.regionId].name + ', unpaid and unknown. Twenty years, a month at a time.',
+        'The full climb · monthly turns'],
+       ['candidate', '🗳️', 'Parliamentary candidate',
+        'The branch years are behind you and your name is on the list. The ballot is in eight weeks.',
+        'Straight into the campaign · weekly turns']]
+      .map(function (o) {
+        return '<button class="opt' + (d.startAs === o[0] ? ' is-on' : '') + '" data-s="' + o[0] + '">' +
+          '<div class="opt-name">' + o[1] + ' ' + esc(o[2]) + '</div>' +
+          '<div class="opt-desc">' + esc(o[3]) + '</div>' +
+          '<div class="opt-stats">' + esc(o[4]) + '</div></button>';
+      }).join('') + '</div></div>';
+
     html += '<button class="btn btn-gold btn-lg btn-block" id="btn-begin">Begin the career</button>' +
-            '<p class="note center">You start as an unpaid activist in ' + esc(c.regionById[d.regionId].name) + '.</p>';
+            '<p class="note center"></p>';
 
     el('#create-body').innerHTML = html;
 
@@ -124,7 +139,21 @@
     bindChips('#row-region', 'r', 'regionId');
     bindChips('#row-party', 'p', 'partyId');
     bindChips('#row-bg', 'b', 'bgId');
+    bindChips('#row-start', 's', 'startAs');
+    refreshStartNote();
     el('#btn-begin').addEventListener('click', RZ.main.begin);
+  }
+
+  // The line under the Begin button has to answer both questions at once:
+  // where you are from, and which end of the career you are coming in at.
+  function refreshStartNote() {
+    var host = el('#create-body'); if (!host) return;
+    var note = host.querySelector('.note.center'); if (!note) return;
+    var c = RZ.COUNTRIES[UI.draft.countryId];
+    var region = c.regionById[UI.draft.regionId].name;
+    note.textContent = UI.draft.startAs === 'candidate'
+      ? 'You are the candidate for ' + region + ', eight weeks out.'
+      : 'You start as an unpaid activist in ' + region + '.';
   }
 
   function bindChips(sel, attr, key) {
@@ -134,11 +163,7 @@
         UI.draft[key] = b.dataset[attr];
         host.querySelectorAll('[data-' + attr + ']').forEach(function (x) { x.classList.remove('is-on'); });
         b.classList.add('is-on');
-        if (key === 'regionId') {
-          var note = el('#create-body').querySelector('.note.center');
-          if (note) note.textContent = 'You start as an unpaid activist in ' +
-            RZ.COUNTRIES[UI.draft.countryId].regionById[UI.draft.regionId].name + '.';
-        }
+        if (key === 'regionId' || key === 'startAs') refreshStartNote();
       });
     });
   }
@@ -153,7 +178,10 @@
         '<div class="hud-portrait">' + esc(initials) + '</div>' +
         '<div class="hud-id"><div class="hud-name">' + esc(P.name) + '</div>' +
         '<div class="hud-office">' + esc(rung.title) + (P.ministry ? ' · ' + esc(P.ministry) : '') + '</div></div>' +
-        '<div class="hud-date"><div class="hud-month">' + RZ.monthShort(S.date.month) + ' ' + S.date.year + '</div>' +
+        '<div class="hud-date">' +
+          (S.sprint
+            ? '<div class="hud-month sprinting">' + S.sprint.weeksLeft + ' week' + (S.sprint.weeksLeft === 1 ? '' : 's') + ' left</div>'
+            : '<div class="hud-month">' + RZ.monthShort(S.date.month) + ' ' + S.date.year + '</div>') +
         '<div class="hud-ap">' + S.actionsLeft + '/' + S.actionsPerTurn + ' actions</div></div>' +
       '</div>' +
       '<div class="hud-res">' +
@@ -172,7 +200,9 @@
     var S = UI.S, c = RZ.COUNTRIES[S.countryId];
     var h = '';
 
-    if (S.campaign.season) {
+    if (S.sprint) {
+      h += wardBoard(S, c);
+    } else if (S.campaign.season) {
       h += '<div class="card" style="border-color:#54452a;background:linear-gradient(180deg,#241f14,#161c25)">' +
         '<div class="block-h" style="margin:0 0 6px">Campaign season</div>' +
         '<p class="note">The general election is in ' + RZ.monthName(RZ.engine.ELECTION_MONTH[c.id]) + ' ' + S.nextElection +
@@ -192,15 +222,58 @@
         '</button>';
     }).join('') + '</div></div>';
 
+    var unit = S.tempo === 'week' ? 'week' : 'month';
     h += '<div class="block"><button class="btn ' + (S.actionsLeft <= 0 ? 'btn-gold' : 'btn-ghost') +
          ' btn-lg btn-block" data-act="end-turn">' +
-         (S.actionsLeft <= 0 ? 'Next month →' : 'Skip to next month →') + '</button></div>';
+         (S.actionsLeft <= 0 ? 'Next ' + unit + ' →' : 'Skip to next ' + unit + ' →') + '</button></div>';
 
     h += '<div class="block"><div class="block-h">The record</div>' +
       S.feed.slice(0, 22).map(paperCard).join('') + '</div>';
 
     el('#pane-desk').innerHTML = h;
+    el('#pane-desk').querySelectorAll('[data-ward]').forEach(function (b) {
+      b.addEventListener('click', function () { RZ.main.act('blitz'); });
+    });
     bindDesk();
+  }
+
+  // The seat, broken into the places it is actually made of. This is the whole
+  // reason the sprint exists: a number for the constituency tells you nothing
+  // about which afternoon to spend where.
+  function wardBoard(S, c) {
+    var sp = S.sprint;
+    var t = RZ.sprint.tally(S);
+    var wk = RZ.sprint.WEEKS - sp.weeksLeft + 1;
+    var lead = t.support >= 50;
+
+    var h = '<div class="sprint">' +
+      '<div class="sprint-top">' +
+        '<div><div class="sprint-k">Week ' + Math.min(wk, RZ.sprint.WEEKS) + ' of ' + RZ.sprint.WEEKS + '</div>' +
+        '<div class="sprint-h">' + esc(c.regionById[S.player.regionId].name) + '</div></div>' +
+        '<div class="sprint-poll ' + (lead ? 'up' : 'down') + '">' + RZ.round(t.support, 1) + '%' +
+        '<small>' + (lead ? 'ahead' : 'behind') + '</small></div>' +
+      '</div>' +
+      '<div class="sprint-bar"><span style="width:' + Math.max(2, Math.min(100, t.support)) + '%"></span></div>' +
+      '<p class="note" style="margin:8px 0 0">' + t.voters.toLocaleString() + ' likely voters across ' +
+        sp.wards.length + ' wards. A ward you do not visit is one somebody else is visiting.</p>' +
+      '<div class="wards">' + sp.wards.slice().sort(function (a, b) { return a.support - b.support; })
+        .map(function (w) { return wardRow(S, w); }).join('') + '</div>' +
+      '</div>';
+    return h;
+  }
+
+  function wardRow(S, w) {
+    var cls = w.support >= 55 ? 'safe' : w.support >= 45 ? 'close' : 'losing';
+    var cold = S.turn - w.lastVisit;
+    return '<button class="ward ' + cls + '" data-ward="' + esc(w.id) + '">' +
+      '<div class="ward-top"><span class="ward-n">' + esc(w.name) + '</span>' +
+        '<span class="ward-p">' + Math.round(w.support) + '%</span></div>' +
+      '<div class="ward-bar"><span style="width:' + Math.max(2, Math.min(100, w.support)) + '%"></span></div>' +
+      '<div class="ward-d">' + esc(w.kindName) + ' · ' + Math.round(w.turnout) + '% turnout · ' +
+        w.voters.toLocaleString() + ' voters' +
+        (w.visits ? ' · visited ' + w.visits + 'x' : '') +
+        (cold > 3 && w.visits ? ' · going cold' : '') + '</div>' +
+      '</button>';
   }
 
   function paperCard(e) {
@@ -504,6 +577,40 @@
     inner.querySelector('[data-close]').addEventListener('click', function () { closeModal(); if (onClose) onClose(); });
   }
 
+  /* ---------------- the ward blitz ---------------- */
+  // Which afternoon, in which place. The list is sorted worst-first, because
+  // the ward you are losing is the one worth the argument.
+  function showBlitz(onDone) {
+    var S = UI.S;
+    var api = RZ.engine.mkApi(S);
+    var wards = S.sprint.wards.slice().sort(function (a, b) { return a.support - b.support; });
+    var cost = api.wage(1.2 + api.tier() * 0.35);
+
+    var h = '<div class="modal-kicker">Week ' + S.sprint.week + ' of ' + RZ.sprint.WEEKS + '</div>' +
+      '<h2 class="modal-h">Where are you spending the week?</h2>' +
+      '<p class="modal-b">Doors, taxi ranks, a hall if you can get one. About ' +
+        esc(RZ.money(cost, RZ.COUNTRIES[S.countryId].cur.sym)) + ' a ward, and you cannot be in two places at once.</p>' +
+      '<div class="choices">' + wards.map(function (w) {
+        var cold = S.turn - w.lastVisit;
+        return '<button class="choice" data-w="' + esc(w.id) + '">' +
+          '<div class="choice-t">' + esc(w.name) + ' <span style="float:right;opacity:.8">' + Math.round(w.support) + '%</span></div>' +
+          '<div class="choice-d">' + esc(w.note) + '</div>' +
+          '<div class="choice-d" style="opacity:.75;margin-top:4px">' +
+            Math.round(w.turnout) + '% turnout · ' + w.voters.toLocaleString() + ' voters' +
+            (w.visits ? ' · you have been ' + w.visits + ' time' + (w.visits === 1 ? '' : 's') : ' · never visited') +
+            (w.visits && cold <= 2 ? ' · still warm, less to gain' : '') + '</div>' +
+          (w.swing >= 1.25 ? '<span class="choice-tag">swings hard</span>' : '') +
+          '</button>';
+      }).join('') + '</div>' +
+      '<button class="btn btn-ghost btn-block" style="margin-top:10px" data-cancel>Not this week</button>';
+
+    var inner = modal(h);
+    inner.querySelectorAll('[data-w]').forEach(function (b) {
+      b.addEventListener('click', function () { closeModal(); onDone(b.dataset.w); });
+    });
+    inner.querySelector('[data-cancel]').addEventListener('click', function () { closeModal(); onDone(null); });
+  }
+
   /* ---------------- constitutional amendment ---------------- */
   // The arithmetic is shown before the decision, because a president who tries
   // this and misses should have been able to count first.
@@ -784,7 +891,7 @@
     UI: UI, show: show, toast: toast, modal: modal, closeModal: closeModal,
     renderCountries: renderCountries, renderCreate: renderCreate, renderGame: renderGame, renderHud: renderHud,
     showEvent: showEvent, showOutcome: showOutcome, showDialogue: showDialogue, showElection: showElection,
-    showAmend: showAmend,
+    showAmend: showAmend, showBlitz: showBlitz,
     showRigOffer: showRigOffer, showBudget: showBudget, showEnd: showEnd, showAbout: showAbout,
     paperCard: paperCard
   };
