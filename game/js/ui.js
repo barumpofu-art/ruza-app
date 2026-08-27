@@ -492,6 +492,8 @@
         sbox('Reserves', RZ.round(n.economy.reserves, 1), 'months of imports') +
       '</div></div>';
 
+    h += blocBoard(S);
+
     h += '<div class="block"><div class="block-h">Condition of the state</div><div class="card"><div class="bars">' +
       plainBar('Health system', n.society.health, 'g') +
       plainBar('Schools', n.society.education, 'g') +
@@ -528,6 +530,35 @@
 
     el('#pane-country').innerHTML = h;
   }
+  // Six electorates rather than one bar. The size is how many of them there
+  // are; the mood is what they currently think; and the swing at the top is
+  // what the two of those together are worth on the day.
+  function blocBoard(S) {
+    if (!RZ.blocs) return '';
+    var sm = RZ.blocs.summary(S);
+    var cls = sm.swing >= 2 ? 'good' : sm.swing <= -2 ? 'bad' : 'mid';
+    return '<div class="block"><div class="block-h">The electorate' +
+      '<span class="sub">' + (sm.swing >= 0 ? '+' : '') + sm.swing + ' pts on the ballot</span></div>' +
+      '<div class="card">' +
+      '<p class="note" style="margin:0 0 12px">There is no such thing as the grassroots. There are six of these ' +
+      'and they want different things, and every one of them votes.</p>' +
+      '<div class="rows">' + sm.rows.map(function (r) {
+        var mc = r.mood >= 62 ? 'good' : r.mood >= 42 ? 'mid' : 'bad';
+        return '<div class="bloc-row">' +
+          '<div class="bloc-row-t"><span class="bloc-row-n">' + r.ico + ' ' + esc(r.name) + '</span>' +
+            '<span class="bloc-row-s">' + r.size + '%</span></div>' +
+          '<div class="bloc-bar"><span class="' + (mc === 'good' ? 'yes' : mc === 'bad' ? 'no' : '') +
+            '" style="width:' + Math.max(2, r.mood) + '%"></span></div>' +
+          '<div class="bloc-row-d">' + esc(r.mood_label) + ' · ' + esc(r.note) +
+            (r.turnout >= 1.2 ? ' <span class="gold">They turn out.</span>' :
+             r.turnout <= 0.8 ? ' <span class="dim">Half of them will not vote.</span>' : '') +
+          '</div></div>';
+      }).join('') + '</div>' +
+      '<p class="note" style="margin:12px 0 0">Weighted for who actually goes to the polling station: ' +
+      '<strong class="' + cls + '">' + sm.weighted + '</strong> out of a hundred.</p>' +
+      '</div></div>';
+  }
+
   function sbox(k, v, n) {
     return '<div class="sbox"><div class="sbox-k">' + esc(k) + '</div><div class="sbox-v">' + esc(v) + '</div><div class="sbox-n">' + esc(n) + '</div></div>';
   }
@@ -939,6 +970,7 @@
           '<div class="choice-t">' + esc(b.name) + '</div>' +
           '<div class="choice-d">' + esc(b.blurb) + '</div>' +
           '<div class="choice-d" style="opacity:.75;margin-top:4px">' + esc(leanLine(b)) + '</div>' +
+          blocLine(b) +
           '</button>';
       }).join('') + '</div>' +
       '<button class="btn btn-ghost btn-block" style="margin-top:10px" data-cancel>Not this session</button>';
@@ -947,6 +979,17 @@
       btn.addEventListener('click', function () { closeModal(); onDone(btn.dataset.b); });
     });
     inner.querySelector('[data-cancel]').addEventListener('click', function () { closeModal(); onDone(null); });
+  }
+
+  // Who is out in the country, as opposed to who is in the House. A bill can
+  // be easy to pass and expensive to have passed.
+  function blocLine(bill) {
+    if (!RZ.blocs || (!bill.wins && !bill.costs)) return '';
+    var nm = function (id) { var b = RZ.blocs.byId[id]; return b ? b.ico + ' ' + b.name.toLowerCase() : id; };
+    var parts = [];
+    if (bill.wins && bill.wins.length) parts.push('Wins ' + bill.wins.map(nm).join(' and '));
+    if (bill.costs && bill.costs.length) parts.push('loses ' + bill.costs.map(nm).join(' and '));
+    return '<div class="choice-d" style="margin-top:4px;color:#c9a86a">' + esc(parts.join(', ')) + '.</div>';
   }
 
   // Who is going to hate it, said in one line, before it is too late to choose

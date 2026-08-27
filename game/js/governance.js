@@ -139,6 +139,17 @@
     S.player.standing.intl = C100(S.player.standing.intl + (b.debtsvc - 14) * 0.4);
     S.player.standing.security = C100(S.player.standing.security + (b.security - 13) * 0.7);
     S.player.standing.grassroots = C100(S.player.standing.grassroots + (b.social - 12) * 0.5 + (b.health - 12) * 0.3);
+    // Nobody reads a budget. Everybody reads the line that is about them.
+    if (RZ.blocs) {
+      RZ.blocs.move(S, null, {
+        rural:   (b.infra - 14) * 0.55 + (b.social - 12) * 0.45 - (b.admin - 18) * 0.15,
+        youth:   (b.education - 17) * 0.70 + (b.social - 12) * 0.40 - (b.debtsvc - 14) * 0.25,
+        labour:  (b.admin - 18) * 0.75 + (b.health - 12) * 0.35 - (b.debtsvc - 14) * 0.30,
+        traders: -(b.admin - 18) * 0.40 - (b.security - 13) * 0.35 + (b.infra - 14) * 0.30,
+        chiefs:  (b.social - 12) * 0.30 + (b.security - 13) * 0.25 - (b.education - 17) * 0.15,
+        middle:  (b.debtsvc - 14) * 0.60 + (b.health - 12) * 0.30 - (b.admin - 18) * 0.45
+      });
+    }
   }
 
   /* ================= constitutional engineering ================= */

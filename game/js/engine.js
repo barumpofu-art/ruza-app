@@ -25,7 +25,7 @@
       // One turn is a month, except in the last eight weeks before a ballot,
       // when it is a week. `span` is the fraction of a month a turn covers, so
       // every monthly rate below can be written once and scaled.
-      tempo: 'month', sprint: null, bill: null, contender: null,
+      tempo: 'month', sprint: null, bill: null, contender: null, blocs: null,
       ladder: ladder.map(function (r) { return r.id; }),
       player: {
         name: cfg.name, gender: cfg.gender, age: cfg.age || 34,
@@ -157,6 +157,10 @@
       Object.keys(S.player.stats).forEach(function (k) { S.player.stats[k] = C100(S.player.stats[k]); });
     }
 
+    // Six electorates rather than one, sized off this country's own numbers
+    // and tilted by the room the origin scene put you in.
+    if (RZ.blocs) RZ.blocs.init(S);
+
     // Somebody else started this year too, with the opposite talent. Made
     // after the origin scene, because which one you get is decided by what
     // the answers in it made you.
@@ -259,7 +263,22 @@
         return amt;
       },
 
+      // A rally is a rally: it moves everybody a little, in proportion to how
+      // many of them there are. Naming winners and losers is what api.blocs()
+      // is for, and that one comes back through addRaw so the net is counted
+      // exactly once.
       add: function (key, amt) {
+        var out = api.addRaw(key, amt);
+        if (key === 'grassroots' && RZ.blocs && amt) RZ.blocs.drift(S, api.traitScale(key, amt) * 0.34);
+        return out;
+      },
+
+      // Name who gains and who loses, and let the size of each of them decide
+      // what it was worth overall.
+      blocs: function (deltas) { return RZ.blocs ? RZ.blocs.move(S, api, deltas) : null; },
+      blocMood: function (id) { var b = RZ.blocs && RZ.blocs.get(S, id); return b ? b.mood : 50; },
+
+      addRaw: function (key, amt) {
         amt = api.traitScale(key, amt);
         if (!amt) return;
         if (key.indexOf('stats.') === 0) {
@@ -749,6 +768,9 @@
     if (RZ.revolt) out.nemesis = RZ.revolt.nemesisTurn(S);
     // The other one moves whether or not you did anything this month.
     if (RZ.contender) RZ.contender.tick(S, span, out);
+    // The electorate reads the same newspaper you do, and six different parts
+    // of it draw six different conclusions from it.
+    if (RZ.blocs) out.blocs = RZ.blocs.tick(S, span, out);
     // The ward keeps its own opinion of you, and the sites keep building or
     // stop, whether or not you spent an action on them this month.
     if (RZ.ward && mkApi(S).tier() >= 4) RZ.ward.tick(S, span, out);

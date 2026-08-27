@@ -25,11 +25,13 @@
       id: 'mines', name: 'The Mineral Resources Bill',
       blurb: 'A state shareholding in every new mining licence, and a beneficiation requirement.',
       lean: { loyal: 25, faction: -10, opp: -45, small: 0 },
+      wins: ['labour', 'youth'], costs: ['middle', 'traders'],
       pass: function (a) {
         a.nation('growth', -RZ.range(0.3, 1.2));
         a.nation('debt', -RZ.range(2, 6));
         a.add('grassroots', RZ.range(8, 16)); a.add('business', -RZ.range(10, 20));
         a.add('intl', -RZ.range(4, 12)); a.add('fame', RZ.range(4, 9));
+        a.blocs({ labour: RZ.range(8, 15), youth: RZ.range(4, 10), middle: -RZ.range(3, 9), traders: -RZ.range(2, 7) });
         a.legacyMark('nationalised');
         return 'The state now sits on the board of every new licence. The rand went first and the ' +
                'editorials followed it, and in the mining towns they played music in the street.';
@@ -39,12 +41,14 @@
       id: 'tax', name: 'The Corporate Tax Amendment Bill',
       blurb: 'Cut the headline rate by eight points and widen the investment allowance.',
       lean: { loyal: -15, faction: 20, opp: 30, small: -10 },
+      wins: ['middle', 'traders'], costs: ['labour', 'youth'],
       pass: function (a) {
         a.nation('growth', RZ.range(0.4, 1.4));
         a.nation('debt', RZ.range(2, 6));
         a.add('business', RZ.range(10, 20)); a.add('intl', RZ.range(4, 10));
         a.add('grassroots', -RZ.range(5, 12));
         a.add('money', a.wage(RZ.range(2, 8)));
+        a.blocs({ middle: RZ.range(6, 12), traders: RZ.range(3, 8), labour: -RZ.range(8, 16), youth: -RZ.range(4, 10) });
         return 'Three announcements within a month and a great many photographs on building sites. ' +
                'The revenue hole is somebody else’s problem in about four years.';
       }
@@ -53,12 +57,14 @@
       id: 'education', name: 'The Free Secondary Education Bill',
       blurb: 'Abolish fees to the end of secondary, funded from the consolidated fund.',
       lean: { loyal: 30, faction: 5, opp: -10, small: 20 },
+      wins: ['youth', 'rural'], costs: ['chiefs'],
       pass: function (a) {
         a.nation('education', RZ.range(6, 14));
         a.nation('debt', RZ.range(3, 8));
         a.add('grassroots', RZ.range(10, 20)); a.add('media', RZ.range(4, 10));
         a.add('fame', RZ.range(4, 10));
         a.wardTrust(RZ.range(5, 12));
+        a.blocs({ youth: RZ.range(12, 22), rural: RZ.range(8, 15), middle: RZ.range(2, 7), chiefs: -RZ.range(2, 8) });
         a.legacyMark('freeEducation');
         return 'Every child to Form Five without a fee. It will be in the first line of the obituary ' +
                'and it will be unaffordable within a decade, and both of those things are true at once.';
@@ -68,10 +74,12 @@
       id: 'land', name: 'The Land Redistribution Bill',
       blurb: 'Expropriation with compensation determined by a tribunal rather than the market.',
       lean: { loyal: 20, faction: -20, opp: -50, small: 15 },
+      wins: ['rural', 'youth'], costs: ['chiefs', 'middle'],
       pass: function (a) {
         a.add('grassroots', RZ.range(12, 22)); a.add('business', -RZ.range(12, 24));
         a.add('intl', -RZ.range(8, 18)); a.nation('growth', -RZ.range(0.5, 1.8));
         a.nation('unrest', -RZ.range(2, 8));
+        a.blocs({ rural: RZ.range(14, 24), youth: RZ.range(6, 13), chiefs: -RZ.range(10, 20), middle: -RZ.range(6, 14) });
         a.legacyMark('landReform');
         return 'The tribunal sat for the first time in October. Two farms in the first year, and a ' +
                'queue of eleven thousand claims behind them.';
@@ -81,10 +89,12 @@
       id: 'wages', name: 'The Public Service Remuneration Bill',
       blurb: 'A three-year above-inflation settlement, written into statute.',
       lean: { loyal: 20, faction: 10, opp: -20, small: 10 },
+      wins: ['labour'], costs: ['traders', 'rural'],
       pass: function (a) {
         a.nation('debt', RZ.range(4, 10)); a.nation('inflation', RZ.range(0.5, 2));
         a.add('grassroots', RZ.range(8, 16)); a.add('party', RZ.range(4, 10));
         a.add('intl', -RZ.range(3, 9));
+        a.blocs({ labour: RZ.range(14, 24), middle: RZ.range(2, 6), traders: -RZ.range(5, 12), rural: -RZ.range(3, 9) });
         return 'Signed at a ceremony with the federations present. Treasury did not send anybody, ' +
                'which everybody in the room understood perfectly.';
       }
@@ -93,12 +103,14 @@
       id: 'anticorr', name: 'The Public Integrity Commission Bill',
       blurb: 'A commission with its own prosecutors, its own budget, and no minister above it.',
       lean: { loyal: -25, faction: -30, opp: 40, small: 5 },
+      wins: ['middle', 'youth'], costs: ['chiefs'],
       pass: function (a) {
         a.nation('corruption', -RZ.range(6, 14));
         a.nation('judiciary', RZ.range(4, 10));
         a.add('intl', RZ.range(6, 14)); a.add('media', RZ.range(6, 14));
         a.add('party', -RZ.range(8, 18)); a.makeRival();
         a.add('stats.integrity', RZ.range(3, 7));
+        a.blocs({ middle: RZ.range(10, 18), youth: RZ.range(6, 12), traders: RZ.range(3, 9), chiefs: -RZ.range(4, 11) });
         a.legacyMark('builtTheCommission');
         return 'It made its first arrest in March and the second one was a member of your own caucus. ' +
                'You built the thing that will one day come for the people who made you.';

@@ -22,7 +22,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FILES = [
   'core.js', 'data-countries.js', 'data-ladder.js', 'data-actions.js',
   'data-events.js', 'data-dialogue.js', 'data-origins.js', 'people.js', 'elections.js',
-  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js', 'constituency.js', 'statecraft.js', 'legislation.js', 'contender.js'
+  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js', 'constituency.js', 'statecraft.js', 'legislation.js', 'contender.js', 'blocs.js'
 ];
 
 function loadGame() {
@@ -232,6 +232,7 @@ function playCareer(seed, { trace = false, policy = 'random' } = {}) {
     sprints: 0, blitzes: 0, weeklyTurns: 0, bestPoll: 0, swings: [],
     billsTabled: 0, billsPassed: 0, billsLost: 0, billsLapsed: 0,
     contenderRung: 0, contenderGap: 0, contenderThrone: 0, contenderAllied: 0,
+    blocSwing: 0, blocSpread: 0, blocWorst: 0, blocBest: 0, deputations: 0,
     contenderFiles: 0, readings: 0,
     blocsWorked: 0, blocsPledged: 0, concessions: 0,
     revolts: 0, revoltsWon: 0, exiled: 0, apologies: 0, blackmails: 0,
@@ -380,6 +381,7 @@ function playCareer(seed, { trace = false, policy = 'random' } = {}) {
     }
     if (turnOut.billLapsed) { r.billsLapsed++; say('a bill fell with the House'); }
     if (turnOut.contenderAscended) { r.contenderThrone = 1; say('the other one took the top'); }
+    if (turnOut.blocAngry) { r.deputations++; say(turnOut.blocAngry + ' sent a deputation'); }
     if (turnOut.sprintResult && turnOut.sprintResult.finalTally) {
       r.bestPoll = Math.max(r.bestPoll, turnOut.sprintResult.finalTally.support);
       if (typeof turnOut.sprintResult.swing === 'number') r.swings.push(turnOut.sprintResult.swing);
@@ -445,6 +447,15 @@ function playCareer(seed, { trace = false, policy = 'random' } = {}) {
   r.tendersRefused = S.capture ? S.capture.refused : 0;
   r.patronsAtEnd = S.capture ? S.capture.patrons.filter((x) => x.owed > 0.5).length : 0;
   r.capital = Math.round(P.capital);
+  if (S.blocs && RZ.blocs) {
+    const moods = RZ.blocs.BLOCS.map((b) => S.blocs[b.id].mood);
+    r.blocSwing = RZ.blocs.swing(S);
+    r.blocWorst = Math.min(...moods);
+    r.blocBest = Math.max(...moods);
+    // How split the country is about you. A player who has pleased everybody
+    // equally has not made a single decision.
+    r.blocSpread = r.blocBest - r.blocWorst;
+  }
   if (S.contender) {
     r.contenderRung = S.contender.rungIdx;
     r.contenderGap = S.contender.rungIdx - P.rungIdx;
@@ -620,6 +631,10 @@ if (sum((r) => r.billsTabled)) {
     worked ? fmt((100 * sum((r) => r.blocsPledged)) / worked) + '% of them pledged' : 'none pledged'}, ${
     fmt(mean((r) => r.concessions), 2)} clauses dropped`);
 }
+console.log(`  the electorate           swing ${fmt(mean((r) => r.blocSwing), 1)} pts, best bloc ${
+  fmt(mean((r) => r.blocBest))} / worst ${fmt(mean((r) => r.blocWorst))}, spread ${fmt(mean((r) => r.blocSpread))}`);
+console.log(`  deputations              ${fmt(mean((r) => r.deputations), 2)} per career, ${
+  fmt(pct((r) => r.deputations > 0))}% of careers had one`);
 console.log(`  the other one            ends on rung ${fmt(mean((r) => r.contenderRung), 1)}, ${
   fmt(mean((r) => r.contenderGap), 1)} rungs from you; ahead of you in ${fmt(pct((r) => r.contenderGap > 0))}% of careers`);
 console.log(`  they reached the top     ${fmt(pct((r) => r.contenderThrone))}% of careers${
@@ -685,6 +700,12 @@ if (mean((r) => r.sprints) > 0 && mean((r) => r.blitzes) === 0) w('the sprint ru
   if (policy === 'directed' && throne < 1 && gap < -4) {
     w('a directed player leaves the contender far behind — the race never happens');
   }
+}
+{
+  // If nothing ever splits the electorate, the blocs are decoration.
+  if (mean((r) => r.blocSpread) < 8) w('the blocs never diverge — policy is not a trade');
+  if (mean((r) => r.blocSpread) > 75) w('the blocs diverge wildly — one decision writes off half the country');
+  if (mean((r) => r.deputations) === 0) w('no bloc ever sent a deputation — the trigger may be unreachable');
 }
 if (policy === 'directed' && mean((r) => r.billsTabled) === 0) {
   w('no bill was ever tabled — the order paper may be unreachable');

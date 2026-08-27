@@ -284,6 +284,9 @@
     var mine = (P.regionSupport[P.regionId] || 0) * 1.15 + P.standing.grassroots * 0.65 +
                P.standing.party * 0.45 + P.fame * 0.25 + P.stats.charisma * 0.16 +
                (S.campaign.delegateSpend || 0) * 0.6 + RZ.noise(10);
+    // Delegates are drawn from the same six electorates, and a bloc that has
+    // decided against you does not send people to fill a hall for you either.
+    if (RZ.blocs) mine += RZ.blocs.swing(S) * 0.8;
     var theirs = difficulty + RZ.noise(10);
     return { won: mine > theirs, mine: mine, theirs: theirs, margin: mine - theirs };
   }
@@ -298,6 +301,9 @@
     // and how good that seat is depends on how much of the machine they control.
     var skew = 0.10 + Math.min(0.55, (P.standing.party + (P.regionSupport[r.id] || 0)) / 340);
     var mine = shares[P.partyId] * (1 + (P.standing.grassroots + (P.regionSupport[r.id] || 0)) / 300) * (1 + skew);
+    // "Grassroots" is an average of six electorates who want different things.
+    // On the day, what counts is who among them actually goes and votes.
+    if (RZ.blocs) mine += RZ.blocs.swing(S);
     var best = 0, bestId = null;
     Object.keys(shares).forEach(function (k) {
       if (k === P.partyId) return;

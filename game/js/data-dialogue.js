@@ -2212,6 +2212,120 @@
           ]
         }
       ]
+    },
+
+    /* ==================== A BLOC THAT HAS HAD ENOUGH ==================== */
+    // Summoned when one of the six has decided you are not on their side. Who
+    // walks through the door depends entirely on which one it is, and every
+    // answer is somebody else's loss.
+    {
+      id: 'bloc-deputation', topic: 'crisis', weight: 0,
+      speaker: function (a) {
+        var id = a.S.flags.blocAngryWho || 'rural';
+        var who_ = {
+          rural: ['chairperson', 'the smallholders’ association'],
+          youth: ['convenor', 'a movement with no office and forty thousand members'],
+          labour: ['shop steward', 'the joint federations'],
+          traders: ['chairlady', 'the market committee'],
+          chiefs: ['senior councillor', 'the council of chiefs'],
+          middle: ['chair', 'the ratepayers’ association']
+        }[id] || ['chairperson', 'a delegation'];
+        return who(a, who_[0], who_[1]);
+      },
+      where: 'Your constituency office, and they did not telephone first',
+      settleOn: 'grassroots',
+      opening: function (a) {
+        var id = a.S.flags.blocAngryWho || 'rural';
+        var b = RZ.blocs.byId[id];
+        var pct = Math.round((RZ.blocs.get(a.S, id) || {}).size || 0);
+        return 'They have come in a hired minibus and they have brought a list. "' +
+          {
+            rural: 'The inputs did not arrive and the road is a river again and we have stopped waiting.',
+            youth: 'Half the people in this room have never had a job. Not a bad job. Any job.',
+            labour: 'Our members have taken a real-terms cut for four years and been thanked for it four times.',
+            traders: 'The by-law officers came again on Tuesday and took the stock, and we know who they work for.',
+            chiefs: 'You have not been to the chiefdom since the campaign. We noticed. Everybody noticed.',
+            middle: 'The rates went up, the lights go off, and the schools our children go to are ours to pay for twice.'
+          }[id] + '" ' + pct + ' per cent of this ' + a.t.constituency + ' is ' + b.name.toLowerCase() +
+          ', and none of that ' + pct + ' per cent is currently yours.';
+      },
+      beats: [
+        {
+          q: function (a) {
+            var id = a.S.flags.blocAngryWho || 'rural';
+            return '"So say it plainly, in front of everybody, and we will write it down. Are you ours, or are ' +
+              'you theirs? Because you cannot be both and you have been trying to be both since ' +
+              (a.S.date.year - 1) + '."';
+          },
+          answers: [
+            { t: 'Yours. Say what you need and I will go and fight for it', mood: 3, tag: 'promise',
+              run: function (a) {
+                var id = a.S.flags.blocAngryWho || 'rural';
+                var d = {}; d[id] = RZ.range(16, 26);
+                // Everything is a trade. Choosing them is choosing against the
+                // two blocs whose money would have paid for it.
+                var others = RZ.blocs.BLOCS.filter(function (x) { return x.id !== id; });
+                var hit = RZ.pick(others), hit2 = RZ.pick(others);
+                d[hit.id] = -RZ.range(4, 10);
+                if (hit2.id !== hit.id) d[hit2.id] = -RZ.range(3, 8);
+                a.blocs(d);
+                a.promise('bloc-' + id, 'What you promised ' + RZ.blocs.byId[id].name.toLowerCase() +
+                  ' in front of a room', { due: 8 });
+                a.add('capital', -a.rng(3, 8));
+              },
+              reply: 'They write it down and they read it back to you and they make you say yes to the read-back. ' +
+                     'That is not a conversation any more. That is a document.' },
+            { t: 'Not only yours. I represent everybody in this ' + 'constituency', mood: -1,
+              run: function (a) {
+                var id = a.S.flags.blocAngryWho || 'rural';
+                var d = {}; d[id] = -RZ.range(3, 9);
+                a.blocs(d);
+                a.add('stats.integrity', a.rng(1, 4)); a.add('media', a.rng(1, 4));
+              },
+              reply: '"Everybody." The chairperson closes the file. "Everybody is what people say when the ' +
+                     'answer is no. We are not angry. We are just going to stop coming."' },
+            { t: 'Give me two years. I cannot deliver this from where I am', mood: 1,
+              run: function (a) {
+                var id = a.S.flags.blocAngryWho || 'rural';
+                var d = {}; d[id] = RZ.range(3, 9);
+                a.blocs(d);
+                a.add('party', a.rng(1, 4));
+                a.promise('bloc-' + id + '-later', 'Two years, you told them, and they wrote the date down', { due: 24 });
+              },
+              reply: '"Two years." Somebody at the back does the arithmetic out loud and arrives at the next ' +
+                     'election, which is exactly what you were hoping nobody would do.' }
+          ]
+        },
+        {
+          q: '"And the other question, which is the one we actually came about. When the money comes — and ' +
+             'some money always comes — does it come here first, or does it come here last?"',
+          answers: [
+            { t: 'First. And I will be photographed saying so', mood: 3, tag: 'cost',
+              run: function (a) {
+                var id = a.S.flags.blocAngryWho || 'rural';
+                var d = {}; d[id] = RZ.range(8, 15);
+                RZ.blocs.BLOCS.forEach(function (x) { if (x.id !== id) d[x.id] = -RZ.range(1, 5); });
+                a.blocs(d);
+                a.add('fame', a.rng(2, 5)); a.add('leader', -a.rng(1, 5));
+              },
+              reply: 'Photographs are taken. One of them will be printed next to a story about a road that ' +
+                     'has not been built, in about three years, and you will remember this room.' },
+            { t: 'Where it is needed most. Sometimes that will be you', mood: 0,
+              run: function (a) { a.add('stats.integrity', a.rng(2, 4)); a.add('party', a.rng(1, 3)); },
+              reply: '"Sometimes." They nod, unimpressed and not insulted, which is roughly what you deserve.' },
+            { t: 'Wherever it buys the most votes. I am being honest with you', mood: -2,
+              run: function (a) {
+                var id = a.S.flags.blocAngryWho || 'rural';
+                var d = {}; d[id] = -RZ.range(2, 8);
+                a.blocs(d);
+                a.add('stats.integrity', a.rng(3, 6)); a.add('stats.cunning', a.rng(1, 3));
+                a.add('media', -a.rng(1, 4));
+              },
+              reply: 'A long silence, and then the chairperson laughs once, without any warmth in it. ' +
+                     '"Then we had better become worth more votes."' }
+          ]
+        }
+      ]
     }
   ];
 

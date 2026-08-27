@@ -14,12 +14,20 @@
   var C100 = RZ.c100, clamp = RZ.clamp;
 
   var KINDS = [
-    { id: 'road',    name: 'a tarred road',        ico: '🛣️', ministry: 'infra',  cost: 14, months: [5, 9], trust: 16 },
-    { id: 'clinic',  name: 'a clinic',             ico: '🏥', ministry: 'health', cost: 12, months: [4, 8], trust: 18 },
-    { id: 'school',  name: 'a secondary school',   ico: '🏫', ministry: 'edu',    cost: 13, months: [5, 9], trust: 17 },
-    { id: 'water',   name: 'a water reticulation scheme', ico: '🚰', ministry: 'infra', cost: 10, months: [3, 6], trust: 15 },
-    { id: 'power',   name: 'an electrification line', ico: '⚡', ministry: 'mines', cost: 11, months: [4, 7], trust: 13 },
-    { id: 'housing', name: 'a housing allocation', ico: '🏘️', ministry: 'local',  cost: 9,  months: [3, 6], trust: 11 }
+    // `serves` is who is standing at the ribbon. A road is for the people who
+    // have to get produce to a market; a housing allocation is not.
+    { id: 'road',    name: 'a tarred road',        ico: '🛣️', ministry: 'infra',  cost: 14, months: [5, 9], trust: 16,
+      serves: { rural: 9, traders: 6, chiefs: 3 } },
+    { id: 'clinic',  name: 'a clinic',             ico: '🏥', ministry: 'health', cost: 12, months: [4, 8], trust: 18,
+      serves: { rural: 7, labour: 5, middle: 3 } },
+    { id: 'school',  name: 'a secondary school',   ico: '🏫', ministry: 'edu',    cost: 13, months: [5, 9], trust: 17,
+      serves: { youth: 10, middle: 5, chiefs: -2 } },
+    { id: 'water',   name: 'a water reticulation scheme', ico: '🚰', ministry: 'infra', cost: 10, months: [3, 6], trust: 15,
+      serves: { rural: 8, traders: 4 } },
+    { id: 'power',   name: 'an electrification line', ico: '⚡', ministry: 'mines', cost: 11, months: [4, 7], trust: 13,
+      serves: { traders: 8, youth: 5, rural: 4 } },
+    { id: 'housing', name: 'a housing allocation', ico: '🏘️', ministry: 'local',  cost: 9,  months: [3, 6], trust: 11,
+      serves: { youth: 7, middle: 4, chiefs: -3 } }
   ];
   function kindById(id) { return KINDS.filter(function (k) { return k.id === id; })[0]; }
 
@@ -152,6 +160,14 @@
       api.add('grassroots', RZ.range(3, 7));
       api.addRegion(S.player.regionId, RZ.range(3, 8));
       api.add('fame', RZ.range(0.5, 2));
+      // Somebody specific cuts the ribbon, and somebody specific notices that
+      // the money went there instead of where they asked for it.
+      var kd = kindById(p.kind);
+      if (kd && kd.serves && RZ.blocs) {
+        var d = {};
+        Object.keys(kd.serves).forEach(function (k) { d[k] = kd.serves[k] * RZ.range(0.6, 1.2); });
+        RZ.blocs.move(S, null, d);
+      }
       if (p.crony) {
         api.nation('corruption', RZ.range(0.4, 1.4));
         api.add('stats.integrity', -RZ.range(0.5, 2));

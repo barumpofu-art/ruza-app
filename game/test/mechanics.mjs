@@ -17,7 +17,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FILES = [
   'core.js', 'data-countries.js', 'data-ladder.js', 'data-actions.js',
   'data-events.js', 'data-dialogue.js', 'data-origins.js', 'people.js', 'elections.js',
-  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js', 'constituency.js', 'statecraft.js', 'legislation.js', 'contender.js'
+  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js', 'constituency.js', 'statecraft.js', 'legislation.js', 'contender.js', 'blocs.js'
 ];
 
 function loadGame() {
@@ -670,21 +670,33 @@ section('11. Mandate, revolt, the file and the nemesis');
 
   // Losing is an ultimatum, never a game over.
   {
-    const L = mk(220, 4);
-    L.player.capital = 30; L.player.standing.party = 2; L.player.standing.grassroots = 2;
-    L.player.rivals.forEach((r) => { r.power = 98; r.dirt = []; });
-    const res = RZ.revolt.revolt(L, RZ.engine.mkApi(L));
-    ok('a lost revolt does not end the career', !res.won && !L.over);
+    // A revolt at 4% still wins one time in twenty-five, and any change
+    // anywhere else in the game shifts the seeded stream under these seeds.
+    // Ask for a lost revolt rather than assuming a given seed produces one.
+    const losingRevolt = (setup) => {
+      for (let seed = 220; seed < 320; seed++) {
+        const T = mk(seed, 4);
+        T.player.capital = 30;
+        T.player.rivals.forEach((r) => { r.power = 98; r.dirt = []; });
+        setup(T);
+        const res = RZ.revolt.revolt(T, RZ.engine.mkApi(T));
+        if (!res.won) return { S: T, res: res };
+      }
+      throw new Error('a hundred seeds and every 4% revolt carried');
+    };
+
+    const lost = losingRevolt((T) => { T.player.standing.party = 2; T.player.standing.grassroots = 2; });
+    const L = lost.S;
+    ok('a lost revolt does not end the career', !lost.res.won && !L.over);
     ok('it puts an ultimatum on the table', !!L.pendingEvent && L.pendingEvent.ultimatum === true);
     ok('with two ways out when you have no file', L.pendingEvent.choices.length === 2,
       String(L.pendingEvent.choices.length));
 
     // Option 0: apologise. Survive, keep the ward, lose your reputation.
-    const A = mk(221, 4);
-    A.player.capital = 30; A.player.standing.party = 2; A.player.standing.grassroots = 40;
-    A.player.stats.integrity = 60; A.player.standing.media = 40;
-    A.player.rivals.forEach((r) => { r.power = 98; r.dirt = []; });
-    RZ.revolt.revolt(A, RZ.engine.mkApi(A));
+    const A = losingRevolt((T) => {
+      T.player.standing.party = 2; T.player.standing.grassroots = 40;
+      T.player.stats.integrity = 60; T.player.standing.media = 40;
+    }).S;
     const homeBefore = A.player.regionId;
     const aRes = RZ.engine.resolveEvent(A, 0);
     ok('apologising keeps your ward', A.player.regionId === homeBefore);
@@ -694,11 +706,10 @@ section('11. Mandate, revolt, the file and the nemesis');
     ok('and makes your name toxic for a while', RZ.revolt.pngActive(A));
 
     // Option 1: refuse. Exile.
-    const R = mk(222, 4);
-    R.player.capital = 30; R.player.standing.party = 60; R.player.standing.grassroots = 40;
-    R.player.money = 1_000_000;
-    R.player.rivals.forEach((r) => { r.power = 98; r.dirt = []; });
-    RZ.revolt.revolt(R, RZ.engine.mkApi(R));
+    const R = losingRevolt((T) => {
+      T.player.standing.party = 60; T.player.standing.grassroots = 40;
+      T.player.money = 1_000_000;
+    }).S;
     const rungBefore = R.player.rungIdx, homeR = R.player.regionId;
     RZ.engine.resolveEvent(R, 1);
     ok('refusing wipes leadership', R.player.standing.leader === 0);
@@ -712,12 +723,11 @@ section('11. Mandate, revolt, the file and the nemesis');
     ok('and it creates a nemesis', !!RZ.revolt.nemesisOf(R));
 
     // Option 2 only appears when you brought something.
-    const F = mk(223, 4);
-    F.player.capital = 30; F.player.standing.party = 2;
-    F.player.rivals.forEach((r) => { r.power = 98; r.dirt = []; });
-    F.player.rivals[0].regionId = F.player.regionId;
-    F.player.rivals[0].dirt = [{ label: 'a tender awarded to a relative', used: false }];
-    RZ.revolt.revolt(F, RZ.engine.mkApi(F));
+    const F = losingRevolt((T) => {
+      T.player.standing.party = 2;
+      T.player.rivals[0].regionId = T.player.regionId;
+      T.player.rivals[0].dirt = [{ label: 'a tender awarded to a relative', used: false }];
+    }).S;
     ok('a file adds a third way out', F.pendingEvent.choices.length === 3);
     const homeF = F.player.regionId, intF = F.player.stats.integrity;
     RZ.engine.resolveEvent(F, 2);
@@ -1220,8 +1230,10 @@ section('14. Capital for elite work, and the ways out of a nemesis');
     E.flags.nemesisId = E.player.rivals[0].id;
     E.player.stats.cunning = 95;
     let ended = false;
+    // A leak lands about half the time; vary the seed rather than rebuilding
+    // the identical career thirty times and calling that thirty attempts.
     for (let i = 0; i < 30 && !ended; i++) {
-      const T = cand(613);
+      const T = cand(613 + i);
       T.player.rivals[0].nemesis = true;
       T.player.rivals[0].power = 44;
       T.player.rivals[0].dirt = [{ label: 'a second family', used: false }];
@@ -2128,6 +2140,275 @@ section('18. The climbing contender');
     gone.contender.ascended = true;
     ok('and it goes away once they are on the throne',
       !RZ.engine.availableActions(gone).some((a) => a.id === 'theother'));
+  }
+}
+
+
+/* ================= 19. six electorates, not one ================= */
+section('19. Demographic blocs');
+{
+  const IDS = RZ.blocs.BLOCS.map((b) => b.id);
+
+  // They exist from the first month, they add up, and they are sized off the
+  // country's own numbers rather than a table.
+  {
+    const S = career('ZA', 1500, 2);
+    ok('a career comes with an electorate', !!S.blocs);
+    ok('six of them', Object.keys(S.blocs).length === 6);
+    const total = IDS.reduce((n, id) => n + S.blocs[id].size, 0);
+    ok('and they add up to the whole country', Math.abs(total - 100) < 0.5, RZ.round(total, 2));
+    ok('none of them is a rounding error', IDS.every((id) => S.blocs[id].size >= 1));
+
+    // A rich urban country and a poor rural one do not have the same electorate.
+    const za = RZ.blocs.sizes(RZ.COUNTRIES.ZA);
+    const mw = RZ.blocs.sizes(RZ.COUNTRIES.MW);
+    ok('the poorer country is more rural', mw.rural > za.rural,
+      RZ.round(mw.rural, 1) + ' vs ' + RZ.round(za.rural, 1));
+    ok('and the richer one has more of a salaried middle', za.middle > mw.middle,
+      RZ.round(za.middle, 1) + ' vs ' + RZ.round(mw.middle, 1));
+    Object.keys(RZ.COUNTRIES).forEach((cid) => {
+      const sz = RZ.blocs.sizes(RZ.COUNTRIES[cid]);
+      const t = IDS.reduce((n, id) => n + sz[id], 0);
+      if (Math.abs(t - 100) > 0.5) throw new Error(cid + ' sizes sum to ' + t);
+    });
+    ok('every country adds up', true);
+  }
+
+  // Where you came from decides who was already listening.
+  {
+    const f = career('ZA', 1510, 2); f.blocs = null; f.player.trait = 'firebrand'; RZ.blocs.init(f);
+    const m = career('ZA', 1510, 2); m.blocs = null; m.player.trait = 'mandarin'; RZ.blocs.init(m);
+    ok('a firebrand starts further ahead with the young than a mandarin does',
+      f.blocs.youth.mood > m.blocs.youth.mood,
+      Math.round(f.blocs.youth.mood) + ' vs ' + Math.round(m.blocs.youth.mood));
+    ok('and further behind with the traditional authority',
+      f.blocs.chiefs.mood < m.blocs.chiefs.mood + 20);
+  }
+
+  // The whole argument: naming winners names losers, and the net is weighted.
+  {
+    const S = career('ZA', 1520, 6);
+    const before = { ...Object.fromEntries(IDS.map((id) => [id, S.blocs[id].mood])) };
+    const g0 = S.player.standing.grassroots;
+    const api = RZ.engine.mkApi(S);
+    const r = api.blocs({ rural: 20, youth: -20 });
+    ok('a policy moves the bloc it is for', S.blocs.rural.mood > before.rural);
+    ok('and the one it is against', S.blocs.youth.mood < before.youth);
+    ok('and nobody else moves', S.blocs.labour.mood === before.labour);
+    ok('the net is weighted by how many of each there are',
+      Math.abs(r.net - (20 * S.blocs.rural.size - 20 * S.blocs.youth.size) / 100) < 0.001,
+      RZ.round(r.net, 3));
+    ok('and it shows up as one number on the screen', S.player.standing.grassroots !== g0);
+
+    // Which way that number goes depends on which of them is bigger.
+    const big = S.blocs.rural.size > S.blocs.youth.size;
+    ok('winning the larger bloc is a net gain', big ? r.net > 0 : r.net < 0, RZ.round(r.net, 2));
+  }
+
+  // An ordinary rally is not free of them — it is spread thinly across all six.
+  {
+    const S = career('ZA', 1530, 4);
+    const before = IDS.map((id) => S.blocs[id].mood);
+    RZ.engine.mkApi(S).add('grassroots', 10);
+    const after = IDS.map((id) => S.blocs[id].mood);
+    ok('a rally lifts every one of them a little', after.every((v, i) => v > before[i]));
+    ok('and lifts the big ones more than the small ones', (() => {
+      const rows = IDS.map((id, i) => ({ size: S.blocs[id].size, gain: after[i] - before[i] }));
+      const biggest = rows.slice().sort((a, b) => b.size - a.size)[0];
+      const smallest = rows.slice().sort((a, b) => a.size - b.size)[0];
+      return biggest.gain > smallest.gain;
+    })());
+    // And it is counted exactly once, not twice.
+    const T = career('ZA', 1531, 4);
+    const g = T.player.standing.grassroots;
+    RZ.engine.mkApi(T).add('grassroots', 10);
+    ok('the visible number moves by what was asked for, once',
+      Math.abs(T.player.standing.grassroots - (g + 10)) < 0.001,
+      RZ.round(T.player.standing.grassroots - g, 3));
+  }
+
+  // They read the newspaper themselves.
+  {
+    const S = career('ZA', 1540, 4);
+    S.nation.economy.unemployment = 70;
+    IDS.forEach((id) => { S.blocs[id].mood = 55; });
+    for (let i = 0; i < 12; i++) RZ.blocs.tick(S, 1, {});
+    ok('mass unemployment costs you the young', S.blocs.youth.mood < 55,
+      Math.round(S.blocs.youth.mood));
+
+    const T = career('ZA', 1541, 4);
+    T.nation.economy.inflation = 40;
+    IDS.forEach((id) => { T.blocs[id].mood = 55; });
+    for (let i = 0; i < 12; i++) RZ.blocs.tick(T, 1, {});
+    ok('and runaway inflation costs you labour', T.blocs.labour.mood < 55,
+      Math.round(T.blocs.labour.mood));
+    ok('the traders feel it too', T.blocs.traders.mood < 55);
+
+    // Nothing happening pulls everybody back towards indifference.
+    const U = career('ZA', 1542, 4);
+    U.nation.economy = { ...U.nation.economy, unemployment: 24, inflation: 5, growth: 2, debt: 55 };
+    U.nation.society = { ...U.nation.society, corruption: 40, infra: 45, education: 48, stability: 60, unrest: 20 };
+    U.blocs.rural.mood = 95;
+    U.blocs.youth.mood = 5;
+    for (let i = 0; i < 40; i++) RZ.blocs.tick(U, 1, {});
+    ok('adoration fades if nothing keeps feeding it', U.blocs.rural.mood < 95);
+    ok('and so does hatred', U.blocs.youth.mood > 5);
+  }
+
+  // What it is worth on the day, and why turnout is the cruel part.
+  {
+    const S = career('ZA', 1550, 4);
+    IDS.forEach((id) => { S.blocs[id].mood = 50; });
+    ok('an electorate that is exactly ambivalent is worth nothing',
+      Math.abs(RZ.blocs.swing(S)) < 0.01, RZ.round(RZ.blocs.swing(S), 3));
+    IDS.forEach((id) => { S.blocs[id].mood = 90; });
+    ok('one that loves you is worth a lot', RZ.blocs.swing(S) > 5, RZ.round(RZ.blocs.swing(S), 1));
+    IDS.forEach((id) => { S.blocs[id].mood = 10; });
+    ok('and one that does not is worth the same the other way',
+      RZ.blocs.swing(S) < -5, RZ.round(RZ.blocs.swing(S), 1));
+
+    // The tragedy of the youth vote, stated as a number.
+    const young = career('ZA', 1551, 4);
+    const old = career('ZA', 1551, 4);
+    IDS.forEach((id) => { young.blocs[id].mood = 40; old.blocs[id].mood = 40; });
+    young.blocs.youth.mood = 95;
+    old.blocs.middle.mood = 95;
+    ok('a bloc that stays at home is worth less than one that turns out',
+      RZ.blocs.swing(old) > RZ.blocs.swing(young),
+      RZ.round(RZ.blocs.swing(old), 2) + ' vs ' + RZ.round(RZ.blocs.swing(young), 2));
+  }
+
+  // A bill is a trade, and the picker says so before you choose the fight.
+  {
+    RZ.bill.BILLS.forEach((b) => {
+      if (!b.wins || !b.costs) throw new Error(b.id + ' does not say who it is for');
+      b.wins.concat(b.costs).forEach((id) => {
+        if (!RZ.blocs.byId[id]) throw new Error(b.id + ' names a bloc that does not exist: ' + id);
+      });
+    });
+    ok('every bill names its winners and its losers', true);
+
+    const S = career('ZA', 1560, 6);
+    S.player.capital = 60;
+    RZ.bill.table(S, RZ.engine.mkApi(S), 'land');
+    S.bill.blocs.forEach((x) => { x.pledged = true; });
+    const ruralBefore = S.blocs.rural.mood, chiefsBefore = S.blocs.chiefs.mood;
+    RZ.bill.division(S);
+    ok('land reform wins you the smallholders', S.blocs.rural.mood > ruralBefore);
+    ok('and costs you the chiefs', S.blocs.chiefs.mood < chiefsBefore);
+
+    const T = career('ZA', 1561, 6);
+    T.player.capital = 60;
+    RZ.bill.table(T, RZ.engine.mkApi(T), 'tax');
+    T.bill.blocs.forEach((x) => { x.pledged = true; });
+    const labourBefore = T.blocs.labour.mood, middleBefore = T.blocs.middle.mood;
+    RZ.bill.division(T);
+    ok('a corporate tax cut wins the salaried middle', T.blocs.middle.mood > middleBefore);
+    ok('and costs you organised labour', T.blocs.labour.mood < labourBefore);
+  }
+
+  // A budget is six trades on one screen.
+  {
+    const S = career('ZA', 1570, 12);
+    IDS.forEach((id) => { S.blocs[id].mood = 50; });
+    RZ.gov.applyBudget(S, { health: 12, education: 30, infra: 14, security: 13, social: 12, debtsvc: 14, admin: 5 });
+    ok('spending on schools wins the young', S.blocs.youth.mood > 50, Math.round(S.blocs.youth.mood));
+    ok('and cutting the administration costs you labour', S.blocs.labour.mood < 50,
+      Math.round(S.blocs.labour.mood));
+
+    const T = career('ZA', 1571, 12);
+    IDS.forEach((id) => { T.blocs[id].mood = 50; });
+    RZ.gov.applyBudget(T, { health: 12, education: 10, infra: 14, security: 13, social: 12, debtsvc: 30, admin: 9 });
+    ok('servicing the debt wins the salaried middle', T.blocs.middle.mood > 50, Math.round(T.blocs.middle.mood));
+    ok('and costs you the young', T.blocs.youth.mood < 50, Math.round(T.blocs.youth.mood));
+  }
+
+  // A ribbon is cut in front of somebody in particular.
+  {
+    RZ.ward.KINDS.forEach((k) => {
+      if (!k.serves) throw new Error(k.id + ' has no constituency');
+      Object.keys(k.serves).forEach((id) => {
+        if (!RZ.blocs.byId[id]) throw new Error(k.id + ' serves a bloc that does not exist: ' + id);
+      });
+    });
+    ok('every project knows who it is for', true);
+
+    const S = career('ZA', 1580, 6);
+    RZ.ward.init(S);
+    IDS.forEach((id) => { S.blocs[id].mood = 50; });
+    S.ward.projects.push({ kind: 'school', name: 'a secondary school', status: 'building',
+      monthsLeft: 0.1, trustOnDone: 17, risk: 0, crony: false, started: 0 });
+    RZ.ward.tick(S, 1, {});
+    ok('opening a school wins the young', S.blocs.youth.mood > 50, Math.round(S.blocs.youth.mood));
+
+    const T = career('ZA', 1581, 6);
+    RZ.ward.init(T);
+    IDS.forEach((id) => { T.blocs[id].mood = 50; });
+    T.ward.projects.push({ kind: 'road', name: 'a tarred road', status: 'building',
+      monthsLeft: 0.1, trustOnDone: 16, risk: 0, crony: false, started: 0 });
+    RZ.ward.tick(T, 1, {});
+    ok('and a road wins the smallholders', T.blocs.rural.mood > 50, Math.round(T.blocs.rural.mood));
+  }
+
+  // They come and tell you, once, when they have given up on you.
+  {
+    const S = career('ZA', 1590, 4);
+    IDS.forEach((id) => { S.blocs[id].mood = 60; });
+    S.blocs.traders.mood = 8;
+    let summoned = false;
+    for (let i = 0; i < 60 && !summoned; i++) {
+      S.pendingScene = null;
+      S.blocs.traders.mood = 8;
+      RZ.blocs.tick(S, 1, {});
+      if (S.pendingScene === 'bloc-deputation') summoned = true;
+    }
+    ok('a bloc that has given up on you sends a deputation', summoned);
+    ok('and it names who came', S.flags.blocAngryWho === 'traders');
+    // Once each. Somebody else may well come — that is the game working — but
+    // the traders do not come back every month to say the same thing.
+    S.pendingScene = null;
+    let tradersAgain = false, someoneElse = null;
+    for (let i = 0; i < 60; i++) {
+      S.blocs.traders.mood = 8;
+      RZ.blocs.tick(S, 1, {});
+      if (S.pendingScene) {
+        if (S.flags.blocAngryWho === 'traders') tradersAgain = true;
+        else someoneElse = S.flags.blocAngryWho;
+        S.pendingScene = null;
+      }
+    }
+    ok('and the same one never comes twice', tradersAgain === false,
+      someoneElse ? 'though ' + someoneElse + ' did' : '');
+
+    const T = career('ZA', 1591, 4);
+    IDS.forEach((id) => { T.blocs[id].mood = 60; });
+    T.blocs.rural.mood = 5;
+    T.pendingEvent = { id: 'x', choices: [] };
+    let onTop = false;
+    for (let i = 0; i < 40; i++) { T.blocs.rural.mood = 5; RZ.blocs.tick(T, 1, {}); if (T.pendingScene) onTop = true; }
+    ok('nobody arrives on top of a decision already on the table', onTop === false);
+  }
+
+  // And it decides the ballot.
+  {
+    function seat(mood, seed) {
+      const S = career('ZA', seed, 4);
+      IDS.forEach((id) => { S.blocs[id].mood = mood; });
+      RZ.seed(4242);
+      const vote = RZ.elections.nationalVote ? null : null;
+      return RZ.blocs.swing(S);
+    }
+    ok('a happy electorate swings the seat towards you', seat(85, 1600) > seat(15, 1601));
+  }
+
+  // Save, load, and it is all still there.
+  {
+    const S = career('ZA', 1610, 4);
+    S.blocs.youth.mood = 91;
+    RZ.engine.save(S);
+    const back = RZ.engine.load();
+    ok('the electorate round-trips', back && back.blocs && Math.round(back.blocs.youth.mood) === 91);
+    ok('and the summary reads off the saved state', RZ.blocs.summary(back).rows.length === 6);
   }
 }
 

@@ -418,6 +418,17 @@ body{
 .chest-d{ font-size:.72rem; color:var(--text-faint); margin-top:5px; line-height:1.45; }
 .chest-own{ color:#e0b06f; }
 .chest-warn{ color:#d99a97; }
+/* the electorate: six of them, and they want different things */
+.bloc-row{ padding:9px 0; border-bottom:1px solid var(--line-soft); }
+.bloc-row:last-child{ border-bottom:none; }
+.bloc-row-t{ display:flex; align-items:baseline; gap:8px; }
+.bloc-row-n{ font-weight:600; font-size:.88rem; }
+.bloc-row-s{ margin-left:auto; font-family:var(--mono); font-size:.82rem; color:var(--gold); }
+.bloc-row-d{ font-size:.72rem; color:var(--text-faint); margin-top:5px; line-height:1.45; }
+.bloc-row .bloc-bar{ margin-top:6px; }
+.dim{ opacity:.6; }
+strong.good{ color:var(--green); } strong.mid{ color:var(--gold); } strong.bad{ color:var(--red); }
+
 /* the race: your climb and theirs, on the same axis */
 .race-top{ display:flex; align-items:flex-start; gap:12px; margin-bottom:12px; }
 .race-n{ font-family:var(--serif); font-size:1.06rem; font-weight:600; }
