@@ -66,6 +66,13 @@ people you left keep everything they know about you.
 rented, not owned: the higher it is, the more it costs each month to hold. You cannot
 maintain all seven.
 
+**Situations.** Most of what happens to you is a card with three buttons on it. The
+biggest things are not: the kraal, the live television question about whether you want the
+top job, the Secretary-General at the residence after ten at night with six provincial
+resolutions in a folder, the deputy who sits down before he is asked to. Those are rooms,
+played through the same engine as the meetings, and they cannot be escaped — close the app
+halfway through an answer and the room reopens on the question you were still holding.
+
 **Scandal.** Everything you do that would embarrass you goes into a file with a severity.
 Files come out — faster where the press is free and the courts work. Exposure blocks
 appointments, and appointments are how the middle of the ladder works. Scandals fade with
@@ -94,7 +101,7 @@ js/data-ladder.js     the thirteen rungs and their per-country titles
 js/data-actions.js    the monthly action deck
 js/data-dialogue.js   the conversations: who is in the room and what they ask
 js/dialogue.js        the scene engine — beats, answers, mood, closing
-js/data-events.js     the event deck
+js/data-events.js     the event deck — cards with choices, and rooms with beats
 js/people.js          invented politicians, name pools, starting backgrounds
 js/field.js           the rest of the party: who holds each rung, and who is climbing
 js/elections.js       vote projection, seat allocation, coalitions, internal contests

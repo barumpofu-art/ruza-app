@@ -193,6 +193,23 @@
 
   function resumePendingEvent() {
     var S = UI.S;
+
+    // A situation that is a room rather than a card. It is resumed at the beat
+    // it was left on, so closing the app mid-answer does not escape it.
+    if (S.pendingEvent.talk) {
+      var convo = RZ.dialogue.beginEvent(S, { beat: S.pendingEvent.talkBeat, mood: S.pendingEvent.talkMood });
+      if (convo) {
+        RZ.ui.showDialogue(convo, function (cv) {
+          var entry = RZ.engine.finishEventDialogue(S, cv);
+          if (S.over) { RZ.ui.showEnd(); return; }
+          RZ.ui.renderGame();
+        });
+        return;
+      }
+      // No beats after all — fall through and treat it as an ordinary card.
+      S.pendingEvent.talk = false;
+    }
+
     RZ.ui.showEvent(S.pendingEvent, function (i) {
       var entry = RZ.engine.resolveEvent(S, i);
       RZ.ui.closeModal();

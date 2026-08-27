@@ -630,14 +630,19 @@
     var ev = RZ.weighted(pool, function (e) { return e.w || 5; });
     S.seenEvents[ev.id] = S.turn;
     if (ev.prep) ev.prep(api);
-    return {
+    var pending = {
       id: ev.id, kicker: ev.kicker,
       title: typeof ev.title === 'function' ? ev.title(api) : ev.title,
       body: typeof ev.body === 'function' ? ev.body(api) : ev.body,
-      choices: ev.choices.map(function (ch, i) {
-        return { i: i, t: ch.t, d: ch.d, tag: ch.tag, ok: !ch.when || ch.when(api) };
-      })
+      choices: []
     };
+    // Some situations are a card with three buttons on it. Others are a room
+    // with somebody in it, and those carry their own beats.
+    if (ev.beats) { pending.talk = true; pending.talkBeat = 0; pending.talkMood = 0; return pending; }
+    pending.choices = ev.choices.map(function (ch, i) {
+      return { i: i, t: ch.t, d: ch.d, tag: ch.tag, ok: !ch.when || ch.when(api) };
+    });
+    return pending;
   }
 
   function resolveEvent(S, choiceIndex) {
@@ -992,6 +997,17 @@
     hostile: 'It went badly'
   };
 
+  // An event that was played as a conversation is written up like one, but
+  // filed under the event's own kicker so the feed reads as news, not a diary.
+  function finishEventDialogue(S, convo) {
+    var entry = finishDialogue(S, convo);
+    var def = (RZ.EVENTS || []).filter(function (e) { return e.id === convo.eventId; })[0];
+    if (def && def.kicker) { S.feed[0].src = def.kicker; entry.src = def.kicker; }
+    S.pendingEvent = null;
+    save(S);
+    return entry;
+  }
+
   function pushFeed(S, e) {
     e.turn = S.turn;
     e.date = { year: S.date.year, month: S.date.month };
@@ -1020,7 +1036,7 @@
     endTurn: endTurn, rollEvent: rollEvent, resolveEvent: resolveEvent,
     contestStatus: contestStatus, contest: contest, promote: promote, nextRung: nextRung,
     meetsRequirements: meetsRequirements, pushFeed: pushFeed, endGame: endGame,
-    finishDialogue: finishDialogue,
+    finishDialogue: finishDialogue, finishEventDialogue: finishEventDialogue,
     save: save, load: load, clearSave: clearSave, hasSave: hasSave,
     WAGE_BASE: WAGE_BASE, ELECTION_MONTH: ELECTION_MONTH, isCampaignSeason: isCampaignSeason
   };

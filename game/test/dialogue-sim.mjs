@@ -74,6 +74,25 @@ for (const sc of RZ.DIALOGUE) {
   }
 }
 
+/* ---- events that are rooms are held to the same shape ---- */
+const eventRooms = RZ.EVENTS.filter((e) => e.beats);
+console.log(`${eventRooms.length} of ${RZ.EVENTS.length} events are rooms rather than cards`);
+for (const ev of eventRooms) {
+  if (ev.choices) fail(ev.id, 'an event has both beats and choices; it can only be one');
+  if (typeof ev.speaker !== 'function') fail(ev.id, 'an event room has no speaker');
+  if (!ev.where) fail(ev.id, 'an event room has no place');
+  if (ev.beats.length < 2) fail(ev.id, 'an event room asks fewer than two questions');
+  for (const [i, b] of ev.beats.entries()) {
+    if (!b.q) fail(ev.id, `beat ${i} has no question`);
+    if (!Array.isArray(b.answers) || b.answers.length < 3) fail(ev.id, `beat ${i} offers fewer than three answers`);
+    for (const [j, ans] of (b.answers || []).entries()) {
+      if (!ans.t) fail(ev.id, `beat ${i} answer ${j} has no text`);
+      if (!ans.reply) fail(ev.id, `beat ${i} answer ${j} has no reply`);
+      if (typeof ans.mood !== 'number') fail(ev.id, `beat ${i} answer ${j} has no mood`);
+    }
+  }
+}
+
 /* ---- play every answer of every beat, in several careers ---- */
 // A career is set up rich, senior and well connected so that answers gated on
 // money or office are reachable; the gates themselves are checked separately.
@@ -97,6 +116,55 @@ function career(countryId, seed, tier) {
 
 let played = 0, lines = 0;
 const countries = RZ.COUNTRY_ORDER;
+
+// Event rooms are played through the pending-event path so the resume
+// bookkeeping is exercised too, not only the beats.
+for (const ev of eventRooms) {
+  const widest = Math.max(...ev.beats.map((b) => b.answers.length));
+  for (let pick = 0; pick < widest; pick++) {
+    for (const cid of countries) {
+      if (ev.only && ev.only.indexOf(cid) < 0) continue;
+      const S = career(cid, 5000 + pick * 13, 12);
+      S.player.isLeader = true;
+      S.player.isPresident = true;
+      S.nation.termNumber = 2;
+      S.pendingEvent = { id: ev.id, kicker: ev.kicker, talk: true, talkBeat: 0, talkMood: 0 };
+      let convo;
+      try {
+        convo = RZ.dialogue.beginEvent(S, { beat: 0, mood: 0 });
+      } catch (e) {
+        fail(ev.id, `beginEvent threw in ${cid}: ${e.message}`);
+        continue;
+      }
+      if (!convo) { fail(ev.id, `beginEvent returned nothing in ${cid}`); continue; }
+      try {
+        let guard = 0;
+        while (!convo.done && guard++ < 20) {
+          const opts = RZ.dialogue.options(convo);
+          if (!opts.length) { fail(ev.id, `no options at beat ${convo.beat} in ${cid}`); break; }
+          const allowed = opts.filter((o) => o.ok);
+          if (!allowed.length) { fail(ev.id, `no allowed option at beat ${convo.beat} in ${cid}`); break; }
+          const want = allowed[Math.min(pick, allowed.length - 1)];
+          RZ.dialogue.choose(convo, want.i);
+          lines += 2;
+        }
+        if (!convo.done) fail(ev.id, `never closed in ${cid}`);
+        else {
+          if (S.pendingEvent) fail(ev.id, `still pending after closing in ${cid}`);
+          const entry = RZ.engine.finishEventDialogue(S, convo);
+          if (!entry || !entry.title || !entry.body) fail(ev.id, `wrote no feed entry in ${cid}`);
+          if (/undefined|NaN|\[object Object\]/.test(String(entry.title) + String(entry.body))) {
+            fail(ev.id, `feed entry reads: ${String(entry.body).slice(0, 120)}`);
+          }
+        }
+        played++;
+      } catch (e) {
+        fail(ev.id, `threw in ${cid}: ${e.message}`);
+      }
+      break;   // one country per path is enough; `only` events pick their own
+    }
+  }
+}
 
 for (const sc of RZ.DIALOGUE) {
   // How many distinct paths: play each answer index at each beat.

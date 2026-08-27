@@ -235,27 +235,75 @@
       id: 'defectoffer', w: 6, kicker: 'An approach',
       when: function (a) { return a.tier() >= 3 && a.tier() <= 9 && a.C.parties.length > 1; },
       title: 'Another party wants you',
-      body: function (a) {
+      speaker: function (a) { return { name: RZ.makeName(a.C), role: 'an emissary', org: a.otherParty().abbr }; },
+      where: 'A private dining room, no phones on the table',
+      settleOn: 'party',
+      opening: function (a) {
         var other = a.otherParty();
-        return 'An emissary from <strong>' + a.esc(other.abbr) + '</strong> asked to meet somewhere with no cameras. ' +
-          'They are offering a safe position, resources, and a promise that you would not have to wait your turn. ' +
-          'They are also offering, implicitly, the end of everything you have built where you are.';
+        return 'He does not hand over a card. "I am authorised by ' + a.esc(other.abbr) + ' to have a conversation ' +
+          'that has not happened. Before you say anything — I know what you are worth there, and I know what you ' +
+          'are being paid for it, and those two numbers are not close."';
       },
-      choices: [
-        { t: 'Cross the floor', d: 'A new party, a new ceiling, and a permanent asterisk.', tag: 'risk',
-          run: function (a) { return a.defect(); } },
-        { t: 'Refuse, and tell your leadership about it', d: 'Loyalty, publicly banked.',
-          run: function (a) {
-            a.add('leader', a.rng(5, 10)); a.add('party', a.rng(3, 7)); a.add('media', a.rng(1, 3));
-            return { title: 'You reported the approach', body: 'You walked into the principal’s office and named the emissary. In a movement that fears betrayal above all things, that is the most valuable currency there is.', tone: 'good' };
-          } },
-        { t: 'Refuse, and keep the number', d: 'No decision is also a decision.',
-          run: function (a) {
-            a.add('stats.cunning', a.rng(.5, 1.5)); a.add('capital', a.rng(1, 3));
-            a.S.flags.hasBackChannel = true;
-            return { title: 'You left the door open', body: 'Nobody knows, which is the point. If your own structures collapse, there is a landing place.', tone: 'flat' };
-          } }
-      ]
+      beats: [
+        {
+          q: function (a) {
+            return '"A safe seat, resources, and you do not wait your turn. That is the offer and it does not improve. ' +
+              'What is keeping you where you are?"';
+          },
+          answers: [
+            { t: 'Nothing is keeping me. Draw up the papers.', mood: 3, tag: 'risk',
+              run: function (a, convo) { convo.crossing = true; },
+              reply: '"Then we will announce on a Tuesday, because Tuesday is a slow news day and you will want the coverage to be about policy." It will not be about policy.' },
+            { t: 'Thirty years of people who carried chairs for me.', mood: 1,
+              run: function (a) { a.add('grassroots', a.rng(2, 5)); a.add('stats.integrity', a.rng(2, 4)); },
+              reply: '"Chairs." He nods, unbothered. "Half the people who carried chairs for me are now in my party. Loyalty is a route, not a destination."' },
+            { t: 'The fact that you would do this to me in two years’ time.', mood: 2,
+              run: function (a) { a.add('stats.cunning', a.rng(1, 3)); a.add('capital', a.rng(1, 2)); },
+              reply: 'He laughs properly. "Yes. I would. But you would have had two years, and two years is a ministry."' }
+          ]
+        },
+        {
+          q: '"Then the last question, and I would like the true answer because it costs you nothing tonight. Who do you tell about this meeting?"',
+          answers: [
+            { t: 'My leadership. Tomorrow morning, with your name in it.', mood: -3,
+              run: function (a, convo) {
+                if (convo.crossing) return;
+                a.add('leader', a.rng(5, 10)); a.add('party', a.rng(3, 7)); a.add('media', a.rng(1, 3));
+              },
+              reply: '"My name." He puts his glass down. "That is a costly answer for me and a very good one for you. Enjoy it."' },
+            { t: 'Nobody. And I am keeping your number.', mood: 1,
+              run: function (a, convo) {
+                if (convo.crossing) return;
+                a.add('stats.cunning', a.rng(.5, 1.5)); a.add('capital', a.rng(1, 3));
+                a.S.flags.hasBackChannel = true;
+              },
+              reply: '"Nobody." He is satisfied. "Then this was a good use of a Thursday for both of us."' },
+            { t: 'Everybody. I am going to say it in a speech.', mood: 0,
+              run: function (a, convo) {
+                if (convo.crossing) return;
+                a.add('media', a.rng(3, 7)); a.add('fame', a.rng(2, 5)); a.add('leader', a.rng(2, 6)); a.add('party', -a.rng(0, 3));
+              },
+              reply: '"In a speech." He is already standing. "You will get one good week out of it and we will deny all of it."' }
+          ]
+        }
+      ],
+      settles: function (a, temp, convo) {
+        if (convo.crossing) {
+          var res = a.defect();
+          convo.transcript.push({ who: 'them', text: String(res.body).replace(/<[^>]+>/g, '') });
+        } else {
+          a.add('party', (temp === 'warm' ? -1 : 1) * a.rng(1, 3));
+        }
+      },
+      close: function (a, temp, convo) {
+        if (convo.crossing) return 'The papers were signed on the Friday and announced on the Tuesday, exactly as he said they would be.';
+        return {
+          warm: 'He pays for the meal, which is the last thing his party will ever give you.',
+          fair: 'You both leave by different doors, ten minutes apart, out of habit rather than necessity.',
+          cool: 'He leaves first and does not offer his hand.',
+          hostile: 'He was on the phone before he reached the car, and not to his own leadership.'
+        }[temp];
+      }
     }),
 
     E({
@@ -293,33 +341,69 @@
       id: 'chief', w: 7, kicker: 'Tradition',
       when: function (a) { return a.C.inst.ethnic > 25; },
       title: function (a) { return 'The ' + a.t.chief + ' sends for you'; },
-      body: function (a) {
-        return 'Land allocation, a school, and the question of who really speaks for this area. He has not endorsed anyone ' +
-          'in nineteen years, and everyone in the ' + a.t.constituency + ' waits to hear what he thinks before they decide what they think.';
+      speaker: function (a) { return { name: RZ.makeName(a.C), role: 'the ' + a.t.chief, org: a.C.regionById[a.P.regionId].name }; },
+      where: 'A kraal, mid-morning, shoes left at the edge of the mat',
+      settleOn: 'grassroots',
+      opening: function (a) {
+        return 'He lets the elders speak for an hour and a half before he says anything at all. ' +
+          'Then: "You have come about the ' + a.t.constituency + '. Everyone comes about the ' + a.t.constituency + '. ' +
+          'I have not told anybody what I think for nineteen years."';
       },
-      choices: [
-        { t: 'Show deference and ask for nothing', d: 'Sit low, speak last.',
-          run: function (a) {
-            var ok = a.roll('charisma', 42);
-            a.addRegion(a.P.regionId, ok ? a.rng(6, 11) : a.rng(1, 4));
-            a.add('grassroots', ok ? a.rng(3, 6) : a.rng(0, 2));
-            return { title: ok ? 'You were received well' : 'Courteous, and non-committal', body: ok
-              ? 'You sat on the mat, took off your shoes, and let the elders talk for two hours. When you finally spoke, they listened.'
-              : 'He accepted your greeting and told you nothing. The area will wait.', tone: ok ? 'good' : 'flat' };
-          } },
-        { t: 'Promise the school and the road', d: 'Deliverable, if you survive the budget cycle.',
-          run: function (a) {
-            a.addRegion(a.P.regionId, a.rng(4, 9)); a.add('grassroots', a.rng(2, 5));
-            a.S.flags.owesSchool = true;
-            return { title: 'A promise, witnessed', body: 'It was said in front of the whole kraal. Promises made there are not forgotten, and are not forgiven either.', tone: 'good' };
-          } },
-        { t: 'Go around him to the youth', d: 'The young are more of them, and less patient.',
-          run: function (a) {
-            a.add('fame', a.rng(2, 5)); a.addRegion(a.P.regionId, a.rng(1, 4));
-            a.add('grassroots', -a.rng(1, 3));
-            return { title: 'You chose the future', body: 'The under-35s are the majority and they are not sentimental about chieftaincy. The elders will remember the insult for longer than the young remember the speech.', tone: 'flat' };
-          } }
-      ]
+      beats: [
+        {
+          q: '"Before we discuss land or schools. Whose area is this? Say it carefully."',
+          answers: [
+            { t: 'Yours. I am a visitor here who happens to be on a ballot.', mood: 3,
+              run: function (a) { a.addRegion(a.P.regionId, a.rng(6, 11)); a.add('grassroots', a.rng(3, 6)); a.add('stats.integrity', a.rng(1, 3)); },
+              reply: '"A visitor." The elders make a low sound of approval. "Then you may sit closer."' },
+            { t: 'The people’s. I answer to them and so, with respect, do you.', mood: -1,
+              run: function (a) { a.addRegion(a.P.regionId, a.rng(0, 3)); a.add('fame', a.rng(1, 4)); a.add('media', a.rng(1, 3)); a.add('grassroots', -a.rng(0, 3)); },
+              reply: 'Nobody speaks for a while. "That is a modern answer," he says, and it is not a compliment.' },
+            { t: 'Mine, in law. I would rather it were ours in practice.', mood: 1,
+              run: function (a) { a.addRegion(a.P.regionId, a.rng(2, 6)); a.add('stats.charisma', a.rng(.5, 1.5)); },
+              reply: '"In law." He almost smiles. "The law has been to this kraal twice in my lifetime and left both times."' }
+          ]
+        },
+        {
+          q: function (a) {
+            return '"Now. There are four hundred children walking eleven kilometres to school. ' +
+              'What are you going to do, and do not say you will look into it, because the last three did."';
+          },
+          answers: [
+            { t: 'Promise the school and the road, here, in front of everyone.', mood: 3,
+              run: function (a) { a.addRegion(a.P.regionId, a.rng(5, 10)); a.add('grassroots', a.rng(3, 6)); a.S.flags.owesSchool = true; a.promise('school', 'A school and a road, promised at the kraal in front of the elders'); },
+              reply: '"Witnessed." He says it formally, and the word changes what you have just done. It is not a campaign promise any more.' },
+            { t: 'I can get the road this year. The school I cannot promise.', mood: 2,
+              run: function (a) { a.addRegion(a.P.regionId, a.rng(3, 6)); a.add('stats.integrity', a.rng(2, 4)); a.promise('kraalroad', 'A road to the kraal within the year'); },
+              reply: '"One of two." He nods slowly. "Nobody has ever offered me one of two. They always offer both."' },
+            { t: 'Nothing, until I am in a position to deliver it. Ask me again then.', mood: 0,
+              run: function (a) { a.add('stats.integrity', a.rng(3, 6)); a.addRegion(a.P.regionId, -a.rng(0, 2)); a.add('grassroots', a.rng(0, 2)); },
+              reply: 'The elders talk among themselves. He listens to them. "We will remember that you did not lie. It is a smaller thing than a school."' }
+          ]
+        },
+        {
+          q: '"Last. The young men here do not come to the kraal any more. They are on the internet and they are angry. Do you go to them through me, or around me?"',
+          answers: [
+            { t: 'Through you. Always.', mood: 3,
+              run: function (a) { a.addRegion(a.P.regionId, a.rng(3, 7)); a.add('grassroots', a.rng(2, 5)); a.add('fame', -a.rng(0, 2)); },
+              reply: '"Then I will call them, and they will come, because they still come when I call." That may not be true for much longer, and he knows it.' },
+            { t: 'Around you, and I would rather tell you that to your face.', mood: 0,
+              run: function (a) { a.add('fame', a.rng(3, 6)); a.addRegion(a.P.regionId, a.rng(1, 4)); a.add('grassroots', -a.rng(1, 3)); },
+              reply: 'He takes it better than the elders do. "You are honest and you are wrong, and the second one is the one that will cost you."' },
+            { t: 'Both. You for the funerals, them for the rallies.', mood: 1,
+              run: function (a) { a.addRegion(a.P.regionId, a.rng(2, 5)); a.add('stats.cunning', a.rng(1, 2)); a.add('fame', a.rng(1, 3)); },
+              reply: '"Both." He looks at you for a long moment. "That is what a politician says. At least you said it here."' }
+          ]
+        }
+      ],
+      close: function (a, temp) {
+        return {
+          warm: 'He walks you to the gate himself, which he has not done for a politician in nineteen years, and everybody in the kraal sees it.',
+          fair: 'You are given tea and thanked. Nothing is said about endorsement, which is how these things are never said.',
+          cool: 'An elder walks you out. The ' + a.t.chief + ' is already talking to somebody else.',
+          hostile: 'The meeting is ended early, courteously, and by tomorrow the whole ' + a.t.constituency + ' will know it was ended early.'
+        }[temp];
+      }
     }),
 
     /* ================= scandal & law ================= */
@@ -773,21 +857,53 @@
       id: 'succession', w: 7, kicker: 'Succession',
       when: function (a) { return a.tier() >= 8 && !a.isLeader(); },
       title: 'Somebody asked the question on live television',
-      body: function (a) {
-        return '"Do you want to be ' + a.t.hos + '?" There is no good answer. Denial is a lie everyone can see, ' +
-          'confirmation is a declaration of war, and a joke reads as arrogance.';
+      speaker: function (a) { return { name: RZ.makeName(a.C), role: 'anchor', org: RZ.pick(a.C.media) }; },
+      where: 'A live studio, the panel discussion already overrunning',
+      settleOn: 'media',
+      opening: function (a) {
+        return 'She waits for the other panellist to finish, and then turns her chair very slightly towards you, ' +
+          'which is how you know the next eleven minutes are the reason you were invited.';
       },
-      choices: [
-        { t: 'Say yes, plainly', d: 'End the pretence. Start the fight.', tag: 'risk',
-          run: function (a) { a.add('fame', a.rng(6, 12)); a.add('media', a.rng(3, 8)); a.add('party', a.rng(2, 6)); a.add('leader', -a.rng(8, 16)); a.makeRival();
-            return { title: 'You declared', body: 'It was refreshing, and it cost you the principal permanently. From tonight, every mistake you make is a story about ambition.', tone: 'flat' }; } },
-        { t: 'Say the movement will decide', d: 'The formula. Everyone knows what it means.',
-          run: function (a) { a.add('party', a.rng(2, 5)); a.add('leader', -a.rng(1, 4)); a.add('media', -a.rng(0, 2));
-            return { title: 'You used the formula', body: '"I serve where I am deployed." Nobody believes it, nobody can attack it, and it has protected ambitious deputies for fifty years.', tone: 'good' }; } },
-        { t: 'Rule it out completely', d: 'Buys total trust. Costs the option.', tag: 'risk',
-          run: function (a) { a.add('leader', a.rng(8, 15)); a.add('media', a.rng(2, 5)); a.add('party', -a.rng(2, 6)); a.S.flags.ruledOut = true;
-            return { title: 'You ruled yourself out', body: 'The principal relaxed visibly. You have bought years of protection at the price of a promise that will be quoted back at you the day you break it.', tone: 'flat' }; } }
-      ]
+      beats: [
+        {
+          q: function (a) { return '"Simple question. Do you want to be ' + a.t.hos + '?"'; },
+          answers: [
+            { t: 'Yes. I do.', mood: 2, tag: 'risk',
+              run: function (a) { a.add('fame', a.rng(6, 12)); a.add('media', a.rng(3, 8)); a.add('party', a.rng(2, 6)); a.add('leader', -a.rng(8, 16)); a.makeRival(); a.S.flags.declared = true; },
+              reply: 'She had a follow-up ready for every answer except that one. "Right," she says. "Well. That is a first."' },
+            { t: 'The movement will decide. I serve where I am deployed.', mood: 0,
+              run: function (a) { a.add('party', a.rng(2, 5)); a.add('leader', -a.rng(1, 4)); a.add('media', -a.rng(0, 2)); },
+              reply: '"I serve where I am deployed," she repeats, to camera. "That has been the answer since 1994 and it has never once meant no."' },
+            { t: 'No. Not now, not in five years, not ever.', mood: 1, tag: 'risk',
+              run: function (a) { a.add('leader', a.rng(8, 15)); a.add('media', a.rng(2, 5)); a.add('party', -a.rng(2, 6)); a.S.flags.ruledOut = true; },
+              reply: '"Not ever." She lets it hang. "That is on tape now, and tape is forever, as you know."' }
+          ]
+        },
+        {
+          q: function (a) {
+            return '"Then let me ask it the other way. If the ' + a.t.exec + ' came to you tonight and asked you to stand — what would you say to them?"';
+          },
+          answers: [
+            { t: 'I would say yes, and I have just said so on your programme.', mood: 2,
+              run: function (a) { a.add('fame', a.rng(4, 9)); a.add('party', a.rng(2, 6)); a.add('leader', -a.rng(4, 10)); a.makeRival(); },
+              reply: '"So the answer to the first question was yes." She is enjoying this. So, by now, is the entire country.' },
+            { t: 'I would ask them why they were asking me and not the person in the job.', mood: 3,
+              run: function (a) { a.add('media', a.rng(3, 7)); a.add('party', a.rng(2, 5)); a.add('stats.cunning', a.rng(1, 3)); },
+              reply: 'She actually pauses. It is the first answer of the night that has moved the question rather than dodged it.' },
+            { t: 'I would tell them what I have told you, and you may draw your own conclusion.', mood: -1,
+              run: function (a) { a.add('media', -a.rng(2, 5)); a.add('leader', a.rng(1, 4)); },
+              reply: '"I will draw it, then." She turns back to the wide shot. "Viewers, draw your own."' }
+          ]
+        }
+      ],
+      close: function (a, temp) {
+        return {
+          warm: 'The clip ran on every bulletin for two days and you came out of it looking like somebody who answers questions.',
+          fair: 'The clip ran once. Your office spent Friday explaining what you had meant, which is the usual Friday.',
+          cool: 'The clip ran with the anchor’s eyebrow, which did more damage than anything you said.',
+          hostile: 'The clip is now the thing people play before they introduce you at events, for years.'
+        }[temp];
+      }
     }),
 
     E({
@@ -814,41 +930,131 @@
       when: function (a) { return a.isPresident() && a.S.nation.termNumber >= 2 && a.C.termLimit > 0; },
       once: true,
       title: 'They are asking you to stay',
-      body: function (a) {
-        return 'Provincial structures have begun passing resolutions calling for the term limit to be reviewed. ' +
-          'You did not ask them to. Some of them were paid to. The constitution says two terms; the ' + a.t.exec +
-          ' says the movement must not be destabilised.';
+      speaker: function (a) { return { name: RZ.makeName(a.C), role: 'Secretary-General of the party', org: '' }; },
+      where: 'The residence, after ten at night, no minutes taken',
+      settleOn: 'party',
+      opening: function (a) {
+        return 'He has the resolutions in a folder and he puts the folder on the table without opening it. ' +
+          '"Six provinces. You did not ask for them. Four of them were paid for and I know which four. ' +
+          'The constitution says two terms and the ' + a.t.exec + ' says the movement must not be destabilised, ' +
+          'and both of those sentences are now your problem."';
       },
-      choices: [
-        { t: 'Rule it out and start the handover', d: 'Leave. The hardest thing in this job.',
-          run: function (a) { a.add('intl', a.rng(10, 20)); a.add('media', a.rng(8, 15)); a.add('stats.integrity', a.rng(6, 12)); a.S.flags.willStepDown = true; a.legacyMark('respectedTermLimit');
-            return { title: 'You announced your last day', body: 'You named the date, in public, with three years to run. The markets steadied and every ambitious person in your party began moving at once.', tone: 'good' }; } },
-        { t: 'Let the debate run without endorsing it', d: 'Say nothing. Let them build it for you.', tag: 'risk',
-          run: function (a) { a.add('media', -a.rng(3, 8)); a.add('intl', -a.rng(3, 8)); a.add('party', a.rng(2, 6)); a.S.flags.thirdTermDebate = true;
-            return { title: 'You did not discourage them', body: 'Your spokesperson said it is a matter for the movement. Everyone understood exactly what that meant.', tone: 'flat' }; } },
-        { t: 'Push the amendment through', d: 'It can be done. It has been done.', tag: 'risk',
-          run: function (a) { return a.attemptThirdTerm(); } }
-      ]
+      beats: [
+        {
+          q: '"So. Do we let this run, or do you kill it tonight?"',
+          answers: [
+            { t: 'Kill it tonight. I will name my last day in public tomorrow.', mood: 2,
+              run: function (a) { a.add('intl', a.rng(10, 20)); a.add('media', a.rng(8, 15)); a.add('stats.integrity', a.rng(6, 12)); a.add('party', -a.rng(2, 6)); a.S.flags.willStepDown = true; a.legacyMark('respectedTermLimit'); },
+              reply: 'He is quiet for a long time. "Then from tomorrow you are a lame duck and everybody in this building starts moving. You know that."' },
+            { t: 'Let it run. I will say nothing either way.', mood: 1,
+              run: function (a) { a.add('media', -a.rng(3, 8)); a.add('intl', -a.rng(3, 8)); a.add('party', a.rng(2, 6)); a.S.flags.thirdTermDebate = true; },
+              reply: '"Nothing either way." He opens the folder now. "Then I will keep collecting these, and in nine months it will not be a debate any more."' },
+            { t: 'Bring me the amendment. I want the numbers in the House by Friday.', mood: 3, tag: 'risk',
+              run: function (a) { a.S.flags.pushingThirdTerm = true; a.add('party', a.rng(3, 8)); a.add('intl', -a.rng(6, 14)); a.add('media', -a.rng(5, 12)); },
+              reply: '"By Friday." He writes nothing down. Men in his position have not written anything down since 1998.' }
+          ]
+        },
+        {
+          q: function (a) {
+            return '"Whichever way. There is a second question and nobody else in this country will ask it of you. ' +
+              'What are you afraid of — losing the office, or what happens to you the day after you leave it?"';
+          },
+          answers: [
+            { t: 'The day after. Obviously. And I am going to leave anyway.', mood: 3,
+              run: function (a) { a.add('stats.integrity', a.rng(4, 8)); a.add('intl', a.rng(3, 8)); a.S.flags.willStepDown = true; a.legacyMark('respectedTermLimit'); },
+              reply: '"Then we will need to build you a floor to land on." For the first time tonight he sounds like a friend rather than a Secretary-General.' },
+            { t: 'The office. The country is not finished and neither am I.', mood: 1,
+              run: function (a) { a.add('party', a.rng(3, 7)); a.add('media', -a.rng(2, 6)); a.add('intl', -a.rng(2, 6)); a.S.flags.thirdTermDebate = true; },
+              reply: '"They all say the country is not finished." He picks up the folder. "It is never finished. That is what a country is."' },
+            { t: 'Neither. I am afraid of who gets it next.', mood: 2,
+              run: function (a) { a.add('party', a.rng(2, 5)); a.add('leader', a.rng(0, 3)); a.add('stats.cunning', a.rng(1, 3)); },
+              reply: '"Then choose one and build them, starting Monday." It is the best advice you will get this year and you will probably not take it.' }
+          ]
+        }
+      ],
+      settles: function (a, temp, convo) {
+        // The amendment is only actually attempted if it was asked for, and the
+        // room decides how much of the machine goes with it.
+        if (a.S.flags.pushingThirdTerm) {
+          a.S.flags.pushingThirdTerm = false;
+          var res = a.attemptThirdTerm();
+          convo.transcript.push({ who: 'them', text: res.title + ' ' + String(res.body).replace(/<[^>]+>/g, '') });
+        } else {
+          a.add('party', (temp === 'warm' ? 1 : temp === 'hostile' ? -1 : 0) * a.rng(2, 5));
+        }
+      },
+      close: function (a, temp) {
+        return {
+          warm: 'He leaves by the side door at one in the morning. Whatever was decided in this room, it was decided with him and not around him.',
+          fair: 'He leaves without finishing the tea. Nothing was settled that cannot be reopened in three months.',
+          cool: 'He takes the folder with him, which means the resolutions keep coming.',
+          hostile: 'He takes the folder with him and does not say goodnight. By Thursday two more provinces have passed the resolution.'
+        }[temp];
+      }
     }),
 
     E({
       id: 'deputybrief', w: 7, kicker: 'Your deputy',
       when: function (a) { return a.isLeader() || a.isPresident(); },
       title: 'Your deputy is briefing against you',
-      body: 'Journalists have started using a phrase that only comes from one office. Provincial chairs are being ' +
-            'flown to a farm at somebody else’s expense. It is happening, and it is early.',
-      choices: [
-        { t: 'Fire them', d: 'Decisive. Also creates a martyr with a base.', tag: 'risk',
-          run: function (a) { var ok = a.roll('cunning', 52); a.add('party', ok ? a.rng(2, 6) : -a.rng(5, 12)); a.add('media', -a.rng(1, 5)); a.makeRival();
-            return { title: ok ? 'Removed, cleanly' : 'They left with three provinces', body: ok
-              ? 'Announced at 6am with a replacement already sworn in. No vacuum, no rally, no story by Thursday.'
-              : 'The dismissal was the beginning of their campaign, not the end of it. They have a grievance now, and grievances win conferences.', tone: ok ? 'good' : 'bad' }; } },
-        { t: 'Bind them closer — give them something big', d: 'Make them responsible for a problem.',
-          run: function (a) { a.add('capital', -5); a.add('party', a.rng(1, 4)); a.add('stats.cunning', a.rng(1, 2));
-            return { title: 'They now own the electricity crisis', body: 'You handed them a portfolio that cannot be fixed in four years and thanked them publicly for their willingness to serve.', tone: 'good' }; } },
-        { t: 'Destroy them with what you have', d: 'You have a file. Everyone has a file.', tag: 'risk',
-          run: function (a) { return a.doLeak(true); } }
-      ]
+      speaker: function (a) {
+        var r = a.aRival();
+        return { name: r ? r.name : RZ.makeName(a.C), role: r ? r.role : 'your deputy', org: '' };
+      },
+      where: 'Your office, a meeting neither of you asked for',
+      settleOn: 'party',
+      opening: function (a) {
+        return 'Journalists have started using a phrase that comes from exactly one office. Provincial chairs are ' +
+          'being flown to a farm at somebody else’s expense. He sits down before he is asked to, which is itself ' +
+          'the answer to the question you were going to open with.';
+      },
+      beats: [
+        {
+          q: '"You wanted to see me. I assume this is about the farm."',
+          answers: [
+            { t: 'It is. Stop, or I remove you this week.', mood: -2,
+              run: function (a, convo) {
+                convo.removed = a.roll('cunning', 52);
+                a.add('party', convo.removed ? a.rng(2, 6) : -a.rng(4, 9));
+                a.add('leader', convo.removed ? a.rng(1, 4) : -a.rng(2, 5));
+                if (!convo.removed) a.makeRival();
+              },
+              reply: function (a, convo) {
+                return convo.removed
+                  ? '"This week." He counts the provinces in his head, out loud, and stops at two. "Fine."'
+                  : '"Remove me." He smiles. "Count the provinces first. I have, twice, this morning."';
+              } },
+            { t: 'It is. And I would like to know what you actually want.', mood: 2,
+              run: function (a) { a.add('stats.cunning', a.rng(1, 3)); a.add('party', a.rng(1, 4)); },
+              reply: '"What I want." He looks genuinely thrown. "Nobody in this building has asked me that in four years."' },
+            { t: 'No. It is about the electricity portfolio, which is now yours.', mood: 1,
+              run: function (a) { a.add('capital', -5); a.add('party', a.rng(1, 4)); a.add('stats.cunning', a.rng(1, 2)); },
+              reply: '"Electricity." He understands immediately what has been done to him, and he cannot refuse it in front of a camera.' }
+          ]
+        },
+        {
+          q: '"Let us be adults. There is a conference in two years and one of us is going to be finished by it. What is the arrangement?"',
+          answers: [
+            { t: 'You succeed me. I will say so publicly and I will mean it.', mood: 3,
+              run: function (a) { a.add('party', a.rng(4, 9)); a.add('leader', a.rng(2, 5)); a.add('stats.integrity', a.rng(2, 5)); a.removeRival(); a.promise('succession', 'A public undertaking that your deputy succeeds you'); },
+              reply: '"Publicly." He does not trust it and he cannot afford not to. "Then I will stop, and if you break it I will not stop again."' },
+            { t: 'There is no arrangement. Beat me on the floor or stop briefing.', mood: -1,
+              run: function (a) { a.add('party', a.rng(1, 4)); a.add('stats.grit', a.rng(1, 3)); a.makeRival(); },
+              reply: '"On the floor, then." He stands. At least it is now a contest and not a whispering campaign.' },
+            { t: 'There is a file on you, and this is me telling you it exists.', mood: -3, tag: 'risk',
+              run: function (a) { var r = a.doLeak(true); a.S.flags.leakedOnDeputy = true; },
+              reply: '"A file." He is very still. "Then we are both going to find out what is in yours."' }
+          ]
+        }
+      ],
+      close: function (a, temp) {
+        return {
+          warm: 'He leaves and cancels the farm. The phrase disappears from the papers within a fortnight.',
+          fair: 'He leaves. The briefings slow down without stopping, which is the most you were going to get.',
+          cool: 'He leaves and flies to the farm that weekend anyway, with two more chairs than last time.',
+          hostile: 'He leaves, and by Sunday three provinces have passed motions of support for him that nobody drafted in a province.'
+        }[temp];
+      }
     }),
 
     /* ================= what you said in a room ================= */

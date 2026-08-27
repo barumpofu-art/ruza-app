@@ -197,7 +197,7 @@ function playCareer(countryId, seed, strategy) {
   const where = `${countryId}/${seed}`;
   checkState(`${where} @start`, S);
 
-  const stats = { turns: 0, actions: 0, meetings: 0, events: 0, contests: 0, wins: 0,
+  const stats = { turns: 0, actions: 0, meetings: 0, events: 0, eventRooms: 0, contests: 0, wins: 0,
                   elections: 0, appointments: 0, beatenBy: 0, budgets: 0 };
 
   for (let turn = 0; turn < 600 && !S.over; turn++) {
@@ -276,10 +276,41 @@ function playCareer(countryId, seed, strategy) {
     if (S.pendingEvent) {
       stats.events++;
       const ev = S.pendingEvent;
-      if (!ev.choices.length) fail(at, `event ${ev.id} offers no choices`);
-      const ok = ev.choices.filter((ch) => ch.ok);
-      if (!ok.length) fail(at, `event ${ev.id} offers no allowed choice`);
-      checkEntry(at, RZ.engine.resolveEvent(S, RZ.pick(ok).i));
+      if (ev.talk) {
+        // A situation that is a room. Half the time, walk out of the app
+        // mid-answer and come back, because an event must survive that.
+        stats.eventRooms++;
+        let convo = RZ.dialogue.beginEvent(S, { beat: ev.talkBeat, mood: ev.talkMood });
+        if (!convo) { fail(at, `event ${ev.id} says it is a room and has no beats`); }
+        else {
+          let beats = 0, interrupted = false;
+          while (!convo.done && beats++ < 12) {
+            const opts = RZ.dialogue.options(convo).filter((o) => o.ok);
+            if (!opts.length) { fail(at, `event ${ev.id} beat ${convo.beat} has no answerable option`); break; }
+            RZ.dialogue.choose(convo, RZ.pick(opts).i);
+            if (!convo.done && !interrupted && RZ.chance(0.35)) {
+              // reopened from the save, exactly as the app would
+              interrupted = true;
+              const held = S.pendingEvent;
+              if (!held || held.id !== ev.id) { fail(at, `event ${ev.id} lost its place mid-room`); break; }
+              const again = RZ.dialogue.beginEvent(S, { beat: held.talkBeat, mood: held.talkMood });
+              if (!again) { fail(at, `event ${ev.id} could not be resumed`); break; }
+              if (again.beat !== convo.beat) fail(at, `event ${ev.id} resumed at beat ${again.beat}, not ${convo.beat}`);
+              convo = again;
+            }
+          }
+          if (!convo.done) fail(at, `event room ${ev.id} never closed`);
+          else {
+            checkEntry(at, RZ.engine.finishEventDialogue(S, convo));
+            if (S.pendingEvent) fail(at, `event ${ev.id} is still pending after its room closed`);
+          }
+        }
+      } else {
+        if (!ev.choices.length) fail(at, `event ${ev.id} offers no choices`);
+        const ok = ev.choices.filter((ch) => ch.ok);
+        if (!ok.length) fail(at, `event ${ev.id} offers no allowed choice`);
+        checkEntry(at, RZ.engine.resolveEvent(S, RZ.pick(ok).i));
+      }
       checkState(`${at} after event ${ev.id}`, S);
     }
   }
@@ -303,7 +334,7 @@ function playCareer(countryId, seed, strategy) {
 const ids = Object.keys(RZ.COUNTRIES);
 console.log(`playing ${CAREERS} careers in each of ${ids.length} countries, as ${STRATEGIES.join(' and ')}\n`);
 
-const totals = { turns: 0, actions: 0, meetings: 0, events: 0, contests: 0, wins: 0,
+const totals = { turns: 0, actions: 0, meetings: 0, events: 0, eventRooms: 0, contests: 0, wins: 0,
                  elections: 0, appointments: 0, beatenBy: 0, budgets: 0 };
 const endings = {};
 const ceilings = {};
@@ -330,7 +361,7 @@ for (const strategy of STRATEGIES) {
 }
 
 console.log(`\n  ${totals.turns} months played, ${totals.actions} actions, ${totals.meetings} meetings,`);
-console.log(`  ${totals.events} events, ${totals.contests} contests (${totals.wins} won, ${totals.beatenBy} lost to a named rival),`);
+console.log(`  ${totals.events} events (${totals.eventRooms} of them rooms), ${totals.contests} contests (${totals.wins} won, ${totals.beatenBy} lost to a named rival),`);
 console.log(`  ${totals.elections} general elections, ${totals.appointments} appointments, ${totals.budgets} budgets.`);
 console.log('  endings: ' + Object.entries(endings).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', '));
 for (const strategy of STRATEGIES) {
