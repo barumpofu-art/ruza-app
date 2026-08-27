@@ -256,10 +256,33 @@
       '<div class="sprint-bar"><span style="width:' + Math.max(2, Math.min(100, t.support)) + '%"></span></div>' +
       '<p class="note" style="margin:8px 0 0">' + t.voters.toLocaleString() + ' likely voters across ' +
         sp.wards.length + ' wards. A ward you do not visit is one somebody else is visiting.</p>' +
+      warChest(S, c, sp) +
       '<div class="wards">' + sp.wards.slice().sort(function (a, b) { return a.support - b.support; })
         .map(function (w) { return wardRow(S, w); }).join('') + '</div>' +
       '</div>';
     return h;
+  }
+
+  // What is left, where it came from, and how much of it will survive being
+  // looked at afterwards.
+  function warChest(S, c, sp) {
+    var w = sp.war;
+    var sym = c.cur.sym;
+    var dirtyPct = w.raised ? Math.round((100 * w.dirty) / w.raised) : 0;
+    var low = w.cash < RZ.engine.mkApi(S).wage(1.5);
+    return '<div class="chest">' +
+      '<div class="chest-row">' +
+        '<div class="chest-k">War chest</div>' +
+        '<div class="chest-v ' + (low ? 'low' : '') + '">' + esc(RZ.money(w.cash, sym)) + '</div>' +
+      '</div>' +
+      '<div class="chest-d">' +
+        'raised ' + esc(RZ.money(w.raised, sym)) + ' · spent ' + esc(RZ.money(w.spent, sym)) +
+        (w.personal ? ' · <span class="chest-own">' + esc(RZ.money(w.personal, sym)) + ' of it your own</span>' : '') +
+      '</div>' +
+      (w.dirty
+        ? '<div class="chest-d chest-warn">' + dirtyPct + '% of it is money the return has no line for</div>'
+        : '') +
+      '</div>';
   }
 
   function wardRow(S, w) {

@@ -379,6 +379,17 @@ body{
   text-transform:uppercase; font-weight:700; opacity:.8; margin-top:4px; }
 .sprint-bar{ display:block; height:7px; border-radius:4px; background:#1b2530; margin-top:11px; overflow:hidden; }
 .sprint-bar span{ display:block; height:100%; background:linear-gradient(90deg,var(--gold-deep),var(--gold)); }
+.chest{
+  margin-top:12px; padding:10px 12px; border-radius:var(--radius-sm);
+  background:#1b2530; border:1px solid var(--line-soft);
+}
+.chest-row{ display:flex; align-items:baseline; gap:10px; }
+.chest-k{ font-size:.62rem; letter-spacing:.15em; text-transform:uppercase; color:var(--text-faint); font-weight:700; }
+.chest-v{ margin-left:auto; font-family:var(--mono); font-size:1rem; font-weight:700; color:var(--gold); }
+.chest-v.low{ color:var(--red); }
+.chest-d{ font-size:.72rem; color:var(--text-faint); margin-top:5px; line-height:1.45; }
+.chest-own{ color:#e0b06f; }
+.chest-warn{ color:#d99a97; }
 .wards{ display:flex; flex-direction:column; gap:8px; margin-top:12px; }
 .ward{
   display:block; width:100%; text-align:left; padding:10px 11px; cursor:pointer;

@@ -431,10 +431,19 @@
   function sadcIntervention(S) {
     var P = S.player, c = RZ.COUNTRIES[S.countryId];
     var s = S.nation.society;
-    if (!(s.unrest > 85 && P.standing.intl < 15)) { S.flags.sadcWarned = false; return false; }
+    if (!(s.unrest > 85 && P.standing.intl < 15)) {
+      S.flags.sadcWarned = false;
+      S.flags.sadcSince = 0;
+      return false;
+    }
 
-    // One month of warning, so it is a situation you watched arrive rather
-    // than a coin landing on you.
+    // Three months of warning, not one. A single month is not a warning: no
+    // action in the game lifts international standing from single figures past
+    // fifteen in one turn, so a one-month fuse was an announcement that the
+    // career was already over. Three turns is enough to work the phones, go to
+    // the summit, and put the unrest down — if the player drops everything.
+    S.flags.sadcSince = S.flags.sadcSince || 0;
+    S.flags.sadcSince++;
     if (!S.flags.sadcWarned) {
       S.flags.sadcWarned = true;
       RZ.engine.pushFeed(S, {
@@ -445,6 +454,21 @@
               'A standby brigade has been mentioned by name in a document that was not supposed to circulate.',
         tone: 'bad'
       });
+      return false;
+    }
+    if (S.flags.sadcSince < 4) {
+      // Still convened, still not moving. Say so once more halfway through, so
+      // the player knows the clock is running rather than stopped.
+      if (S.flags.sadcSince === 2) {
+        RZ.engine.pushFeed(S, {
+          kind: 'big', alert: true, src: 'Gaborone',
+          title: 'The Organ has not adjourned',
+          body: 'A second communiqué, shorter than the first, noting that the situation remains under active ' +
+                'consideration. Two more capitals have recalled their high commissioners. There is still time ' +
+                'to make this somebody else’s problem, and there is not much of it.',
+          tone: 'bad'
+        });
+      }
       return false;
     }
 

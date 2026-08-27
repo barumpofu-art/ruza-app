@@ -95,13 +95,30 @@ function chooseAction(RZ, S, acts, policy) {
   // Eight weeks out, the seat is the only thing that matters. Blitz the ward
   // you are losing, and keep the taxis booked.
   if (S.tempo === 'week' && S.sprint) {
-    const blitz = acts.filter((a) => a.id === 'blitz');
-    const logistics = acts.filter((a) => a.id === 'transport' || a.id === 'agents');
     if (S.player.health < 30) {
       const sleep = acts.filter((a) => a.id === 'sleep');
       if (sleep.length) return sleep[0];
     }
+    // Fund the campaign before spending it. A week spent raising is a week not
+    // spent canvassing, which is the trade the war chest exists to create.
+    const api = RZ.engine.mkApi(S);
+    const weekly = api.wage(1.2 + api.tier() * 0.35);
+    if (RZ.sprint.warFunds(S) < weekly * 2) {
+      const fav = acts.filter((a) => a.id === 'favours');
+      if (fav.length) return fav[0];
+      // Clean money is exhausted and the ballot is close. This is the moment
+      // the whole funding design is about, so the policy has to actually face
+      // it rather than fundraise its way round it.
+      if (S.sprint.week >= 3) {
+        const chq = acts.filter((a) => a.id === 'cheque');
+        if (chq.length) return chq[0];
+      }
+      const br = acts.filter((a) => a.id === 'branchraise');
+      if (br.length) return br[0];
+    }
+    const logistics = acts.filter((a) => a.id === 'transport' || a.id === 'agents');
     if (logistics.length && RZ.rnd() < 0.25) return logistics[Math.floor(RZ.rnd() * logistics.length)];
+    const blitz = acts.filter((a) => a.id === 'blitz');
     if (blitz.length) return blitz[0];
   }
 
@@ -109,6 +126,16 @@ function chooseAction(RZ, S, acts, policy) {
   if (S.player.health < 34) {
     const rest = acts.filter((a) => a.id === 'rest');
     if (rest.length) return rest[0];
+  }
+
+  // A brigade is being discussed on your border. Everything else can wait —
+  // this is what the warning window exists for, and a policy that ignores it
+  // cannot tell us whether the window is wide enough to survive.
+  if (S.flags && S.flags.sadcWarned) {
+    const dip = acts.filter((a) => ['summit', 'donors', 'diaspora'].includes(a.id));
+    if (dip.length && S.player.standing.intl < 20) return dip[Math.floor(RZ.rnd() * dip.length)];
+    const calm = acts.filter((a) => ['address', 'security'].includes(a.id));
+    if (calm.length) return calm[Math.floor(RZ.rnd() * calm.length)];
   }
 
   // The ways past the bottleneck. A competent player takes a revolt when the
@@ -167,6 +194,8 @@ function playCareer(seed, { trace = false, policy = 'random' } = {}) {
     coalitionCollapses: 0, elections: 0, promisesMade: 0, promisesBroken: 0,
     sprints: 0, blitzes: 0, weeklyTurns: 0, bestPoll: 0, swings: [],
     revolts: 0, revoltsWon: 0, exiled: 0, apologies: 0, blackmails: 0,
+    raised: 0, spentOwn: 0, dirtyShares: [], audits: 0, brokeWeeks: 0, cheques: 0, favours: 0,
+    sadcWarned: 0,
     mandates: 0, nemesisMoves: 0,
     tendersGranted: 0, tendersRefused: 0, patronsAtEnd: 0,
     capital: 0, integrity: 0, money: 0, dirt: 0, health: 0, age: 0,
@@ -237,6 +266,9 @@ function playCareer(seed, { trace = false, policy = 'random' } = {}) {
       }
       if (pick.id === 'defect') { r.crossings++; say('crossed the floor'); }
       if (pick.id === 'revolt') { r.revolts++; say('challenged the incumbent'); }
+      if (pick.id === 'cheque') r.cheques++;
+      if (pick.id === 'favours') r.favours++;
+      if (S.sprint && RZ.sprint.warFunds(S) <= 0) r.brokeWeeks++;
       if (pick.id === 'blackmail') { r.blackmails++; say('traded the file for the seat'); }
     }
 
@@ -251,7 +283,10 @@ function playCareer(seed, { trace = false, policy = 'random' } = {}) {
     if (turnOut.sprintResult && turnOut.sprintResult.finalTally) {
       r.bestPoll = Math.max(r.bestPoll, turnOut.sprintResult.finalTally.support);
       if (typeof turnOut.sprintResult.swing === 'number') r.swings.push(turnOut.sprintResult.swing);
+      const w = turnOut.sprintResult.war;
+      if (w) { r.raised += w.raised; r.spentOwn += w.personal; if (w.raised) r.dirtyShares.push(w.dirty / w.raised); }
     }
+    if (S.flags.sadcWarned) r.sadcWarned = 1;
     if (turnOut.nemesis && turnOut.nemesis.move) r.nemesisMoves++;
     if (turnOut.collapsed) { r.collapses++; say('medical collapse'); }
     if (turnOut.purge && turnOut.purge.purged) { r.purges++; say('purged from the slate'); }
@@ -259,6 +294,7 @@ function playCareer(seed, { trace = false, policy = 'random' } = {}) {
     // ---- whatever is on the table ----
     if (S.pendingEvent) {
       const ev = S.pendingEvent;
+      if (ev.audit) r.audits++;
       const ok = (ev.choices || []).filter((x) => x.ok);
       if (ok.length) {
         const ch = ok[Math.floor(RZ.rnd() * ok.length)];
@@ -381,8 +417,10 @@ for (const policy of cohorts) report(policy, all[policy]);
   if (!any((r) => r.amendmentsTried > 0)) {
     allWarnings.push('[all] no amendment attempted in any cohort — president-only, see mechanics.mjs');
   }
-  if (!any((r) => r.ending === 'sadc')) {
-    allWarnings.push('[all] SADC intervention never fired in any cohort');
+  // Reaching the warning is the reachability question. Whether the brigade
+  // then crosses is up to the player, and mechanics.mjs proves both endings.
+  if (!any((r) => r.sadcWarned)) {
+    allWarnings.push('[all] no career ever reached the SADC warning — its trigger may be unreachable');
   }
   const top = every.filter((r) => r.becamePresident).length;
   console.log(`\nACROSS BOTH COHORTS\n  reached the top office   ${top} of ${every.length}` +
@@ -435,8 +473,9 @@ console.log(`  career length  median ${quantile((r) => r.turns, 0.5)} months  p9
 
 console.log('\nTHE NEW MECHANICS  (how often each one actually fires)');
 const sadc = results.filter((r) => r.ending === 'sadc');
-console.log(`  SADC intervention        ${fmt(pct((r) => r.ending === 'sadc'))}%  ${
-  sadc.length ? `avg at month ${fmt(sadc.reduce((t, r) => t + (r.sadcTurn ?? r.turns), 0) / sadc.length, 0)}` : '(never fired)'}`);
+console.log(`  SADC: warned ${fmt(pct((r) => r.sadcWarned))}% of careers, ended ${fmt(pct((r) => r.ending === 'sadc'))}%  ${
+  sadc.length ? `(avg at month ${fmt(sadc.reduce((t, r) => t + (r.sadcTurn ?? r.turns), 0) / sadc.length, 0)})`
+              : '— every warned career got out of it'}`);
 console.log(`  medical collapse         ${fmt(pct((r) => r.collapses > 0))}% of careers, ${fmt(mean((r) => r.collapses), 2)} per career`);
 console.log(`  black swan shock         ${fmt(pct((r) => r.shocks > 0))}% of careers, ${fmt(mean((r) => r.shocks), 2)} per career`);
 console.log(`  congress purge           ${fmt(pct((r) => r.purges > 0))}% of careers, ${fmt(mean((r) => r.purges), 2)} per career`);
@@ -448,6 +487,17 @@ console.log(`  mandates won             ${fmt(mean((r) => r.mandates), 2)} per c
 console.log(`  caucus revolts           ${fmt(mean((r) => r.revolts), 2)} per career, ${fmt(pct((r) => r.exiled > 0))}% ended in exile`);
 console.log(`  files traded for a seat  ${fmt(mean((r) => r.blackmails), 2)} per career`);
 console.log(`  nemesis moves            ${fmt(mean((r) => r.nemesisMoves), 1)} per career`);
+{
+  const ds = results.flatMap((r) => r.dirtyShares);
+  ds.sort((a, b) => a - b);
+  const perCamp = Math.max(1, sum((r) => r.sprints));
+  console.log(`  raised per campaign      ${fmt(sum((r) => r.raised) / perCamp, 0)}`);
+  console.log(`  own money per campaign   ${fmt(sum((r) => r.spentOwn) / perCamp, 0)}` +
+    `  (${fmt(sum((r) => r.spentOwn) / Math.max(1, sum((r) => r.raised)), 2)}x what was raised)`);
+  console.log(`  dirty share of a chest   ${ds.length ? fmt(100 * ds[Math.floor(ds.length / 2)], 1) + '% median, ' + fmt(100 * ds[ds.length - 1], 1) + '% worst' : 'none'}`);
+  console.log(`  late cheques / favours   ${fmt(mean((r) => r.cheques), 2)} / ${fmt(mean((r) => r.favours), 2)} per career`);
+  console.log(`  commission audits        ${fmt(mean((r) => r.audits), 2)} per career`);
+}
 console.log(`  campaign poll at close   ${fmt(quantile((r) => r.bestPoll, 0.5), 1)}% median, ${fmt(quantile((r) => r.bestPoll, 0.1), 1)}% p10, ${fmt(quantile((r) => r.bestPoll, 0.9), 1)}% p90`);
 {
   const sw = results.flatMap((r) => r.swings).sort((a, b) => a - b);
@@ -490,7 +540,8 @@ if (policy === 'directed') {
 if (policy === 'random' && pct((r) => r.becamePresident) > 45) {
   w('a coin-flipping player becomes president too often');
 }
-if (pct((r) => r.ending === 'sadc') > 12) w('SADC intervention is ending too many careers');
+// Only a concern for a policy that is actively trying to get out of it.
+if (pct((r) => r.ending === 'sadc') > 12) w('SADC ends too many careers even for a player who reacts to the warning');
 if (mean((r) => r.shocks) < 0.15) w('black swan shocks are too rare to matter');
 // A random player never rests, so a high collapse rate there is the mechanic
 // working. The bar that matters is whether a player who does rest can hold it.

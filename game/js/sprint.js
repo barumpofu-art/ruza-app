@@ -33,9 +33,10 @@
     S.sprint = {
       kind: 'election', weeksLeft: WEEKS, week: 1,
       wards: buildWards(S),
-      war: { spent: 0, raised: 0 },
+      war: emptyWar(),
       sabotage: 0, rebuttals: 0
     };
+    seedWarChest(S);
     S.sprint.openTally = tally(S).support;
     var c = RZ.COUNTRIES[S.countryId];
     RZ.engine.pushFeed(S, {
@@ -71,8 +72,93 @@
     sp.swing = swing;
 
     sp.finalTally = t;
+    sp.dirtyShare = dirtyShare(S, sp);
     S.flags.lastSprint = sp;
+    // Money that will not survive being looked at is a deferred cost, not a
+    // free one. The commission gets to the returns a few months after the
+    // ballot, which is exactly when you have stopped thinking about it.
+    if (sp.war.dirty > 0 && sp.dirtyShare > 0.28) {
+      S.flags.auditDue = {
+        month: S.date.year * 12 + S.date.month + RZ.irange(2, 5),
+        dirty: Math.round(sp.war.dirty),
+        raised: Math.round(sp.war.raised),
+        share: sp.dirtyShare
+      };
+    }
     return sp;
+  }
+
+  /* =======================================================================
+     THE WAR CHEST
+     Two currencies that are not interchangeable and do not decay alike.
+
+     Money is spent and gone. Capital is standing owed to you by people who
+     can be asked for things — slow to rebuild (a few points a month, by rung)
+     and therefore the more expensive of the two to burn. The campaign turns
+     one into the other in exactly one direction: favours become cash.
+
+     Where the cash came from is remembered, because after the ballot somebody
+     asks.
+     ======================================================================= */
+  function emptyWar() {
+    return { cash: 0, raised: 0, spent: 0, clean: 0, dirty: 0, personal: 0, sources: [] };
+  }
+
+  // What the party puts in. Machine parties fund their candidates; a candidate
+  // the structures dislike is funding themselves.
+  function seedWarChest(S) {
+    var api = RZ.engine.mkApi(S);
+    var pst = S.parties[S.player.partyId] || { machine: 50 };
+    var tier = api.tier();
+    var amount = Math.round(api.wage(2 + tier * 0.5) *
+      (0.45 + S.player.standing.party / 130) * (0.6 + pst.machine / 130));
+    raise(S, amount, 'clean', 'The party allocation');
+    S.sprint.war.allocation = amount;
+    return amount;
+  }
+
+  function raise(S, amount, kind, label) {
+    var w = S.sprint && S.sprint.war;
+    if (!w || amount <= 0) return 0;
+    amount = Math.round(amount);
+    w.cash += amount;
+    w.raised += amount;
+    w[kind === 'dirty' ? 'dirty' : 'clean'] += amount;
+    w.sources.push({ label: label, amount: amount, kind: kind, week: S.sprint.week });
+    return amount;
+  }
+
+  // Campaign costs come off the campaign account. When it is empty they come
+  // out of your own pocket, which is how candidates in this part of the world
+  // end up selling the plot their father left them.
+  function spend(S, api, amount, label) {
+    amount = Math.round(amount);
+    var w = S.sprint && S.sprint.war;
+    if (!w) { api.add('money', -amount); return { fromWar: 0, fromSelf: amount, short: true }; }
+    var fromWar = Math.min(w.cash, amount);
+    w.cash -= fromWar;
+    w.spent += fromWar;
+    var rest = amount - fromWar;
+    if (rest > 0) {
+      api.add('money', -rest);
+      w.personal += rest;
+      w.spent += rest;
+    }
+    return { fromWar: fromWar, fromSelf: rest, short: rest > 0 };
+  }
+
+  function warFunds(S) {
+    var w = S.sprint && S.sprint.war;
+    return w ? w.cash : 0;
+  }
+  // What you can actually field this week, whoever ends up paying for it.
+  function canAfford(S, api, amount) { return warFunds(S) + Math.max(0, api.P.money) >= amount; }
+
+  // The share of the chest that will not survive being looked at.
+  function dirtyShare(S, sp) {
+    var w = (sp || S.sprint) && (sp || S.sprint).war;
+    if (!w || !w.raised) return 0;
+    return w.dirty / w.raised;
   }
 
   /* =======================================================================
@@ -158,11 +244,10 @@
     var w = (S.sprint.wards || []).filter(function (x) { return x.id === wardId; })[0];
     if (!w) return null;
 
-    var spend = api.wage(1.2 + api.tier() * 0.35);
-    api.add('money', -spend);
-    S.sprint.war.spent += spend;
-
-    var broke = api.P.money < 0;
+    var cost = api.wage(1.2 + api.tier() * 0.35);
+    var paid = spend(S, api, cost, 'A week in ' + w.name);
+    // Running on your own money is not the same as running on the campaign's.
+    var broke = paid.short && api.P.money < 0;
     var fresh = S.turn - w.lastVisit > 2 ? 1 : 0.55;      // the third rally in a fortnight is not the first
     var fatigue = Math.pow(0.82, w.visits);                // and diminishing returns are real
     var ok = api.roll('charisma', 44);
@@ -178,7 +263,7 @@
     api.addRegion(api.P.regionId, gain * 0.35);
     api.campaignEffort(RZ.range(2, 5) * fresh);
 
-    return { ward: w, gain: gain, ok: ok, spend: spend, broke: broke };
+    return { ward: w, gain: gain, ok: ok, spend: cost, paid: paid, broke: broke };
   }
 
   // Money rather than feet: a bigger jump than a blitz, and the ward is held
@@ -187,10 +272,9 @@
   function surge(S, wardId, api) {
     var w = (S.sprint.wards || []).filter(function (x) { return x.id === wardId; })[0];
     if (!w) return null;
-    var spend = api.wage(4 + api.tier() * 0.5);
-    api.add('money', -spend);
+    var cost = api.wage(4 + api.tier() * 0.5);
+    var paid = spend(S, api, cost, 'Everything at ' + w.name);
     api.add('capital', -RZ.range(6, 10));
-    S.sprint.war.spent += spend;
 
     var gain = RZ.range(9, 16) * w.swing;
     w.support = C100(w.support + gain);
@@ -200,7 +284,7 @@
     w.lastVisit = S.turn;
     api.addRegion(api.P.regionId, gain * 0.3);
     api.campaignEffort(RZ.range(4, 9));
-    return { ward: w, gain: gain, spend: spend };
+    return { ward: w, gain: gain, spend: cost, paid: paid };
   }
 
   /* =======================================================================
@@ -319,7 +403,7 @@
     {
       id: 'broke', w: 12,
       title: 'The campaign has run out of money',
-      when: function (a) { return a.P.money < a.wage(1); },
+      when: function (a) { return warFunds(a.S) < a.wage(0.5) && a.P.money < a.wage(1); },
       body: 'The petrol account is closed, the printer wants cash up front, and two of the ward organisers have not ' +
             'been paid since the middle of the month. There are still weeks of this left.',
       choices: [
@@ -393,6 +477,81 @@
     return { week: S.sprint.week, weeksLeft: S.sprint.weeksLeft, tally: tally(S) };
   }
 
+  // Fired from the monthly loop once the ballot is behind you.
+  function auditDue(S) {
+    var a = S.flags.auditDue;
+    if (!a) return null;
+    if (S.date.year * 12 + S.date.month < a.month) return null;
+    S.flags.auditDue = null;
+    var api = RZ.engine.mkApi(S);
+    return {
+      id: 'audit', kicker: 'The commission', audit: true, share: a.share,
+      title: 'They have asked for the campaign returns',
+      body: 'A letter, on paper, giving you twenty-one days. Roughly ' + Math.round(a.share * 100) + '% of what ' +
+            'that campaign spent came from places the return has no line for — a printer settled directly, ' +
+            'suppliers paid by somebody who was never a donor. It was legal-adjacent at the time. ' +
+            'It is a schedule of questions now.',
+      choices: [
+        { i: 0, t: 'File it honestly and take what comes', d: 'The whole thing, with the awkward lines in it.', ok: true },
+        { i: 1, t: 'File a return that balances', d: 'It will balance. It will also be false.', tag: 'risk', ok: true },
+        { i: 2, t: 'Settle it quietly with the commission', d: 'A fine, paid fast, before anybody reads it.', tag: 'cost',
+          ok: api.P.money > api.wage(4) }
+      ]
+    };
+  }
+
+  function resolveAudit(S, ev, idx) {
+    var a = RZ.engine.mkApi(S);
+    var res = auditOutcome(S, a, ev, idx);
+    res.deltas = a.deltas.slice();
+    return res;
+  }
+
+  function auditOutcome(S, a, ev, idx) {
+    if (idx === 0) {
+      a.add('media', -RZ.range(3, 9));
+      a.add('stats.integrity', RZ.range(3, 6));
+      a.add('party', -RZ.range(1, 5));
+      a.dirt('returns', 'A campaign return that disclosed donations nobody else disclosed', 2);
+      return {
+        title: 'You filed the awkward version', tone: 'flat',
+        body: 'Every line of it, including the four that should never have been possible. One newspaper ran it ' +
+              'for two days. The commission has closed the file and written to say so, which is a letter worth ' +
+              'more than the coverage cost you.'
+      };
+    }
+    if (idx === 1) {
+      var caught = RZ.chance(0.35 + ev.share * 0.4);
+      a.add('stats.integrity', -RZ.range(3, 7));
+      if (caught) {
+        a.add('media', -RZ.range(8, 16));
+        a.add('party', -RZ.range(4, 10));
+        a.dirt('falsereturn', 'A campaign return that did not match the bank records', 4);
+        return {
+          title: 'The bank records did not match the return', tone: 'bad',
+          body: 'Somebody at the commission did what nobody at the commission normally does and rang the bank. ' +
+                'There is now a file with a case number on it, and a case number is a different kind of problem ' +
+                'from a story.'
+        };
+      }
+      return {
+        title: 'It balanced, and nobody looked further', tone: 'flat',
+        body: 'Eleven pages, internally consistent, filed on the twentieth day. The commission acknowledged ' +
+              'receipt. The reconciliation exists in a drawer and will exist there for as long as nobody ' +
+              'has a reason to want it.'
+      };
+    }
+    a.add('money', -a.wage(RZ.range(4, 8)));
+    a.add('media', -RZ.range(1, 4));
+    a.add('stats.cunning', RZ.range(0.5, 1.5));
+    return {
+      title: 'An administrative penalty, paid the same week', tone: 'flat',
+      body: 'Agreed before the questions were finished being asked. It is on the register as a compliance matter ' +
+            'rather than a finding, which is a distinction that will matter exactly once, years from now, ' +
+            'when somebody goes looking.'
+    };
+  }
+
   /* =======================================================================
      WEEKLY-ONLY ACTIONS
      ======================================================================= */
@@ -406,7 +565,7 @@
     { id: 'surge', ico: '💸', ap: 1, special: 'surge',
       name: 'Surge a contested ward',
       desc: 'Emergency funds into one ward. Expensive, and it holds.',
-      when: function (a) { return a.P.money > a.wage(4) && a.P.capital >= 8; } },
+      when: function (a) { return canAfford(a.S, a, a.wage(4)) && a.P.capital >= 8; } },
 
     { id: 'dump', ico: '🗞️', ap: 1, risky: true,
       name: 'The Friday news dump',
@@ -473,6 +632,81 @@
         };
       } },
 
+    /* ---- filling the chest ---- */
+    { id: 'branchraise', ico: '🪣', ap: 1,
+      name: 'Pass the hat at the branches',
+      desc: 'Small money, from people who will expect to be remembered for it.',
+      run: function (a) {
+        var ok = a.roll('charisma', 44);
+        // What the branches give you is a function of what they think of you.
+        var take = a.wage((0.6 + a.P.standing.grassroots / 90) * (ok ? RZ.range(1.1, 1.9) : RZ.range(0.5, 1.0)));
+        raise(a.S, take, 'clean', 'Branch collections');
+        a.add('health', -a.rng(2, 4));
+        a.add('grassroots', ok ? a.rng(1, 3) : a.rng(0, 1));
+        return {
+          title: ok ? 'Eleven branches, eleven envelopes' : 'The tins came back light',
+          tone: ok ? 'good' : 'flat',
+          body: ok
+            ? 'Twenties and fifties, counted on a table in a church hall by four women who would not let you help. ' +
+              'It is nothing beside what the other side is spending and it is the only money in the campaign that ' +
+              'nobody can ask you about afterwards.'
+            : 'People gave what they had, which this month is not much. Two branches gave nothing at all and were ' +
+              'embarrassed about it, which is worse than the money.'
+        };
+      } },
+
+    { id: 'favours', ico: '🤲', ap: 1,
+      name: 'Call in what you are owed',
+      desc: 'Turn standing into cash. There are only so many people to ring.',
+      // Twice. A candidate who could convert capital into cash every week
+      // would never need anybody else's money, and the whole question of where
+      // campaign funding comes from would stop being a question.
+      when: function (a) {
+        return a.P.capital >= 10 && (a.S.sprint.war.favours || 0) < 2;
+      },
+      run: function (a) {
+        var w = a.S.sprint.war;
+        w.favours = (w.favours || 0) + 1;
+        var burn = Math.min(a.P.capital, RZ.range(10, 18));
+        a.add('capital', -burn);
+        // Thinner the second time: the people who owed you most were rung first.
+        var rate = (w.favours === 1 ? RZ.range(0.22, 0.34) : RZ.range(0.12, 0.20));
+        raise(a.S, a.wage(burn * rate), 'clean', 'Favours called in');
+        a.add('leader', -a.rng(0, 2));
+        return {
+          title: w.favours === 1
+            ? 'You spent a decade of goodwill in an afternoon'
+            : 'The second round of calls went worse',
+          tone: 'flat',
+          body: w.favours === 1
+            ? 'Nine phone calls, all of them to people who owed you something specific and now do not. ' +
+              'The money is clean and it arrived by Thursday.'
+            : 'You have gone back to the same people inside a month. Three of them did not pick up, and the ones ' +
+              'who did gave less and made sure you understood it was the last time.'
+        };
+      } },
+
+    { id: 'cheque', ico: '✒️', ap: 1, risky: true,
+      name: 'Take the late cheque',
+      desc: 'One signature covers the rest of the campaign. It is not a gift.',
+      when: function (a) { return a.tier() >= 3; },
+      run: function (a) {
+        var nm = RZ.makeName(a.C);
+        var take = a.wage(RZ.range(7, 13));
+        raise(a.S, take, 'dirty', 'A cheque from ' + nm);
+        a.add('business', a.rng(2, 5));
+        a.add('stats.integrity', -a.rng(2, 5));
+        a.owePatron(nm, RZ.range(6, 10));
+        a.dirt('cheque-' + nm.replace(/\W/g, ''),
+          'A late campaign donation from ' + nm + ', paid to suppliers rather than declared', 3);
+        return {
+          title: nm + ' settled the printer’s account directly', tone: 'flat',
+          body: 'Which means there is no donation to declare, because on paper there was no donation. ' +
+                'He did not ask for anything and he did not need to. The rest of the campaign is funded and ' +
+                'the rest of your career now has him in it.'
+        };
+      } },
+
     { id: 'rebut', ico: '📢', ap: 1,
       name: 'Rebut the story of the week',
       desc: 'Get in front of it before it sets.',
@@ -491,9 +725,7 @@
       name: 'Book transport for the day',
       desc: 'Turnout is a logistics problem before it is a political one.',
       run: function (a) {
-        var spend = a.wage(2.5);
-        a.add('money', -spend);
-        a.S.sprint.war.spent += spend;
+        spend(a.S, a, a.wage(2.5), 'Transport for the day');
         var lift = a.rng(2.5, 6);
         a.S.sprint.wards.forEach(function (w) { w.turnout = clamp(w.turnout + lift * (w.turnout < 55 ? 1.3 : 0.7), 25, 95); });
         return { title: 'Forty-one taxis, booked and paid',
@@ -505,9 +737,7 @@
       name: 'Train your polling agents',
       desc: 'Somebody of yours in every station, who knows the regulations.',
       run: function (a) {
-        var spend = a.wage(1.5);
-        a.add('money', -spend);
-        a.S.sprint.war.spent += spend;
+        spend(a.S, a, a.wage(1.5), 'Training the polling agents');
         a.S.flags.agentsTrained = (a.S.flags.agentsTrained || 0) + 1;
         a.add('party', a.rng(1, 3));
         return { title: 'Two days in a church hall with the regulations',
@@ -540,6 +770,9 @@
     WEEKS: WEEKS,
     due: due, begin: begin, end: end, tickWeek: tickWeek,
     tally: tally, blitz: blitz, surge: surge,
+    raise: raise, spend: spend, warFunds: warFunds, canAfford: canAfford,
+    dirtyShare: dirtyShare, seedWarChest: seedWarChest,
+    auditDue: auditDue, resolveAudit: resolveAudit,
     weekActions: weekActions, weekActionById: weekActionById,
     resolveWeekly: resolveWeekly, WEEKLY: WEEKLY, WARD_KINDS: WARD_KINDS
   };

@@ -304,13 +304,33 @@ section('7. SADC intervention');
   ok('the first month is a warning, not an ending', !S.over && S.flags.sadcWarned === true);
   ok('the warning reaches the feed as an alert', S.feed[0] && S.feed[0].alert === true);
 
-  const ended = RZ.crisis.monthly(S, {});
-  ok('the second month ends the career', ended === true && S.over === true);
+  // Three turns of warning, because no action lifts international standing
+  // from single figures past fifteen in one month.
+  let ended = false;
+  for (let i = 0; i < 2 && !ended; i++) ended = RZ.crisis.monthly(S, {});
+  ok('the second and third months are still warnings', !ended && !S.over);
+  ok('and there is a second notice halfway', S.feed.some((f) => /has not adjourned/.test(f.title)));
+  ended = RZ.crisis.monthly(S, {});
+  ok('the fourth month ends the career', ended === true && S.over === true);
   ok('with the right ending', S.ending === 'sadc');
   const obit = String(RZ.gov.obituary(S, RZ.gov.legacy(S)));
   ok('the obituary names what happened, not the fallback',
     /brigade/i.test(obit) && !/^The career ended\.$/.test(obit),
     obit.slice(0, 120));
+
+  // Fixing it in the window has to actually work, or the warning is theatre.
+  {
+    const R = makePresident(career('ZA', 65, 13));
+    R.nation.society.unrest = 90; R.player.standing.intl = 10;
+    RZ.crisis.monthly(R, {});
+    RZ.crisis.monthly(R, {});
+    R.player.standing.intl = 40;                 // you went to the summit
+    RZ.crisis.monthly(R, {});
+    ok('lifting the condition stops the clock', !R.over && R.flags.sadcSince === 0);
+    R.player.standing.intl = 10;
+    for (let i = 0; i < 3; i++) RZ.crisis.monthly(R, {});
+    ok('and the countdown restarts from the beginning', !R.over);
+  }
 
   // Just one of the two conditions is not enough.
   const unrestOnly = makePresident(career('ZA', 62, 13));
@@ -327,8 +347,7 @@ section('7. SADC intervention');
   const backbench = career('ZA', 64, 3);
   backbench.nation.society.unrest = 92;
   backbench.player.standing.intl = 8;
-  RZ.crisis.monthly(backbench, {});
-  RZ.crisis.monthly(backbench, {});
+  for (let i = 0; i < 5; i++) RZ.crisis.monthly(backbench, {});
   ok('a backbencher is not ended by it', !backbench.over);
   ok('but does live through it', backbench.flags.sadcSurvived === true);
 }
@@ -427,7 +446,11 @@ section('10. The eight-week campaign sprint');
   ok('a blitz moves the ward you chose', target.support > before.t,
     `${Math.round(before.t)} -> ${Math.round(target.support)}`);
   ok('and leaves the others alone', other.support === before.o);
-  ok('and costs money', S.player.money < before.money);
+  ok('and is paid for', r.paid && (r.paid.fromWar > 0 || r.paid.fromSelf > 0),
+    JSON.stringify(r.paid));
+  ok('out of the campaign account before your own pocket',
+    r.paid.fromWar > 0 && S.player.money === before.money,
+    `war ${Math.round(r.paid.fromWar)} / self ${Math.round(r.paid.fromSelf)}`);
   ok('and raises turnout there', r.ward.turnout > 0 && r.ward.visits === 1);
 
   // Diminishing returns, so blitzing one ward eight times is not the answer.
@@ -837,6 +860,149 @@ section('11. Mandate, revolt, the file and the nemesis');
     const kres = kg.run(RZ.engine.mkApi(K));
     ok('and it costs no money at all', K.player.money === moneyBefore, String(K.player.money));
     ok('and it returns text', !!kres.title && !!kres.body);
+  }
+}
+
+/* ================= 12. campaign funds ================= */
+section('12. The war chest — Capital, Money, and where it came from');
+{
+  const cc = RZ.COUNTRIES.ZA;
+  const cand = (seed) => RZ.engine.newGame({
+    countryId: 'ZA', seed, name: 'C', gender: 'f',
+    regionId: cc.regions[0].id, bgId: RZ.BACKGROUNDS[0].id, partyId: cc.parties[0].id,
+    startAs: 'candidate'
+  });
+
+  // The party puts something in, and it is not nothing.
+  {
+    const S = cand(401);
+    const w = S.sprint.war;
+    ok('the campaign opens with a party allocation', w.cash > 0 && w.allocation > 0, String(Math.round(w.cash)));
+    ok('and it is recorded as clean', w.clean === w.raised && w.dirty === 0);
+    ok('with a named source', w.sources.length === 1 && /allocation/i.test(w.sources[0].label));
+
+    // A candidate the structures like gets more than one they do not.
+    const liked = cand(402), disliked = cand(403);
+    liked.player.standing.party = 90; disliked.player.standing.party = 5;
+    liked.sprint.war = { cash: 0, raised: 0, spent: 0, clean: 0, dirty: 0, personal: 0, sources: [] };
+    disliked.sprint.war = { cash: 0, raised: 0, spent: 0, clean: 0, dirty: 0, personal: 0, sources: [] };
+    RZ.sprint.seedWarChest(liked); RZ.sprint.seedWarChest(disliked);
+    ok('a candidate the structures back is funded better',
+      liked.sprint.war.cash > disliked.sprint.war.cash,
+      `${Math.round(liked.sprint.war.cash)} vs ${Math.round(disliked.sprint.war.cash)}`);
+  }
+
+  // Spending draws the chest first, then your own pocket.
+  {
+    const S = cand(410);
+    S.sprint.war.cash = 1000;
+    S.player.money = 50_000;
+    const api = RZ.engine.mkApi(S);
+    const a = RZ.sprint.spend(S, api, 600, 'test');
+    ok('a cost inside the chest is billed to the campaign',
+      a.fromWar === 600 && a.fromSelf === 0 && S.player.money === 50_000);
+    const b = RZ.sprint.spend(S, api, 900, 'test');
+    ok('an overrun falls back to your own money',
+      b.fromWar === 400 && b.fromSelf === 500 && S.player.money === 49_500);
+    ok('and the campaign remembers you paid it', S.sprint.war.personal === 500);
+    ok('the chest cannot go negative', S.sprint.war.cash === 0);
+  }
+
+  // Capital converts into cash. Cash does not convert back.
+  {
+    const S = cand(420);
+    const fav = RZ.sprint.weekActionById('favours');
+    S.player.capital = 5;
+    ok('favours need capital worth calling in', !fav.when(RZ.engine.mkApi(S)));
+    S.player.capital = 60;
+    ok('and are offered when you have it', fav.when(RZ.engine.mkApi(S)));
+    const cashBefore = S.sprint.war.cash;
+    fav.run(RZ.engine.mkApi(S));
+    ok('calling them in raises clean money', S.sprint.war.cash > cashBefore);
+    ok('at the cost of capital', S.player.capital < 60, String(S.player.capital));
+    ok('and none of it is dirty', S.sprint.war.dirty === 0);
+    ok('there is no way to turn cash back into capital',
+      RZ.sprint.weekActions(S).every((x) => x.id !== 'buycapital'));
+  }
+
+  // The branches give what they think of you.
+  {
+    const liked = cand(430), disliked = cand(431);
+    liked.player.standing.grassroots = 90; disliked.player.standing.grassroots = 5;
+    const br = RZ.sprint.weekActionById('branchraise');
+    const l0 = liked.sprint.war.cash, d0 = disliked.sprint.war.cash;
+    br.run(RZ.engine.mkApi(liked)); br.run(RZ.engine.mkApi(disliked));
+    ok('branch collections scale with what the ground thinks of you',
+      liked.sprint.war.cash - l0 > disliked.sprint.war.cash - d0,
+      `${Math.round(liked.sprint.war.cash - l0)} vs ${Math.round(disliked.sprint.war.cash - d0)}`);
+    ok('and it is clean money', liked.sprint.war.dirty === 0);
+  }
+
+  // The cheque is big, fast, and permanent.
+  {
+    const S = cand(440);
+    const chq = RZ.sprint.weekActionById('cheque');
+    const before = S.sprint.war.cash;
+    const intBefore = S.player.stats.integrity;
+    chq.run(RZ.engine.mkApi(S));
+    ok('a late cheque is worth more than a week of branches',
+      S.sprint.war.cash - before > 0 && S.sprint.war.dirty > 0);
+    ok('it costs integrity', S.player.stats.integrity < intBefore);
+    ok('it creates a creditor', S.capture.patrons.length > 0);
+    ok('and it leaves a file', S.player.dirt.some((d) => d.id.startsWith('cheque-')));
+  }
+
+  // Dirty money is a deferred cost, not a free one.
+  {
+    const S = cand(450);
+    S.sprint.war = { cash: 0, raised: 10000, spent: 0, clean: 2000, dirty: 8000, personal: 0, sources: [] };
+    ok('the dirty share is computed', Math.abs(RZ.sprint.dirtyShare(S) - 0.8) < 0.001);
+    RZ.sprint.end(S);
+    ok('a dirty campaign schedules an audit', !!S.flags.auditDue);
+    ok('for a few months after the ballot', S.flags.auditDue.month > S.date.year * 12 + S.date.month);
+
+    const clean = cand(451);
+    clean.sprint.war = { cash: 0, raised: 10000, spent: 0, clean: 10000, dirty: 0, personal: 0, sources: [] };
+    RZ.sprint.end(clean);
+    ok('a clean one does not', !clean.flags.auditDue);
+
+    // The letter arrives.
+    S.date.year += 1;
+    const ev = RZ.sprint.auditDue(S);
+    ok('the commission writes', !!ev && ev.audit === true);
+    ok('and quotes the share back at you', /\d+%/.test(ev.body));
+    ok('with three ways to answer', ev.choices.length === 3);
+    ok('it only arrives once', RZ.sprint.auditDue(S) === null);
+
+    const bad = [];
+    [0, 1, 2].forEach((i) => {
+      for (let k = 0; k < 20; k++) {
+        const T = cand(460 + k);
+        T.player.money = 5_000_000;
+        try {
+          const r = RZ.sprint.resolveAudit(T, { audit: true, share: 0.8 }, i);
+          if (!r || !r.title || !r.body) bad.push(`choice ${i}: no text`);
+        } catch (e) { bad.push(`choice ${i}: ${e.message}`); }
+      }
+    });
+    ok('every answer to the commission runs cleanly', bad.length === 0, bad.join('; '));
+
+    // Filing honestly should not be the one that ruins you.
+    const H = cand(470);
+    const aH = RZ.engine.mkApi(H);
+    RZ.sprint.resolveAudit(H, { audit: true, share: 0.8 }, 0);
+    ok('filing honestly buys integrity back', H.player.stats.integrity > cand(470).player.stats.integrity);
+  }
+
+  // Money is the binding constraint the sprint is supposed to have.
+  {
+    const S = cand(480);
+    S.player.money = 0;
+    S.sprint.war.cash = 0;
+    const api = RZ.engine.mkApi(S);
+    ok('a broke campaign cannot surge', !RZ.sprint.weekActionById('surge').when(api));
+    ok('but can still work the branches', !!RZ.sprint.weekActionById('branchraise'));
+    ok('and can still walk a ward', RZ.sprint.weekActions(S).some((x) => x.id === 'blitz'));
   }
 }
 

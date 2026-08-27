@@ -656,6 +656,10 @@
     // career, in which case nothing after it matters.
     if (RZ.crisis && RZ.crisis.monthly(S, out)) { save(S); return out; }
     if (RZ.revolt) out.nemesis = RZ.revolt.nemesisTurn(S);
+    if (RZ.sprint && !S.pendingEvent) {
+      var aud = RZ.sprint.auditDue(S);
+      if (aud) S.pendingEvent = aud;
+    }
 
     // ---- danger checks ----
     checkDangers(S, out);
@@ -752,6 +756,20 @@
   function resolveEvent(S, choiceIndex) {
     var ev = S.pendingEvent;
     if (!ev) return null;
+
+    // The electoral commission, months after the ballot.
+    if (ev.audit) {
+      var audRes = RZ.sprint.resolveAudit(S, ev, choiceIndex);
+      S.pendingEvent = null;
+      var audEntry = {
+        kind: audRes.tone === 'bad' ? 'bad' : 'flat', src: 'The commission',
+        title: audRes.title, body: audRes.body,
+        deltas: audRes.deltas || [], tone: audRes.tone
+      };
+      pushFeed(S, audEntry);
+      save(S);
+      return { res: audRes, entry: audEntry };
+    }
 
     // The disciplinary hearing after a failed revolt.
     if (ev.ultimatum) {
