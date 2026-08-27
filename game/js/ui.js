@@ -491,6 +491,31 @@
       plainBar('International', P.standing.intl, 'b') +
       '</div></div></div>';
 
+    // Where you stand inside the machine right now: the window a mandate buys,
+    // the year a failed revolt costs, and the man who has not forgotten.
+    var status = [];
+    if (RZ.revolt) {
+      var now = RZ.revolt.monthIndex(S);
+      if (RZ.revolt.mandateActive(S)) {
+        status.push(['#4bab84', 'Mandate', (S.flags.mandateUntil - now) + ' months left · party and leadership hold at half decay']);
+      }
+      if (RZ.revolt.pngActive(S)) {
+        status.push(['#d4453f', 'Persona non grata', (S.flags.pngUntil - now) + ' months left · your name is a liability in the corridors']);
+      }
+      if (S.flags.exiled) {
+        status.push(['#d8a53f', 'Deployed', 'Reassigned to ' + esc(c.regionById[P.regionId].name) + ' after a failed challenge']);
+      }
+      var nem = RZ.revolt.nemesisOf(S);
+      if (nem) status.push(['#d4453f', 'Nemesis: ' + esc(nem.name), 'Spends his own turns on you, and will until one of you is gone']);
+    }
+    if (status.length) {
+      h += '<div class="block"><div class="block-h">Where you stand</div><div class="card"><div class="rows">' +
+        status.map(function (x) {
+          return '<div class="row"><span class="row-dot" style="background:' + x[0] + '"></span>' +
+            '<span class="row-n">' + x[1] + '<small>' + x[2] + '</small></span></div>';
+        }).join('') + '</div></div></div>';
+    }
+
     // Everything you said out loud in a meeting, still outstanding.
     var proms = P.promises || [];
     if (proms.length) {
@@ -580,16 +605,21 @@
   /* ---------------- the ward blitz ---------------- */
   // Which afternoon, in which place. The list is sorted worst-first, because
   // the ward you are losing is the one worth the argument.
-  function showBlitz(onDone) {
+  function showBlitz(onDone, mode) {
     var S = UI.S;
     var api = RZ.engine.mkApi(S);
     var wards = S.sprint.wards.slice().sort(function (a, b) { return a.support - b.support; });
-    var cost = api.wage(1.2 + api.tier() * 0.35);
+    var surge = mode === 'surge';
+    var cost = api.wage(surge ? 4 + api.tier() * 0.5 : 1.2 + api.tier() * 0.35);
 
     var h = '<div class="modal-kicker">Week ' + S.sprint.week + ' of ' + RZ.sprint.WEEKS + '</div>' +
-      '<h2 class="modal-h">Where are you spending the week?</h2>' +
-      '<p class="modal-b">Doors, taxi ranks, a hall if you can get one. About ' +
-        esc(RZ.money(cost, RZ.COUNTRIES[S.countryId].cur.sym)) + ' a ward, and you cannot be in two places at once.</p>' +
+      '<h2 class="modal-h">' + (surge ? 'Which ward gets the war chest?' : 'Where are you spending the week?') + '</h2>' +
+      '<p class="modal-b">' + (surge
+        ? 'Everything at one ward, and it stays held for the rest of the campaign. About ' +
+          esc(RZ.money(cost, RZ.COUNTRIES[S.countryId].cur.sym)) + ' and a good deal of political capital.'
+        : 'Doors, taxi ranks, a hall if you can get one. About ' +
+          esc(RZ.money(cost, RZ.COUNTRIES[S.countryId].cur.sym)) + ' a ward, and you cannot be in two places at once.') +
+      '</p>' +
       '<div class="choices">' + wards.map(function (w) {
         var cold = S.turn - w.lastVisit;
         return '<button class="choice" data-w="' + esc(w.id) + '">' +
@@ -598,7 +628,8 @@
           '<div class="choice-d" style="opacity:.75;margin-top:4px">' +
             Math.round(w.turnout) + '% turnout · ' + w.voters.toLocaleString() + ' voters' +
             (w.visits ? ' · you have been ' + w.visits + ' time' + (w.visits === 1 ? '' : 's') : ' · never visited') +
-            (w.visits && cold <= 2 ? ' · still warm, less to gain' : '') + '</div>' +
+            (w.visits && cold <= 2 && !surge ? ' · still warm, less to gain' : '') +
+            (w.held ? ' · held' : '') + '</div>' +
           (w.swing >= 1.25 ? '<span class="choice-tag">swings hard</span>' : '') +
           '</button>';
       }).join('') + '</div>' +

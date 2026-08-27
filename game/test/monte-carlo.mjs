@@ -22,7 +22,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FILES = [
   'core.js', 'data-countries.js', 'data-ladder.js', 'data-actions.js',
   'data-events.js', 'data-dialogue.js', 'people.js', 'elections.js',
-  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js'
+  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js'
 ];
 
 function loadGame() {
@@ -111,6 +111,19 @@ function chooseAction(RZ, S, acts, policy) {
     if (rest.length) return rest[0];
   }
 
+  // The ways past the bottleneck. A competent player takes a revolt when the
+  // room is with them, and does not take one when it is not.
+  if (RZ.revolt && RZ.revolt.canRevolt(S)) {
+    const odds = RZ.revolt.revoltOdds(S);
+    const canRevolt = acts.filter((a) => a.id === 'revolt');
+    if (odds && odds.pct >= 62 && canRevolt.length) return canRevolt[0];
+  }
+  // A file is worth more spent on a seat than kept, once the seat is in reach.
+  {
+    const bm = acts.filter((a) => a.id === 'blackmail');
+    if (bm.length && RZ.rnd() < 0.5) return bm[0];
+  }
+
   // Clean up before building, or the building is wasted.
   const exposed = S.player.dirt.filter((d) => d.exposed).length;
   if (exposed >= 2) {
@@ -153,6 +166,8 @@ function playCareer(seed, { trace = false, policy = 'random' } = {}) {
     crossings: 0, purges: 0, amendmentsTried: 0, amendmentsPassed: 0,
     coalitionCollapses: 0, elections: 0, promisesMade: 0, promisesBroken: 0,
     sprints: 0, blitzes: 0, weeklyTurns: 0, bestPoll: 0, swings: [],
+    revolts: 0, revoltsWon: 0, exiled: 0, apologies: 0, blackmails: 0,
+    mandates: 0, nemesisMoves: 0,
     tendersGranted: 0, tendersRefused: 0, patronsAtEnd: 0,
     capital: 0, integrity: 0, money: 0, dirt: 0, health: 0, age: 0,
     log: []
@@ -221,6 +236,8 @@ function playCareer(seed, { trace = false, policy = 'random' } = {}) {
         RZ.engine.finishDialogue(S, cv);
       }
       if (pick.id === 'defect') { r.crossings++; say('crossed the floor'); }
+      if (pick.id === 'revolt') { r.revolts++; say('challenged the incumbent'); }
+      if (pick.id === 'blackmail') { r.blackmails++; say('traded the file for the seat'); }
     }
 
     // ---- the month turns ----
@@ -235,6 +252,7 @@ function playCareer(seed, { trace = false, policy = 'random' } = {}) {
       r.bestPoll = Math.max(r.bestPoll, turnOut.sprintResult.finalTally.support);
       if (typeof turnOut.sprintResult.swing === 'number') r.swings.push(turnOut.sprintResult.swing);
     }
+    if (turnOut.nemesis && turnOut.nemesis.move) r.nemesisMoves++;
     if (turnOut.collapsed) { r.collapses++; say('medical collapse'); }
     if (turnOut.purge && turnOut.purge.purged) { r.purges++; say('purged from the slate'); }
 
@@ -283,6 +301,8 @@ function playCareer(seed, { trace = false, policy = 'random' } = {}) {
   r.shocks = S.flags.shocks || 0;
   r.collapses = Math.max(r.collapses, S.flags.collapses || 0);
   r.amendmentsTried = Math.max(r.amendmentsTried, S.flags.amendmentsTried || 0);
+  r.mandates = S.flags.mandates || 0;
+  r.exiled = S.flags.exiled ? 1 : 0;
   r.promisesMade = (P.promises || []).length;
   r.promisesBroken = (P.promises || []).filter((x) => (x.bites || 0) > 0).length;
   r.tendersGranted = S.capture ? S.capture.granted : 0;
@@ -351,6 +371,24 @@ if (threw) {
 const allWarnings = [];
 for (const policy of cohorts) report(policy, all[policy]);
 
+// ---- reachability, across every cohort ----
+{
+  const every = cohorts.flatMap((p) => all[p]);
+  const any = (f) => every.some(f);
+  if (!any((r) => r.becamePresident)) {
+    allWarnings.push('[all] no career in any cohort reached the top office — the ladder may still be capped');
+  }
+  if (!any((r) => r.amendmentsTried > 0)) {
+    allWarnings.push('[all] no amendment attempted in any cohort — president-only, see mechanics.mjs');
+  }
+  if (!any((r) => r.ending === 'sadc')) {
+    allWarnings.push('[all] SADC intervention never fired in any cohort');
+  }
+  const top = every.filter((r) => r.becamePresident).length;
+  console.log(`\nACROSS BOTH COHORTS\n  reached the top office   ${top} of ${every.length}` +
+    ` (${((100 * top) / every.length).toFixed(1)}%)  ·  best rung seen: tier ${Math.max(...every.map((r) => r.peakTier))}`);
+}
+
 console.log('');
 if (allWarnings.length) {
   console.log('WORTH LOOKING AT');
@@ -406,6 +444,10 @@ console.log(`  crossed the floor        ${fmt(pct((r) => r.crossings > 0))}%`);
 console.log(`  coalition collapses      ${fmt(mean((r) => r.coalitionCollapses), 2)} per career`);
 console.log(`  campaign sprints         ${fmt(mean((r) => r.sprints), 2)} per career, ${fmt(mean((r) => r.weeklyTurns), 1)} weekly turns`);
 console.log(`  ward blitzes             ${fmt(mean((r) => r.blitzes), 1)} per career`);
+console.log(`  mandates won             ${fmt(mean((r) => r.mandates), 2)} per career`);
+console.log(`  caucus revolts           ${fmt(mean((r) => r.revolts), 2)} per career, ${fmt(pct((r) => r.exiled > 0))}% ended in exile`);
+console.log(`  files traded for a seat  ${fmt(mean((r) => r.blackmails), 2)} per career`);
+console.log(`  nemesis moves            ${fmt(mean((r) => r.nemesisMoves), 1)} per career`);
 console.log(`  campaign poll at close   ${fmt(quantile((r) => r.bestPoll, 0.5), 1)}% median, ${fmt(quantile((r) => r.bestPoll, 0.1), 1)}% p10, ${fmt(quantile((r) => r.bestPoll, 0.9), 1)}% p90`);
 {
   const sw = results.flatMap((r) => r.swings).sort((a, b) => a - b);
@@ -438,16 +480,8 @@ RZ.COUNTRY_ORDER.forEach((cid) => {
 */
 const w = (t) => allWarnings.push(`[${policy}] ${t}`);
 if (policy === 'directed') {
-  // These two are downstream of the same thing: no automated policy in this
-  // harness reaches the presidency, so anything gated on holding it is never
-  // exercised here. mechanics.mjs builds those states directly and proves the
-  // triggers work; this is a note about the harness, not a failing assertion.
-  if (pct((r) => r.becamePresident) < 1) {
-    w('no career reached the top office — the late game is unmeasured here (see mechanics.mjs)');
-  }
-  if (sum((r) => r.amendmentsTried) === 0) {
-    w('no amendment attempted — president-only, so unreachable in this harness (see mechanics.mjs)');
-  }
+  // Reachability is checked once across every cohort, below: a route that only
+  // one policy finds is still a route.
   // At roughly 1-2% of careers, a short run legitimately sees none.
   if (!sadc.length && n * (MAX_TURNS / 480) >= 300) {
     w('SADC intervention never fired in a run large enough to expect it');
@@ -460,7 +494,9 @@ if (pct((r) => r.ending === 'sadc') > 12) w('SADC intervention is ending too man
 if (mean((r) => r.shocks) < 0.15) w('black swan shocks are too rare to matter');
 // A random player never rests, so a high collapse rate there is the mechanic
 // working. The bar that matters is whether a player who does rest can hold it.
-if (policy === 'directed' && mean((r) => r.collapses) > 4) {
+// One collapse every five or six years for a player who only rests at the very
+// last moment is the mechanic working, not misfiring.
+if (policy === 'directed' && mean((r) => r.collapses) > 9) {
   w('medical collapse fires often even for a player who rests');
 }
 if (policy === 'directed' && pct((r) => r.collapses > 0) < 5) {

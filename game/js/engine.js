@@ -528,6 +528,10 @@
     // month in every respect rather than a month that happens to be short.
     var span = S.tempo === 'week' ? 0.25 : 1;
     out.span = span;
+    // A mandate won on the floor holds the machine off for a year: party and
+    // leadership standing erode at half speed, which is the window the ladder
+    // needs to be climbable at all.
+    var mandate = (RZ.revolt && RZ.revolt.mandateActive(S)) ? 0.5 : 1;
 
     // ---- income & costs ----
     var lad = RZ.ladderFor(c.id);
@@ -549,9 +553,10 @@
     P.health = C100(P.health + hDrift * span);
     // Standing is rented, not owned: the higher it is, the more it costs to hold.
     ['grassroots', 'media', 'leader', 'business', 'security', 'intl'].forEach(function (k) {
-      P.standing[k] = C100(P.standing[k] - (0.15 + P.standing[k] * 0.012) * RZ.range(0.7, 1.3) * span);
+      P.standing[k] = C100(P.standing[k] -
+        (0.15 + P.standing[k] * 0.012) * RZ.range(0.7, 1.3) * span * (k === 'leader' ? mandate : 1));
     });
-    P.standing.party = C100(P.standing.party - (0.06 + P.standing.party * 0.005) * RZ.range(0.7, 1.3) * span);
+    P.standing.party = C100(P.standing.party - (0.06 + P.standing.party * 0.005) * RZ.range(0.7, 1.3) * span * mandate);
     P.fame = C100(P.fame - (0.10 + P.fame * 0.007) * RZ.range(0.7, 1.3) * span);
     Object.keys(P.regionSupport).forEach(function (k) {
       P.regionSupport[k] = C100(P.regionSupport[k] - (0.08 + P.regionSupport[k] * 0.008) * RZ.range(0.7, 1.3) * span);
@@ -650,6 +655,7 @@
     // coming due, and the regional brigade. Returns true when it has ended the
     // career, in which case nothing after it matters.
     if (RZ.crisis && RZ.crisis.monthly(S, out)) { save(S); return out; }
+    if (RZ.revolt) out.nemesis = RZ.revolt.nemesisTurn(S);
 
     // ---- danger checks ----
     checkDangers(S, out);
@@ -746,6 +752,20 @@
   function resolveEvent(S, choiceIndex) {
     var ev = S.pendingEvent;
     if (!ev) return null;
+
+    // The disciplinary hearing after a failed revolt.
+    if (ev.ultimatum) {
+      var ultRes = RZ.revolt.resolveUltimatum(S, ev, choiceIndex);
+      S.pendingEvent = null;
+      var ultEntry = {
+        kind: 'big', alert: ultRes.tone === 'bad', src: 'The regional office',
+        title: ultRes.title, body: ultRes.body,
+        deltas: ultRes.deltas || [], tone: ultRes.tone
+      };
+      pushFeed(S, ultEntry);
+      save(S);
+      return { res: ultRes, entry: ultEntry };
+    }
 
     // Campaign-week events live in sprint.js, built when the week turns.
     if (ev.weekly) {
@@ -864,7 +884,10 @@
       var diff = 30 + rung.tier * 9 + (S.parties[S.player.partyId].machine - 50) * 0.45 +
                  c.inst.incumbency * 0.12;
       var r = RZ.elections.primaryContest(S, diff);
-      if (r.won) { promote(S, 'The ' + c.terms.branch + 'es voted for you.'); }
+      if (r.won) {
+        promote(S, 'The ' + c.terms.branch + 'es voted for you.');
+        if (RZ.revolt) RZ.revolt.grantMandate(S, RZ.ladderFor(c.id)[S.player.rungIdx]);
+      }
       else { api.add('party', -RZ.range(1, 4)); api.add('grassroots', -RZ.range(0, 2)); }
       return { kind: 'internal', won: r.won, rung: rung, detail: r };
     }
@@ -916,7 +939,20 @@
     S.player.rungIdx = Math.min(lad.length - 1, S.player.rungIdx + 1);
     var r = lad[S.player.rungIdx];
     S.player.officeSince = { year: S.date.year, month: S.date.month };
-    if (r.id === 'hos' && !S.flags.becameHosYear) S.flags.becameHosYear = S.date.year;
+    // Reaching the rung is not the same as holding the office. Election night
+    // used to be the only path that set these, so any other route — a revolt, a
+    // traded file, an appointment — left a president who was not president, with
+    // every president-gated mechanic still dark.
+    if (r.id === 'hos') {
+      if (!S.flags.becameHosYear) S.flags.becameHosYear = S.date.year;
+      S.player.isPresident = true;
+      S.player.isLeader = true;
+      S.nation.termNumber = S.nation.termNumber || 1;
+      S.nation.presidentName = S.player.name;
+      S.nation.presidentParty = S.player.partyId;
+      if (S.nation.govParties.indexOf(S.player.partyId) < 0) S.nation.govParties.push(S.player.partyId);
+    }
+    if (r.id === 'leader') S.player.isLeader = true;
     S.player.titles.push(r.title);
     S.player.record.push({ year: S.date.year, text: 'Became ' + r.title + '.' });
     S.player.fame = C100(S.player.fame + 4 + r.tier * 1.6);

@@ -17,7 +17,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FILES = [
   'core.js', 'data-countries.js', 'data-ladder.js', 'data-actions.js',
   'data-events.js', 'data-dialogue.js', 'people.js', 'elections.js',
-  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js'
+  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js'
 ];
 
 function loadGame() {
@@ -583,6 +583,261 @@ section('10. The eight-week campaign sprint');
     `${w.health.toFixed(1)} vs ${m.health.toFixed(1)}`);
   ok('and the economy too', Math.abs(w.growth - m.growth) < 1.5,
     `${w.growth.toFixed(2)} vs ${m.growth.toFixed(2)}`);
+}
+
+/* ================= 11. past the bottleneck ================= */
+section('11. Mandate, revolt, the file and the nemesis');
+{
+  const cc = RZ.COUNTRIES.ZA;
+  const mk = (seed, rung) => career('ZA', seed, rung);
+
+  // The mandate: a year of half decay.
+  {
+    const S = mk(201, 3);
+    RZ.revolt.grantMandate(S, RZ.ladderFor('ZA')[3]);
+    ok('winning a contest grants a mandate', RZ.revolt.mandateActive(S));
+    const withM = mk(202, 3), without = mk(203, 3);
+    RZ.revolt.grantMandate(withM, RZ.ladderFor('ZA')[3]);
+    [withM, without].forEach((T) => { T.player.standing.party = 60; T.player.standing.leader = 60; });
+    for (let i = 0; i < 10; i++) {
+      [withM, without].forEach((T) => { T.actionsLeft = 0; T.pendingEvent = null; RZ.engine.endTurn(T); T.pendingEvent = null; });
+    }
+    ok('and it visibly slows party decay',
+      withM.player.standing.party > without.player.standing.party,
+      `${Math.round(withM.player.standing.party)} vs ${Math.round(without.player.standing.party)}`);
+    const S2 = mk(204, 3);
+    RZ.revolt.grantMandate(S2, RZ.ladderFor('ZA')[3]);
+    S2.date.year += 2;
+    ok('and it expires', !RZ.revolt.mandateActive(S2));
+  }
+
+  // The revolt: a real gamble with visible odds.
+  {
+    const S = mk(210, 4);
+    S.player.capital = 60;
+    ok('there is somebody in the way', !!RZ.revolt.incumbent(S));
+    ok('the revolt is offered', RZ.revolt.canRevolt(S));
+    const odds = RZ.revolt.revoltOdds(S);
+    ok('the odds are shown before you commit', odds && odds.pct > 0 && odds.pct < 100, `${odds && odds.pct}%`);
+
+    const strong = mk(211, 4);
+    strong.player.capital = 90; strong.player.standing.party = 92; strong.player.standing.grassroots = 92;
+    strong.player.rivals.forEach((r) => { r.power = 10; });
+    const weak = mk(212, 4);
+    weak.player.capital = 20; weak.player.standing.party = 5; weak.player.standing.grassroots = 5;
+    weak.player.rivals.forEach((r) => { r.power = 95; });
+    ok('a strong challenger has better odds than a weak one',
+      RZ.revolt.revoltOdds(strong).pct > RZ.revolt.revoltOdds(weak).pct,
+      `${RZ.revolt.revoltOdds(strong).pct}% vs ${RZ.revolt.revoltOdds(weak).pct}%`);
+
+    // Winning promotes.
+    const W = mk(213, 4);
+    W.player.capital = 90; W.player.standing.party = 95; W.player.standing.grassroots = 95;
+    W.player.rivals.forEach((r) => { r.power = 5; });
+    const rungBefore = W.player.rungIdx;
+    const res = RZ.revolt.revolt(W, RZ.engine.mkApi(W));
+    ok('a won revolt promotes you', res.won && W.player.rungIdx > rungBefore,
+      `${rungBefore} -> ${W.player.rungIdx}`);
+    ok('and grants the mandate', RZ.revolt.mandateActive(W));
+    ok('and costs capital', W.player.capital < 90);
+  }
+
+  // Losing is an ultimatum, never a game over.
+  {
+    const L = mk(220, 4);
+    L.player.capital = 30; L.player.standing.party = 2; L.player.standing.grassroots = 2;
+    L.player.rivals.forEach((r) => { r.power = 98; r.dirt = []; });
+    const res = RZ.revolt.revolt(L, RZ.engine.mkApi(L));
+    ok('a lost revolt does not end the career', !res.won && !L.over);
+    ok('it puts an ultimatum on the table', !!L.pendingEvent && L.pendingEvent.ultimatum === true);
+    ok('with two ways out when you have no file', L.pendingEvent.choices.length === 2,
+      String(L.pendingEvent.choices.length));
+
+    // Option 0: apologise. Survive, keep the ward, lose your reputation.
+    const A = mk(221, 4);
+    A.player.capital = 30; A.player.standing.party = 2; A.player.standing.grassroots = 40;
+    A.player.stats.integrity = 60; A.player.standing.media = 40;
+    A.player.rivals.forEach((r) => { r.power = 98; r.dirt = []; });
+    RZ.revolt.revolt(A, RZ.engine.mkApi(A));
+    const homeBefore = A.player.regionId;
+    const aRes = RZ.engine.resolveEvent(A, 0);
+    ok('apologising keeps your ward', A.player.regionId === homeBefore);
+    ok('and costs integrity heavily', A.player.stats.integrity <= 36,
+      String(Math.round(A.player.stats.integrity)));
+    ok('and flattens leadership without wiping it', A.player.standing.leader <= 5);
+    ok('and makes your name toxic for a while', RZ.revolt.pngActive(A));
+
+    // Option 1: refuse. Exile.
+    const R = mk(222, 4);
+    R.player.capital = 30; R.player.standing.party = 60; R.player.standing.grassroots = 40;
+    R.player.money = 1_000_000;
+    R.player.rivals.forEach((r) => { r.power = 98; r.dirt = []; });
+    RZ.revolt.revolt(R, RZ.engine.mkApi(R));
+    const rungBefore = R.player.rungIdx, homeR = R.player.regionId;
+    RZ.engine.resolveEvent(R, 1);
+    ok('refusing wipes leadership', R.player.standing.leader === 0);
+    ok('and slashes party standing', R.player.standing.party < 60 * 0.35,
+      String(Math.round(R.player.standing.party)));
+    ok('and moves you to another region', R.player.regionId !== homeR,
+      `${homeR} -> ${R.player.regionId}`);
+    ok('but you keep the rung', R.player.rungIdx === rungBefore);
+    ok('and it does not end the career', !R.over);
+    ok('the escape hatch is now open', !!RZ.actionById['defect'].when(RZ.engine.mkApi(R)));
+    ok('and it creates a nemesis', !!RZ.revolt.nemesisOf(R));
+
+    // Option 2 only appears when you brought something.
+    const F = mk(223, 4);
+    F.player.capital = 30; F.player.standing.party = 2;
+    F.player.rivals.forEach((r) => { r.power = 98; r.dirt = []; });
+    F.player.rivals[0].regionId = F.player.regionId;
+    F.player.rivals[0].dirt = [{ label: 'a tender awarded to a relative', used: false }];
+    RZ.revolt.revolt(F, RZ.engine.mkApi(F));
+    ok('a file adds a third way out', F.pendingEvent.choices.length === 3);
+    const homeF = F.player.regionId, intF = F.player.stats.integrity;
+    RZ.engine.resolveEvent(F, 2);
+    ok('using it keeps your ward', F.player.regionId === homeF);
+    ok('and your leadership', F.player.standing.leader > 0);
+    ok('but burns the file', F.player.rivals.every((r) => (r.dirt || []).every((d) => d.used)) ||
+      !RZ.engine.mkApi(F).hasLeverage());
+    ok('and maxes his aggression', F.player.rivals.some((r) => r.aggression === 100 && r.nemesis));
+  }
+
+  // The file, traded up.
+  {
+    const B = mk(230, 5);
+    // Exactly one file, on exactly one man, so "spent" means spent.
+    B.player.rivals.forEach((r) => { r.power = 70; r.dirt = []; });
+    B.player.rivals[0].dirt = [{ label: 'a second family', used: false }];
+    ok('a file on a superior is a target', !!RZ.revolt.blackmailTarget(B));
+    const rungBefore = B.player.rungIdx;
+    const res = RZ.revolt.blackmail(B, RZ.engine.mkApi(B));
+    ok('trading it promotes you outright', B.player.rungIdx > rungBefore, `${rungBefore} -> ${B.player.rungIdx}`);
+    ok('at a heavy cost to integrity', B.player.stats.integrity < 55);
+    ok('and it leaves a file on you', B.player.dirt.some((d) => d.id === 'blackmail'));
+    ok('and makes a permanent enemy', !!RZ.revolt.nemesisOf(B));
+    ok('the same file cannot be spent twice', !RZ.revolt.blackmailTarget(B));
+  }
+
+  // Reaching the top rung by any route must actually make you president, or
+  // every president-gated mechanic stays dark for a player who is one.
+  {
+    const T = mk(235, 5);
+    const lad = RZ.ladderFor('ZA');
+    T.player.rungIdx = lad.length - 2;
+    RZ.engine.promote(T, 'By whatever route.');
+    ok('the top rung sets the office', T.player.isPresident === true && T.player.isLeader === true);
+    ok('and the nation knows who is president', T.nation.presidentName === T.player.name);
+    ok('which unlocks the president-only actions',
+      !!RZ.gov.actionById('amend').when(RZ.engine.mkApi(T)));
+
+    // ...and neither the caucus nor a file can hand you a national ballot.
+    const V = mk(236, 5);
+    V.player.rungIdx = lad.length - 2;
+    V.player.capital = 90;
+    ok('a revolt cannot take an office decided by the country', !RZ.revolt.canRevolt(V));
+    V.player.rivals[0].dirt = [{ label: 'a file', used: false }];
+    V.player.rivals[0].power = 80;
+    ok('and neither can a file', RZ.revolt.blackmail(V, RZ.engine.mkApi(V)).fail === true);
+  }
+
+  // The nemesis actually does something.
+  {
+    const N = mk(240, 5);
+    N.player.rivals[0].power = 80;
+    N.flags.nemesisId = N.player.rivals[0].id;
+    N.player.rivals[0].nemesis = true;
+    let moved = 0;
+    for (let i = 0; i < 120 && moved < 6; i++) {
+      N.date.month++;
+      if (N.date.month > 12) { N.date.month = 1; N.date.year++; }
+      const r = RZ.revolt.nemesisTurn(N);
+      if (r && r.move) moved++;
+    }
+    ok('a nemesis spends his turns on you', moved >= 3, `${moved} moves`);
+    ok('and it lands in the feed', N.feed.some((f) => f.src === N.player.rivals[0].name));
+    ok('he does not act every single month', N.flags.nemesisLast !== undefined);
+
+    const Q = mk(241, 5);
+    Q.player.rivals[0].power = 80;
+    Q.flags.nemesisId = Q.player.rivals[0].id;
+    Q.tempo = 'week';
+    ok('and he stays out of the campaign weeks', RZ.revolt.nemesisTurn(Q) === null);
+
+    // Every move must run.
+    const bad = [];
+    RZ.revolt.MOVES.forEach((mv) => {
+      const T = mk(242, 5);
+      const a = RZ.engine.mkApi(T);
+      try {
+        const o = mv.go(T, a, T.player.rivals[0]);
+        if (!o || !o.title || !o.body) bad.push(`${mv.id}: no text`);
+      } catch (e) { bad.push(`${mv.id}: ${e.message}`); }
+    });
+    ok('every nemesis move runs cleanly', bad.length === 0, bad.join('; '));
+  }
+
+  // The three tactical sprint actions.
+  {
+    const S = RZ.engine.newGame({
+      countryId: 'ZA', seed: 250, name: 'C', gender: 'f',
+      regionId: cc.regions[0].id, bgId: RZ.BACKGROUNDS[0].id, partyId: cc.parties[0].id,
+      startAs: 'candidate'
+    });
+    S.player.money = 5_000_000; S.player.capital = 80;
+    const ids = RZ.sprint.weekActions(S).map((a) => a.id);
+    ok('the surge is offered when you can afford it', ids.includes('surge'), ids.join(', '));
+
+    const w = S.sprint.wards[0];
+    const before = w.support;
+    const sr = RZ.sprint.surge(S, w.id, RZ.engine.mkApi(S));
+    ok('a surge moves a ward hard', w.support - before > 6, `+${(w.support - before).toFixed(1)}`);
+    ok('and costs capital as well as money', S.player.capital < 80);
+    ok('and holds the ward against drift', w.held === true);
+    const held = w.support;
+    for (let i = 0; i < 6; i++) { S.turn += 3; RZ.sprint.tickWeek(S); }
+    ok('a held ward really does not drift', w.support === held, `${held.toFixed(1)} -> ${w.support.toFixed(1)}`);
+
+    // The Friday dump needs leverage and can backfire.
+    const D = RZ.engine.newGame({
+      countryId: 'ZA', seed: 251, name: 'C', gender: 'f',
+      regionId: cc.regions[0].id, bgId: RZ.BACKGROUNDS[0].id, partyId: cc.parties[0].id, startAs: 'candidate'
+    });
+    const dumpAct = RZ.sprint.weekActionById('dump');
+    ok('the dump is hidden without a file', !dumpAct.when(RZ.engine.mkApi(D)));
+    D.player.rivals[0].dirt = [{ label: 'a tender awarded to a relative', used: false }];
+    ok('and offered with one', dumpAct.when(RZ.engine.mkApi(D)));
+    let backfires = 0, runs = 0;
+    for (let i = 0; i < 60; i++) {
+      const T = RZ.engine.newGame({
+        countryId: 'ZA', seed: 300 + i, name: 'C', gender: 'f',
+        regionId: cc.regions[0].id, bgId: RZ.BACKGROUNDS[0].id, partyId: cc.parties[0].id, startAs: 'candidate'
+      });
+      T.player.rivals[0].dirt = [{ label: 'a tender', used: false }];
+      const res = dumpAct.run(RZ.engine.mkApi(T));
+      runs++;
+      if (T.player.dirt.some((d) => d.id === 'dump')) backfires++;
+      if (!res.title || !res.body) { ok('the dump always returns text', false); break; }
+    }
+    ok('the dump backfires sometimes but not usually', backfires > 2 && backfires < runs * 0.65,
+      `${backfires}/${runs}`);
+
+    // The kgotla costs no money and needs integrity.
+    const K = RZ.engine.newGame({
+      countryId: 'BW', seed: 252, name: 'C', gender: 'f',
+      regionId: RZ.COUNTRIES.BW.regions[0].id, bgId: RZ.BACKGROUNDS[0].id,
+      partyId: RZ.COUNTRIES.BW.parties[0].id, startAs: 'candidate'
+    });
+    const kg = RZ.sprint.weekActionById('kgotla');
+    K.player.stats.integrity = 20;
+    ok('the kgotla is closed to a compromised candidate', !kg.when(RZ.engine.mkApi(K)));
+    K.player.stats.integrity = 70;
+    ok('and open to a clean one', kg.when(RZ.engine.mkApi(K)));
+    K.player.money = 1000;
+    const moneyBefore = K.player.money;
+    const kres = kg.run(RZ.engine.mkApi(K));
+    ok('and it costs no money at all', K.player.money === moneyBefore, String(K.player.money));
+    ok('and it returns text', !!kres.title && !!kres.body);
+  }
 }
 
 /* ================= 9. it all still saves ================= */

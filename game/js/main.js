@@ -92,8 +92,8 @@
         };
         RZ.engine.pushFeed(S, entry);
         RZ.engine.save(S);
-        RZ.ui.showOutcome(entry, function () { RZ.ui.renderGame(); });
-      });
+        RZ.ui.showOutcome(entry, afterAction);
+      }, out.special);
       return;
     }
 
@@ -113,13 +113,30 @@
     var out = RZ.engine.doAction(S, id);
     if (!out) return;
 
-    // Blitzing is the only action that needs a target before it can resolve.
-    if (out.special === 'blitz') {
+    // Blitzing and surging both need a target before they can resolve.
+    if (out.special === 'blitz' || out.special === 'surge') {
+      var isSurge = out.special === 'surge';
       RZ.ui.showBlitz(function (wardId) {
         if (!wardId) return;
         var api = RZ.engine.mkApi(S);
-        var r = RZ.sprint.blitz(S, wardId, api);
+        var r = isSurge ? RZ.sprint.surge(S, wardId, api) : RZ.sprint.blitz(S, wardId, api);
         if (!r) return;
+        if (isSurge) {
+          S.actionsLeft--;
+          S.actionsThisMonth = (S.actionsThisMonth || 0) + 1;
+          var sEntry = {
+            kind: 'good', src: r.ward.name,
+            title: 'Everything went into ' + r.ward.name,
+            body: 'Halls, sound, printing, transport and eleven people on the ground full time for the rest of the ' +
+                  'campaign. It is more than you can afford and it will hold — nobody is taking this ward back ' +
+                  'in the weeks that are left.',
+            deltas: api.deltas.slice(), tone: 'good'
+          };
+          RZ.engine.pushFeed(S, sEntry);
+          RZ.engine.save(S);
+          RZ.ui.showOutcome(sEntry, afterAction);
+          return;
+        }
         S.actionsLeft--;
         S.actionsThisMonth = (S.actionsThisMonth || 0) + 1;
         var entry = {
@@ -153,14 +170,22 @@
       RZ.ui.showDialogue(out.dialogue, function (convo) {
         RZ.engine.finishDialogue(S, convo);
         RZ.engine.save(S);
-        RZ.ui.renderGame();
+        afterAction();
       });
       return;
     }
 
     RZ.engine.save(S);
-    RZ.ui.showOutcome(out.entry, function () { RZ.ui.renderGame(); });
+    RZ.ui.showOutcome(out.entry, afterAction);
     RZ.ui.renderHud();
+  }
+
+  // An action can put a decision on the table — a failed revolt summons you to
+  // the regional office there and then. Present it as soon as the outcome
+  // sheet closes rather than leaving it for the end of the month.
+  function afterAction() {
+    if (UI.S.pendingEvent) { resumePendingEvent(); return; }
+    RZ.ui.renderGame();
   }
 
   /* ---------------- contest ---------------- */

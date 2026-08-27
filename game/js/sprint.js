@@ -181,6 +181,28 @@
     return { ward: w, gain: gain, ok: ok, spend: spend, broke: broke };
   }
 
+  // Money rather than feet: a bigger jump than a blitz, and the ward is held
+  // against the drift for the rest of the campaign, which is what the money
+  // is really buying.
+  function surge(S, wardId, api) {
+    var w = (S.sprint.wards || []).filter(function (x) { return x.id === wardId; })[0];
+    if (!w) return null;
+    var spend = api.wage(4 + api.tier() * 0.5);
+    api.add('money', -spend);
+    api.add('capital', -RZ.range(6, 10));
+    S.sprint.war.spent += spend;
+
+    var gain = RZ.range(9, 16) * w.swing;
+    w.support = C100(w.support + gain);
+    w.turnout = clamp(w.turnout + RZ.range(3, 7), 25, 95);
+    w.held = true;                        // no further drift here
+    w.visits++;
+    w.lastVisit = S.turn;
+    api.addRegion(api.P.regionId, gain * 0.3);
+    api.campaignEffort(RZ.range(4, 9));
+    return { ward: w, gain: gain, spend: spend };
+  }
+
   /* =======================================================================
      THE WEEKLY EVENTS — sabotage, money, and the press
      ======================================================================= */
@@ -357,6 +379,7 @@
     // Drift is real but it must not outrun what eight weeks of work can win
     // back, or the only possible campaign is a losing one.
     S.sprint.wards.forEach(function (w) {
+      if (w.held) return;                 // paid for, and staying paid for
       var untouched = S.turn - w.lastVisit;
       if (untouched > 2) w.support = C100(w.support - RZ.range(0.15, 0.6) * w.swing);
     });
@@ -377,6 +400,78 @@
     { id: 'blitz', ico: '📍', ap: 1, special: 'blitz',
       name: 'Blitz a ward',
       desc: 'Pick one, and spend the week in it. Doors, taxi ranks, the lot.' },
+
+    // Emergency money, poured into one contested ward, and held there. An
+    // ordinary blitz is a week of your feet; this is the war chest.
+    { id: 'surge', ico: '💸', ap: 1, special: 'surge',
+      name: 'Surge a contested ward',
+      desc: 'Emergency funds into one ward. Expensive, and it holds.',
+      when: function (a) { return a.P.money > a.wage(4) && a.P.capital >= 8; } },
+
+    { id: 'dump', ico: '🗞️', ap: 1, risky: true,
+      name: 'The Friday news dump',
+      desc: 'Put the dossier out at four on a Friday and let it run all weekend.',
+      when: function (a) { return a.hasLeverage(); },
+      run: function (a) {
+        var res = a.doLeak(false);
+        // Friday is the point: it runs unanswered for three days.
+        a.add('media', a.rng(8, 16));
+        RZ.crisis.addBuff(a.S, 'media', a.rng(8, 16), 4, 'the Friday dump');
+        a.add('fame', a.rng(2, 6));
+        // And it is traced about a third of the time, because somebody in your
+        // own office sent the email.
+        if (RZ.chance(0.34)) {
+          a.add('media', -a.rng(6, 14));
+          a.add('stats.integrity', -a.rng(2, 6));
+          a.dirt('dump', 'A dossier on an opponent traced back to your own campaign office', 3);
+          return {
+            title: 'It was traced to your campaign manager by Tuesday', tone: 'bad',
+            body: (res && res.body ? res.body + ' ' : '') +
+              'The metadata on the document had his name in it. He has resigned, which fools nobody, ' +
+              'and the story is now about you rather than about them.'
+          };
+        }
+        return {
+          title: 'Four o’clock on a Friday', tone: 'good',
+          body: (res && res.body ? res.body + ' ' : '') +
+            'Nobody at their office was answering by the time it landed, so it ran unanswered through two ' +
+            'bulletins and the Sunday papers. By Monday it was established fact.'
+        };
+      } },
+
+    { id: 'kgotla', ico: '🌳', ap: 1,
+      name: function (a) { return 'Mobilise the ' + a.t.meetingPl; },
+      desc: function (a) { return 'The ' + a.t.elder + 's can deliver the rural wards. They will not do it for money.'; },
+      when: function (a) { return a.P.stats.integrity >= 52; },
+      run: function (a) {
+        var ok = a.roll('integrity', 46);
+        // No money at all — this is the one thing a broke campaign can still do.
+        a.add('health', -a.rng(2, 5));
+        var moved = 0;
+        a.S.sprint.wards.forEach(function (w) {
+          if (w.kind !== 'village' && w.kind !== 'farm') return;
+          moved++;
+          w.support = C100(w.support + (ok ? RZ.range(5, 11) : RZ.range(1.5, 4)));
+          w.turnout = clamp(w.turnout + (ok ? RZ.range(2, 6) : RZ.range(0, 2)), 25, 95);
+        });
+        a.add('grassroots', ok ? a.rng(2, 5) : a.rng(0, 2));
+        a.add('media', -a.rng(0, 2));
+        if (!moved) {
+          return { title: 'There is no rural ward to deliver', tone: 'flat',
+            body: 'You sat under the tree for an afternoon and were listened to politely. This seat is all township ' +
+                  'and town centre, and the ' + a.t.elder + 's here have nothing to hand you.' };
+        }
+        return {
+          title: ok ? 'The ' + a.t.elder + 's will say your name' : 'They heard you out and committed to nothing',
+          tone: ok ? 'good' : 'flat',
+          body: ok
+            ? 'Not an endorsement — they are careful about the word — but they will be seen with you on the Sunday, ' +
+              'and in ' + moved + ' ward' + (moved === 1 ? '' : 's') + ' that is the same thing. It cost nothing but ' +
+              'an afternoon of listening, which is the only currency they take.'
+            : 'You were given tea and a great deal of history. Nobody said no. Nobody said anything else either, ' +
+              'and the young men at the back were not impressed by any of it.'
+        };
+      } },
 
     { id: 'rebut', ico: '📢', ap: 1,
       name: 'Rebut the story of the week',
@@ -444,7 +539,7 @@
   RZ.sprint = {
     WEEKS: WEEKS,
     due: due, begin: begin, end: end, tickWeek: tickWeek,
-    tally: tally, blitz: blitz,
+    tally: tally, blitz: blitz, surge: surge,
     weekActions: weekActions, weekActionById: weekActionById,
     resolveWeekly: resolveWeekly, WEEKLY: WEEKLY, WARD_KINDS: WARD_KINDS
   };

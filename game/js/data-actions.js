@@ -537,6 +537,39 @@
     }),
 
     /* ---------------- self ---------------- */
+    /* ---------------- forcing the issue ---------------- */
+    A({
+      id: 'revolt', ico: '⚔️', ap: 1, tier: [2, 9], risky: true,
+      name: 'Challenge the incumbent',
+      desc: function (a) {
+        var o = RZ.revolt.revoltOdds(a.S);
+        return o ? 'Force a vote against ' + o.name + '. Roughly ' + o.pct + '% of the room, on today’s numbers.'
+                 : 'Force an internal vote rather than wait to be chosen.';
+      },
+      when: function (a) { return RZ.revolt && RZ.revolt.canRevolt(a.S); },
+      run: function (a) {
+        var r = RZ.revolt.revolt(a.S, a);
+        if (!r) return { fail: true, title: 'There is nobody to challenge' };
+        return { title: r.title, body: r.body, tone: r.tone };
+      }
+    }),
+
+    A({
+      id: 'blackmail', ico: '🗄️', ap: 1, tier: [2, 11], risky: true,
+      name: 'Trade the file for the seat',
+      desc: function (a) {
+        var t = RZ.revolt.blackmailTarget(a.S);
+        return t ? 'You have something on ' + t.name + '. Positions have been exchanged for less.'
+                 : 'You have nothing on anybody worth the trade.';
+      },
+      when: function (a) {
+        var nr = RZ.engine.nextRung(a.S);
+        return RZ.revolt && !!RZ.revolt.blackmailTarget(a.S) && !!nr && nr.how !== 'auto' &&
+               a.S.tempo !== 'week';
+      },
+      run: function (a) { return RZ.revolt.blackmail(a.S, a); }
+    }),
+
     /* ---------------- crossing the floor ---------------- */
     A({
       id: 'defect', ico: '🚪', ap: 1, tier: [2, 12], risky: true,
