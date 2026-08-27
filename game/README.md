@@ -92,6 +92,8 @@ js/core.js            seeded RNG (mulberry32) and helpers
 js/data-countries.js  the ten countries: regions, seats, parties, institutions, economies
 js/data-ladder.js     the thirteen rungs and their per-country titles
 js/data-actions.js    the monthly action deck
+js/data-dialogue.js   the conversations: who is in the room and what they ask
+js/dialogue.js        the scene engine — beats, answers, mood, closing
 js/data-events.js     the event deck
 js/people.js          invented politicians, name pools, starting backgrounds
 js/field.js           the rest of the party: who holds each rung, and who is climbing
