@@ -47,6 +47,12 @@
 
     if (RZ.engine.hasSave()) document.getElementById('btn-continue').hidden = false;
 
+    var build = document.getElementById('build-line');
+    if (build) {
+      build.textContent = 'Version ' + RZ.VERSION +
+        (location.hostname === 'appassets.androidplatform.net' ? ' · Android' : ' · web');
+    }
+
     // Service worker: only meaningful for the web build. Inside the Android APK
     // every asset is already local and served by the shell, so registering one
     // buys nothing and adds a WebView failure surface — its interception layer
@@ -121,21 +127,38 @@
     var r = RZ.engine.contest(S);
     if (!r) { RZ.ui.toast('Not available yet', 'n'); return; }
     var entry;
+
+    // Who won it instead, and what happened to whoever was sitting there.
+    var beaten = r.beatenBy
+      ? ' It went to <strong>' + RZ.esc(r.beatenBy.name) + '</strong>, who will now be introduced as ' +
+        RZ.esc(r.rung.title) + ' at every function you attend.'
+      : '';
+    var deposed = r.deposed
+      ? (r.deposed.gone
+          ? ' <strong>' + RZ.esc(r.deposed.name) + '</strong> did not come back after lunch, and has not been seen at a party function since.'
+          : ' <strong>' + RZ.esc(r.deposed.name) + '</strong> kept a seat, one row further back, and has not forgiven you.')
+      : '';
+
     if (r.kind === 'internal') {
       entry = r.won
-        ? { src: 'The structures', title: 'You have it', body: 'The ' + RZ.esc(c.terms.branch) + ' chairs counted hands in a hall with no working fan. You are ' + RZ.esc(r.rung.title) + '.', deltas: [] }
-        : { src: 'The structures', title: 'You were beaten', body: 'The vote went against you by a margin the chairperson announced twice, slowly. Rebuild and come back.', deltas: [] };
+        ? { src: 'The structures', title: 'You have it', body: 'The ' + RZ.esc(c.terms.branch) + ' chairs counted hands in a hall with no working fan. You are ' + RZ.esc(r.rung.title) + '.' + deposed, deltas: [] }
+        : { src: 'The structures', title: 'You were beaten', body: 'The vote went against you by a margin the chairperson announced twice, slowly.' + beaten + ' Rebuild and come back.', deltas: [] };
     } else if (r.kind === 'conference') {
       var d = r.detail;
       entry = r.won
         ? { src: c.terms.conference, title: 'Elected on the floor', body: 'You took <strong>' + Math.round(d.mine) + ' of ' + d.total +
-            '</strong> delegates (' + RZ.round(d.pct, 1) + '%). The hall went up, the losing slate walked out, and you are ' + RZ.esc(r.rung.title) + '.', deltas: [] }
+            '</strong> delegates (' + RZ.round(d.pct, 1) + '%). The hall went up, the losing slate walked out, and you are ' + RZ.esc(r.rung.title) + '.' + deposed, deltas: [] }
         : { src: c.terms.conference, title: 'The floor said no', body: 'You took <strong>' + Math.round(d.mine) + ' of ' + d.total +
-            '</strong> delegates (' + RZ.round(d.pct, 1) + '%). Delegates were bought months ago and not by you. There is another conference in five years.', deltas: [] };
+            '</strong> delegates (' + RZ.round(d.pct, 1) + '%). Delegates were bought months ago and not by you.' + beaten + ' There is another conference in five years.', deltas: [] };
     } else if (r.kind === 'primary') {
+      var lost = r.against
+        ? ' <strong>' + RZ.esc(r.against.name) + '</strong> had buses at the gate before the hall opened.'
+        : ' Somebody else’s buses arrived first.';
       entry = r.won
-        ? { src: c.terms.primary, title: 'You are the candidate', body: 'The nomination is yours. ' + RZ.esc(r.note || '') + ' Now you have to win it in public.', deltas: [] }
-        : { src: c.terms.primary, title: 'You lost the nomination', body: 'Somebody else’s buses arrived first. The party will field them, and you will be expected to campaign for them.', deltas: [] };
+        ? { src: c.terms.primary, title: 'You are the candidate', body: 'The nomination is yours. ' + RZ.esc(r.note || '') +
+            (r.against ? ' <strong>' + RZ.esc(r.against.name) + '</strong> came second and did not stay for the photograph.' : '') +
+            ' Now you have to win it in public.', deltas: [] }
+        : { src: c.terms.primary, title: 'You lost the nomination', body: lost + ' The party will field them, and you will be expected to campaign for them.', deltas: [] };
     }
     entry.kind = r.won ? 'good' : 'bad';
     RZ.engine.pushFeed(S, entry);
@@ -176,6 +199,23 @@
 
   function resumePendingEvent() {
     var S = UI.S;
+
+    // A situation that is a room rather than a card. It is resumed at the beat
+    // it was left on, so closing the app mid-answer does not escape it.
+    if (S.pendingEvent.talk) {
+      var convo = RZ.dialogue.beginEvent(S, { beat: S.pendingEvent.talkBeat, mood: S.pendingEvent.talkMood });
+      if (convo) {
+        RZ.ui.showDialogue(convo, function (cv) {
+          var entry = RZ.engine.finishEventDialogue(S, cv);
+          if (S.over) { RZ.ui.showEnd(); return; }
+          RZ.ui.renderGame();
+        });
+        return;
+      }
+      // No beats after all — fall through and treat it as an ordinary card.
+      S.pendingEvent.talk = false;
+    }
+
     RZ.ui.showEvent(S.pendingEvent, function (i) {
       var entry = RZ.engine.resolveEvent(S, i);
       RZ.ui.closeModal();

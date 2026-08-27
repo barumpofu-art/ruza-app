@@ -1,10 +1,10 @@
 /* sw.js — offline shell. Bump CACHE on every release. */
-var CACHE = 'kgosi-cadre-v3';
+var CACHE = 'kgosi-cadre-v4';
 var ASSETS = [
   './', './index.html', './app.css', './manifest.webmanifest',
   './icon.svg', './icon-maskable.svg', './icon-192.png', './icon-512.png', './icon-maskable-512.png',
   './js/core.js', './js/data-countries.js', './js/data-ladder.js', './js/data-actions.js',
-  './js/data-events.js', './js/data-dialogue.js', './js/people.js', './js/elections.js',
+  './js/data-events.js', './js/data-dialogue.js', './js/people.js', './js/field.js', './js/elections.js',
   './js/engine.js', './js/governance.js', './js/dialogue.js', './js/ui.js', './js/main.js'
 ];
 

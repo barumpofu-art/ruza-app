@@ -13,9 +13,10 @@ permissions:
   contents: write
 
 jobs:
-  # Every branch of every conversation, played headlessly. Scene data is only
-  # otherwise exercised by a player tapping through it on a phone.
-  dialogue:
+  # Every branch of every conversation, and whole careers in every country,
+  # played headlessly. Game data is only otherwise exercised by a player
+  # tapping through it on a phone.
+  simulate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,8 +26,20 @@ jobs:
       - name: Play every conversation
         run: node game/test/dialogue-sim.mjs
 
+      # Whole careers, in every country, with every invariant asserted after
+      # every turn. This is what catches a rule change that only breaks in
+      # year thirty of a career nobody would play by hand.
+      - name: Play whole careers
+        run: node game/test/career-sim.mjs --careers 4
+
+      # Neither simulation above ever loads ui.js or main.js, because both run
+      # the modules in a Node sandbox. This one plays the real page in a real
+      # browser: every pane, a year of months, a reload, and the obituary.
+      - name: Play the real page in a browser
+        run: bash game/test/page-smoke.sh
+
   build:
-    needs: dialogue
+    needs: simulate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -40,9 +53,28 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # game/VERSION is the single source of truth. The APK carries the same
+      # string the title screen prints, so a bug report names a real build.
+      - name: Read the version
+        id: ver
+        run: |
+          set -euo pipefail
+          V=$(tr -d ' \t\n\r' < game/VERSION)
+          [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "game/VERSION is not x.y.z: $V"; exit 1; }
+          # The page and the package must not disagree about what this is.
+          grep -q "var VERSION = '$V';" game/js/core.js \
+            || { echo "game/js/core.js does not carry version $V"; exit 1; }
+          IFS=. read -r MA MI PA <<< "$V"
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "code=$(( MA * 10000 + MI * 100 + PA ))" >> "$GITHUB_OUTPUT"
+          echo "Building $V"
+
       - name: Build debug APK
         working-directory: game/android
-        run: ./gradlew --no-daemon assembleDebug
+        run: |
+          ./gradlew --no-daemon assembleDebug \
+            -PkgosiVersionName=${{ steps.ver.outputs.version }} \
+            -PkgosiVersionCode=${{ steps.ver.outputs.code }}
 
       - name: Check what is inside the APK
         working-directory: game/android
@@ -57,7 +89,7 @@ jobs:
                        assets/icon-192.png assets/icon-512.png \
                        assets/js/main.js assets/js/engine.js assets/js/ui.js \
                        assets/js/data-countries.js assets/js/elections.js assets/js/governance.js \
-                       assets/js/dialogue.js assets/js/data-dialogue.js; do
+                       assets/js/dialogue.js assets/js/data-dialogue.js assets/js/field.js; do
             unzip -Z1 "$APK" | grep -qx "$entry" || { echo "missing from APK: $entry"; exit 1; }
           done
           # Density folders come out of AGP with a -v4 qualifier.
@@ -69,15 +101,24 @@ jobs:
       - name: Name the APK
         working-directory: game/android
         run: |
+          set -euo pipefail
           mkdir -p ../../out
           cp app/build/outputs/apk/debug/app-debug.apk ../../out/kgosi-cadre.apk
+          AAPT2=$(ls -d "$ANDROID_HOME"/build-tools/*/aapt2 | sort -V | tail -1)
+          STAMPED=$("$AAPT2" dump badging ../../out/kgosi-cadre.apk \
+            | sed -n "s/.*versionName='\([^']*\)'.*/\1/p")
+          [ "$STAMPED" = "${{ steps.ver.outputs.version }}" ] \
+            || { echo "APK says $STAMPED, game/VERSION says ${{ steps.ver.outputs.version }}"; exit 1; }
+          echo "${{ steps.ver.outputs.version }}" > ../../out/VERSION
           ls -la ../../out
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: kgosi-cadre-apk
-          path: out/kgosi-cadre.apk
+          path: |
+            out/kgosi-cadre.apk
+            out/VERSION
           if-no-files-found: error
 
   # Installs the APK on a real Android image and plays the game through the
@@ -135,12 +176,14 @@ jobs:
             apk-logcat.txt
           if-no-files-found: warn
 
-  # A release asset is a plain one-tap download on a phone, unlike the zipped,
-  # sign-in-only run artifact. The tag is rolling: the same URL always points at
-  # the newest build that passed the emulator.
+  # Two releases from one build. `kgosi-cadre-latest` is a rolling tag: the
+  # same URL always points at the newest build that passed the emulator, which
+  # is what the README links to. A versioned tag is cut the first time a given
+  # game/VERSION reaches main, and then never moved, so a bug report against
+  # v1.1.0 can be reproduced against exactly that APK.
   release:
     needs: smoke
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/claude/southern-africa-politics-game-oo6mro'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -153,23 +196,39 @@ jobs:
       - name: Publish the APK
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: kgosi-cadre-latest
+          ROLLING: kgosi-cadre-latest
         run: |
           set -euo pipefail
-          NOTES="Kgosi & Cadre — debug-signed build of game/ at ${GITHUB_SHA::7}, installed and played on an Android 14 emulator by CI.
+          V=$(tr -d ' \t\n\r' < out/VERSION)
+          TAG="kgosi-cadre-v$V"
+          NOTES="Kgosi & Cadre $V — debug-signed build of game/ at ${GITHUB_SHA::7}, installed and played through on an Android 14 emulator by CI before publishing.
 
           Install on Android: download the APK, open it, and allow installs from your browser when asked.
           It needs no account and makes no network requests; your career is saved on the device.
 
-          The same game also runs in a browser at https://barumpofu-art.github.io/ruza-app/game/"
+          The same game runs in a browser at https://barumpofu-art.github.io/ruza-app/game/"
+
+          # The immutable one, cut once per version.
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" out/kgosi-cadre.apk --clobber
-            gh release edit "$TAG" --notes "$NOTES" --target "$GITHUB_SHA"
+            echo "$TAG already exists — leaving it alone. Bump game/VERSION to cut a new one."
           else
-            gh release create "$TAG" out/kgosi-cadre.apk \
+            cp out/kgosi-cadre.apk "out/kgosi-cadre-$V.apk"
+            gh release create "$TAG" "out/kgosi-cadre-$V.apk" \
+              --title "Kgosi & Cadre $V" \
+              --notes "$NOTES" \
+              --target "$GITHUB_SHA"
+            echo "cut $TAG"
+          fi
+
+          # The rolling one, moved on every green build of main.
+          if gh release view "$ROLLING" >/dev/null 2>&1; then
+            gh release upload "$ROLLING" out/kgosi-cadre.apk --clobber
+            gh release edit "$ROLLING" --notes "$NOTES" --target "$GITHUB_SHA"
+          else
+            gh release create "$ROLLING" out/kgosi-cadre.apk \
               --title "Kgosi & Cadre (latest build)" \
               --notes "$NOTES" \
               --prerelease \
               --target "$GITHUB_SHA"
           fi
-          gh release view "$TAG" --json assets --jq '.assets[] | "\(.name) \(.size) bytes"'
+          gh release view "$ROLLING" --json assets --jq '.assets[] | "\(.name) \(.size) bytes"'

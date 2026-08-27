@@ -13,7 +13,9 @@ network calls.
 
 **As an Android app:** download `kgosi-cadre.apk` from the
 [latest build](https://github.com/barumpofu-art/ruza-app/releases/tag/kgosi-cadre-latest),
-open it, and allow installs from your browser when asked. It is a WebView shell around the
+open it, and allow installs from your browser when asked. That tag always points at the
+newest green build; each released version also gets its own permanent tag
+(`kgosi-cadre-v1.1.0`), so a build can be gone back to. It is a WebView shell around the
 same web app in `android/`, so there is only ever one copy of the source. CI installs every
 build on an Android 14 emulator and plays a career through it before publishing.
 
@@ -52,9 +54,38 @@ way — a show of hands in a branch meeting, a delegate count at national confer
 public ballot, or a phone call from the principal on a Sunday evening that you can only
 make more likely, never demand.
 
+**Contests.** A contest is a comparison, not a threshold. Both you and whoever is standing
+in the doorway are scored by the same arithmetic — local base, grassroots, party standing,
+name recognition, whatever money has already been spent — and the result is a share of the
+room. Whoever holds an office has at least what that office demanded of them, so a sitting
+member is strong in their own constituency the way you are in yours.
+
+Before you commit, your organisers give you a count. It is not exact: how wrong it is
+depends on how good your organisation is, so a candidate with thin party structures and no
+slate is told a number they cannot trust. That is the decision the ladder is built around —
+go now at forty-five per cent, or spend two more years building while the incumbent also
+gets older, and somebody else may take the opening first.
+
+**The field.** Every rung already has somebody in it. Two dozen invented politicians hold
+the offices you want and climb towards the same ones you do, and a contest is resolved
+against whichever of them is standing in the doorway — not against a difficulty number.
+Lose the conference and you lose it *to* a named person, who is then introduced by that
+title at every function you attend for the next five years. Beat them and they go one row
+back, or out altogether, and they do not forgive it. A file you hold on somebody is
+leverage over a career, not a stat: leaking it can end them, and a wounded party leader is
+a party leader who can be challenged. Cross the floor and you inherit a new cast, while the
+people you left keep everything they know about you.
+
 **Standing** (grassroots, party, leadership, media, business, security, international) is
 rented, not owned: the higher it is, the more it costs each month to hold. You cannot
 maintain all seven.
+
+**Situations.** Most of what happens to you is a card with three buttons on it. The
+biggest things are not: the kraal, the live television question about whether you want the
+top job, the Secretary-General at the residence after ten at night with six provincial
+resolutions in a folder, the deputy who sits down before he is asked to. Those are rooms,
+played through the same engine as the meetings, and they cannot be escaped — close the app
+halfway through an answer and the room reopens on the question you were still holding.
 
 **Scandal.** Everything you do that would embarrass you goes into a file with a severity.
 Files come out — faster where the press is free and the courts work. Exposure blocks
@@ -82,14 +113,22 @@ js/core.js            seeded RNG (mulberry32) and helpers
 js/data-countries.js  the ten countries: regions, seats, parties, institutions, economies
 js/data-ladder.js     the thirteen rungs and their per-country titles
 js/data-actions.js    the monthly action deck
-js/data-events.js     the event deck
+js/data-dialogue.js   the conversations: who is in the room and what they ask
+js/dialogue.js        the scene engine — beats, answers, mood, closing
+js/data-events.js     the event deck — cards with choices, and rooms with beats
 js/people.js          invented politicians, name pools, starting backgrounds
+js/field.js           the rest of the party: who holds each rung, and who is climbing
 js/elections.js       vote projection, seat allocation, coalitions, internal contests
 js/engine.js          state, the monthly loop, the action API, promotion and danger
 js/governance.js      the presidency, budgets, election night, legacy and obituary
 js/ui.js              rendering
 js/main.js            bootstrap and flow control
+VERSION               the released version; js/core.js must carry the same string
 android/              WebView wrapper that packages the above as an APK
+test/dialogue-sim.mjs walks every branch of every conversation
+test/career-sim.mjs   plays whole careers in every country, asserting invariants
+test/page-smoke.mjs   plays the real page in a real browser over devtools
+test/page-smoke.sh    serves game/, starts Chromium, and hands it to that test
 test/apk-smoke.mjs    drives the packaged app in a real WebView over devtools
 test/apk-smoke.sh     installs the APK on an emulator and hands it to that test
 ```
@@ -106,6 +145,41 @@ python3 -m http.server 8899 --directory .
 chromium --headless=new --remote-debugging-port=9222 http://127.0.0.1:8899/index.html
 PAGE_ORIGIN=127.0.0.1 node test/apk-smoke.mjs
 ```
+
+All three run in CI before anything is built:
+
+```
+node game/test/dialogue-sim.mjs
+node game/test/career-sim.mjs --careers 4 --verbose
+bash game/test/page-smoke.sh
+```
+
+The first two load the game's modules into a Node sandbox, which means neither ever loads
+`ui.js` or `main.js`. `page-smoke` covers those: it serves the folder, opens it in headless
+Chromium, renders every pane, plays a year, reloads and resumes the saved career through
+the Continue button, and renders the obituary — failing on any exception or console error.
+Set `CHROME` if it cannot find a browser.
+
+`career-sim` also measures the thing the win rate cannot: what a contest looks like for
+somebody who has *only just* qualified for it. Grinding careers arrive at a contest far
+past the bar and win almost everything, which says nothing about whether the ladder is a
+decision. The marginal share sits near forty per cent, and CI fails if it drifts above
+fifty-five (qualifying would all but win) or below thirty-two (qualifying would be
+pointless).
+
+`career-sim` plays each country twice over — once as a player who takes whatever is on the
+desk, and once as one that reads what the next rung wants and buys it. The two bracket the
+balance: if the drifter reaches State House the ladder is too soft, and if the climber
+never does it is impossible.
+
+## Releasing
+
+`game/VERSION` is the single source of truth, and `js/core.js` carries the same string so
+the title screen can print it. CI checks the two agree, stamps both into the APK's
+`versionName`, checks the built package really says so, and then publishes: the rolling
+`kgosi-cadre-latest` tag moves on every green build of `main`, and a permanent
+`kgosi-cadre-v<version>` tag is cut the first time a given version gets there. To release,
+bump both files in the same commit.
 
 Careers are saved to `localStorage` after every turn. The RNG is seeded, so a career is
 reproducible from its seed.

@@ -87,6 +87,7 @@ body{
 .title-blurb{ color:var(--text-dim); line-height:1.62; font-size:.96rem; margin:0 auto 28px; max-width:33rem; }
 .title-actions{ display:flex; flex-direction:column; gap:11px; max-width:20rem; margin:0 auto; }
 .disclaimer{ margin:26px auto 0; font-size:.76rem; color:var(--text-faint); line-height:1.55; max-width:30rem; }
+.disclaimer.build{ margin-top:12px; font-size:.7rem; letter-spacing:.04em; opacity:.75; }
 
 /* ---------- buttons ---------- */
 .btn{
@@ -418,6 +419,8 @@ body{
 .center{ text-align:center; }
 .mt{ margin-top:14px; }
 .gold{ color:var(--gold); }
+.red{ color:var(--red); }
+.green{ color:var(--green); }
 .dim{ color:var(--text-dim); }
 
 @keyframes rise{ from{ opacity:0; transform:translateY(9px);} to{ opacity:1; transform:none;} }
@@ -432,3 +435,12 @@ body{
   .opt-grid{ grid-template-columns:1fr 1fr; }
   .sgrid{ grid-template-columns:repeat(3,1fr); }
 }
+
+/* the whip count on the contest card */
+.whip{ margin-top:12px; padding-top:11px; border-top:1px solid var(--line-soft); }
+.whip-h{ display:flex; justify-content:space-between; align-items:baseline;
+  font-size:.7rem; letter-spacing:.09em; text-transform:uppercase; color:var(--text-faint); margin-bottom:7px; }
+.whip-h .sub{ text-transform:none; letter-spacing:0; font-size:.72rem; }
+.whip-bar{ height:7px; border-radius:4px; background:var(--line-soft); overflow:hidden; margin-bottom:8px; position:relative; }
+.whip-bar::after{ content:''; position:absolute; left:50%; top:-2px; bottom:-2px; width:1px; background:var(--text-faint); opacity:.7; }
+.whip-bar span{ display:block; height:100%; border-radius:4px; transition:width .3s ease; }
