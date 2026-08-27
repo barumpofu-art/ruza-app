@@ -243,10 +243,24 @@
         ' against ' + RZ.round(v.best, 1) + '% for the strongest rival. ' +
         (v.safe ? 'This is winnable ground.' : 'You cannot win a seat here. Move, or change party.') + '</p>';
     }
+    // The rung is not empty and never was. Say whose chair it is.
+    var against = '';
+    if (st.against && r.how !== 'auto') {
+      var a = st.against;
+      var line = a.incumbent
+        ? '<strong>' + esc(a.name) + '</strong> holds it' + (a.region ? ', out of ' + esc(a.region) : '') + '.'
+        : '<strong>' + esc(a.name) + '</strong>, ' + esc(a.role) + ', wants it too.';
+      var read = a.wounded ? 'They are wounded, and a wounded incumbent is a beatable one.'
+               : a.strength > 74 ? 'They are strong. Taking this off them now would be a surprise.'
+               : a.strength > 55 ? 'They are solid, but not untouchable.'
+               : 'They are weaker than the office they are sitting in.';
+      against = '<p class="note mt" style="border-top:1px solid var(--line-soft);padding-top:9px">' +
+        line + ' ' + read + (a.file ? ' <span class="gold">You hold a file on them.</span>' : '') + '</p>';
+    }
     return '<div class="card" style="border-left:3px solid var(--gold)">' +
       '<div class="block-h" style="margin:0 0 8px">Next rung<span class="sub">' + howLabel(r.how, c) + '</span></div>' +
       '<div style="font-family:var(--serif);font-size:1.12rem;font-weight:600;margin-bottom:6px">' + esc(r.title) + '</div>' +
-      body + viability + '</div>';
+      body + against + viability + '</div>';
   }
 
   function howLabel(how, c) {
@@ -365,22 +379,42 @@
           (i <= P.rungIdx + 1 ? '<div class="rung-d">' + esc(r.desc) + '</div>' : '') + '</div></div>';
       }).join('') + '</div></div></div>';
 
-    if (P.rivals.length) {
-      h += '<div class="block"><div class="block-h">Rivals<span class="sub">inside the movement</span></div><div class="card"><div class="rows">' +
-        P.rivals.map(function (r) {
-          var lev = r.dirt.filter(function (d) { return !d.used; });
-          return '<div class="row"><span class="row-dot" style="background:#d4453f"></span>' +
-            '<span class="row-n">' + esc(r.name) + '<small>' + esc(r.role) + ', ' + esc(c.regionById[r.regionId] ? c.regionById[r.regionId].name : '') +
-            (lev.length ? ' · <span class="gold">you hold a file</span>' : '') + '</small></span>' +
-            '<span class="row-v">' + Math.round(r.power) + '</span></div>';
-        }).join('') + '</div></div></div>';
+    // The field: the people holding the rungs above you, and the ones coming
+    // up behind. A rung with a name on it is the whole game.
+    var field = RZ.field.ours(S);
+    if (field.length) {
+      var shown = RZ.field.strongestFirst(field)
+        .filter(function (f) { return f.rungIdx >= P.rungIdx - 1; })
+        .sort(function (a, b) { return b.rungIdx - a.rungIdx; })
+        .slice(0, 12);
+      h += '<div class="block"><div class="block-h">The field<span class="sub">' + field.length +
+        ' in the movement</span></div><div class="card"><div class="rows">' +
+        shown.map(function (f) {
+          var tags = [];
+          if (f.side === 'rival') tags.push('<span class="red">against you</span>');
+          if (f.side === 'ally') tags.push('<span class="green">on your slate</span>');
+          if (f.dirt.some(function (d) { return !d.used; })) tags.push('<span class="gold">you hold a file</span>');
+          if (f.wounded > 0) tags.push('wounded');
+          var dot = f.side === 'rival' ? '#d4453f' : (f.side === 'ally' ? '#4bab84' : '#6b7787');
+          return '<div class="row"><span class="row-dot" style="background:' + dot + '"></span>' +
+            '<span class="row-n">' + esc(f.name) + '<small>' + esc(f.role) +
+            (f.regionId && c.regionById[f.regionId] ? ' · ' + esc(c.regionById[f.regionId].name) : '') +
+            (tags.length ? ' · ' + tags.join(' · ') : '') + '</small></span>' +
+            '<span class="row-v">' + Math.round(f.power) + '</span></div>';
+        }).join('') + '</div>' +
+        '<p class="note mt">Strength is what they can bring to a vote. It is not fixed: ' +
+        'it is spent, lost and rebuilt exactly like yours.</p></div></div>';
     }
-    if (P.allies.length) {
-      h += '<div class="block"><div class="block-h">Your slate</div><div class="card"><div class="rows">' +
-        P.allies.slice(0, 8).map(function (r) {
-          return '<div class="row"><span class="row-dot" style="background:#4bab84"></span>' +
-            '<span class="row-n">' + esc(r.name) + '<small>' + esc(r.role) + '</small></span>' +
-            '<span class="row-v">' + Math.round(r.power) + '</span></div>';
+
+    var gone = (S.field || []).filter(function (f) { return f.retired; }).slice(-5).reverse();
+    if (gone.length) {
+      var FATE = { beaten: 'beaten by you', disgrace: 'destroyed by a story', faded: 'faded out',
+                   died: 'died in office', quit: 'walked away' };
+      h += '<div class="block"><div class="block-h">Off the board</div><div class="card"><div class="rows">' +
+        gone.map(function (f) {
+          return '<div class="row"><span class="row-dot" style="background:#3a4250"></span>' +
+            '<span class="row-n">' + esc(f.name) + '<small>' + esc(f.role) + ' · ' +
+            esc(FATE[f.fate] || 'gone') + ', ' + f.retiredYear + '</small></span></div>';
         }).join('') + '</div></div></div>';
     }
 

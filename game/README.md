@@ -52,6 +52,16 @@ way — a show of hands in a branch meeting, a delegate count at national confer
 public ballot, or a phone call from the principal on a Sunday evening that you can only
 make more likely, never demand.
 
+**The field.** Every rung already has somebody in it. Two dozen invented politicians hold
+the offices you want and climb towards the same ones you do, and a contest is resolved
+against whichever of them is standing in the doorway — not against a difficulty number.
+Lose the conference and you lose it *to* a named person, who is then introduced by that
+title at every function you attend for the next five years. Beat them and they go one row
+back, or out altogether, and they do not forgive it. A file you hold on somebody is
+leverage over a career, not a stat: leaking it can end them, and a wounded party leader is
+a party leader who can be challenged. Cross the floor and you inherit a new cast, while the
+people you left keep everything they know about you.
+
 **Standing** (grassroots, party, leadership, media, business, security, international) is
 rented, not owned: the higher it is, the more it costs each month to hold. You cannot
 maintain all seven.
@@ -84,12 +94,15 @@ js/data-ladder.js     the thirteen rungs and their per-country titles
 js/data-actions.js    the monthly action deck
 js/data-events.js     the event deck
 js/people.js          invented politicians, name pools, starting backgrounds
+js/field.js           the rest of the party: who holds each rung, and who is climbing
 js/elections.js       vote projection, seat allocation, coalitions, internal contests
 js/engine.js          state, the monthly loop, the action API, promotion and danger
 js/governance.js      the presidency, budgets, election night, legacy and obituary
 js/ui.js              rendering
 js/main.js            bootstrap and flow control
 android/              WebView wrapper that packages the above as an APK
+test/dialogue-sim.mjs walks every branch of every conversation
+test/career-sim.mjs   plays whole careers in every country, asserting invariants
 test/apk-smoke.mjs    drives the packaged app in a real WebView over devtools
 test/apk-smoke.sh     installs the APK on an emulator and hands it to that test
 ```
@@ -106,6 +119,18 @@ python3 -m http.server 8899 --directory .
 chromium --headless=new --remote-debugging-port=9222 http://127.0.0.1:8899/index.html
 PAGE_ORIGIN=127.0.0.1 node test/apk-smoke.mjs
 ```
+
+Both simulations run in CI before anything is built:
+
+```
+node game/test/dialogue-sim.mjs
+node game/test/career-sim.mjs --careers 4 --verbose
+```
+
+`career-sim` plays each country twice over — once as a player who takes whatever is on the
+desk, and once as one that reads what the next rung wants and buys it. The two bracket the
+balance: if the drifter reaches State House the ladder is too soft, and if the climber
+never does it is impossible.
 
 Careers are saved to `localStorage` after every turn. The RNG is seeded, so a career is
 reproducible from its seed.

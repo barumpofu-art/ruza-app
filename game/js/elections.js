@@ -264,7 +264,7 @@
       // where the barracks are a faction, their blessing is worth delegates
       pull += P.standing.security * (c.inst.security / 170);
       // a slate votes together
-      pull += Math.min(8, P.allies.length) * 2.5;
+      pull += Math.min(8, RZ.field.allies(S).length) * 2.5;
       // patronage-heavy parties respond to money already spent
       pull += (S.campaign.delegateSpend || 0) * 0.5;
       pull -= difficulty;
