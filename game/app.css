@@ -418,6 +418,40 @@ body{
 .chest-d{ font-size:.72rem; color:var(--text-faint); margin-top:5px; line-height:1.45; }
 .chest-own{ color:#e0b06f; }
 .chest-warn{ color:#d99a97; }
+/* the order paper: a bill in committee, counted bloc by bloc */
+.bill{
+  border:1px solid #3a4a63; border-radius:var(--radius); padding:14px;
+  background:linear-gradient(180deg,#182231,#161c25); margin-bottom:14px;
+}
+.bill .sprint-k{ color:#8fb0d8; }
+.bill-count{ margin-left:auto; text-align:right; font-family:var(--mono); font-size:1.5rem; font-weight:700; line-height:1; }
+.bill-count.up{ color:var(--green); }
+.bill-count.down{ color:var(--gold); }
+.bill-count small{ display:block; font-family:var(--font); font-size:.6rem; letter-spacing:.12em;
+  text-transform:uppercase; font-weight:700; opacity:.8; margin-top:4px; }
+.bill .sprint-bar span{ background:linear-gradient(90deg,#3f6ea8,#6f9fd4); }
+.bill .sprint-bar span.up{ background:linear-gradient(90deg,#2f7a5c,var(--green)); }
+.bill-line{
+  display:block; height:7px; margin-top:-7px; position:relative;
+}
+.blocs{ display:flex; flex-direction:column; gap:8px; margin-top:12px; }
+.bloc{
+  padding:10px 11px; border:1px solid var(--line-soft); border-left-width:3px;
+  border-radius:var(--radius-sm); background:var(--panel);
+}
+.bloc.yes{ border-left-color:var(--green); }
+.bloc.lean{ border-left-color:var(--gold); }
+.bloc.no{ border-left-color:var(--red); }
+.bloc-top{ display:flex; align-items:baseline; gap:8px; }
+.bloc-n{ font-weight:600; font-size:.9rem; }
+.bloc-s{ margin-left:auto; font-family:var(--mono); font-size:.85rem; color:var(--text-dim); }
+.bloc-d{ font-size:.72rem; color:var(--text-faint); margin-top:4px; line-height:1.45; }
+.bloc-bar{ display:block; height:4px; border-radius:3px; background:#1b2530; margin-top:7px; overflow:hidden; }
+.bloc-bar span{ display:block; height:100%; background:var(--gold); }
+.bloc-bar span.yes{ background:var(--green); }
+.bloc-bar span.no{ background:var(--red); }
+.bloc-tag{ font-size:.6rem; letter-spacing:.1em; text-transform:uppercase; font-weight:700;
+  color:var(--green); margin-left:6px; }
 .wards{ display:flex; flex-direction:column; gap:8px; margin-top:12px; }
 .ward{
   display:block; width:100%; text-align:left; padding:10px 11px; cursor:pointer;

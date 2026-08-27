@@ -1839,6 +1839,225 @@
           ]
         }
       ]
+    },
+
+
+    /* ==================== THE ORDER PAPER ==================== */
+    // The whips' count is a room, not a number. Three men who have done this
+    // for twenty years telling you what your own side is actually going to do.
+    {
+      id: 'bill-count', topic: 'billcount', weight: 12,
+      when: function (a) { return !!a.S.bill; },
+      speaker: function (a) { return who(a, 'Chief Whip', 'the parliamentary caucus'); },
+      where: 'The whips’ office, after the House rises',
+      settleOn: 'party',
+      opening: function (a) {
+        var t = RZ.bill.count(a.S);
+        // You have now seen the list, whether the meeting goes well or not.
+        a.S.bill.counted = true;
+        return 'Three of them and one list, gone through name by name since six. He turns it round so ' +
+          'you can see it. "' + t.yes + '. You need ' + t.needed + '. ' +
+          (t.short ? 'And four of the names in that column will not look me in the eye."' :
+                     'Which is a number I have watched evaporate on a Thursday afternoon before."');
+      },
+      beats: [
+        {
+          q: function (a) {
+            var t = RZ.bill.count(a.S);
+            return '"Before we go further. Whose bill is this? Because the caucus thinks it is yours, and a bill ' +
+              'that is one member’s is a bill the party can let fail without anybody being blamed. ' +
+              (t.short ? 'You are ' + t.short + ' short and you are short alone."' : 'You are barely over and you are over alone."');
+          },
+          answers: [
+            { t: 'It is the party’s bill. Put it in the caucus statement.', mood: 3, tag: 'cost',
+              when: function (a) { return a.P.capital >= 6; },
+              run: function (a) {
+                a.add('capital', -a.rng(5, 10)); a.add('party', a.rng(3, 7)); a.add('fame', -a.rng(1, 4));
+                var b = a.S.bill; if (b) b.blocs.forEach(function (x) { if (x.id === 'loyal') x.lean = RZ.clamp(x.lean + RZ.range(10, 22), -95, 95); });
+              },
+              reply: '"Then it is the party’s bill and the party’s win, and your name is in paragraph four." ' +
+                     'He makes a mark against eleven names on the loyal side without being asked.' },
+            { t: 'It is mine. That is the whole point of it.', mood: -1,
+              run: function (a) { a.add('fame', a.rng(3, 7)); a.add('stats.integrity', a.rng(1, 3)); a.add('party', -a.rng(2, 5)); },
+              reply: '"Then it is yours on the way down as well." He does not say it unkindly. He says it the ' +
+                     'way a man says a thing he has watched happen four times.' },
+            { t: 'It is the leader’s bill. He simply has not been told yet.', mood: 2,
+              run: function (a) { a.add('stats.cunning', a.rng(1, 3)); a.add('leader', -a.rng(1, 5)); a.dirt('billclaim', 'Claimed the leader’s backing for a bill he never saw', 3); },
+              reply: 'The youngest of the three looks up sharply. The Chief Whip does not. "I will not correct ' +
+                     'anybody who repeats that," he says, "and I will not have said it."' }
+          ]
+        },
+        {
+          q: '"Now the part you will not like. There are nine members who will vote for anything if their ' +
+             'constituency office gets its establishment back. Nine is usually the whole argument. Do I go and see them?"',
+          answers: [
+            { t: 'Go and see them. Whatever the nine want, find it', mood: 2, tag: 'cost',
+              when: function (a) { return a.P.capital >= 10; },
+              run: function (a) {
+                a.add('capital', -a.rng(10, 18));
+                var b = a.S.bill;
+                if (b) { var open = b.blocs.filter(function (x) { return !x.pledged; }); if (open.length) { var pick = RZ.pick(open); pick.lean = RZ.clamp(pick.lean + RZ.range(14, 26), -95, 95); if (pick.lean > 55) { pick.pledged = true; pick.how = 'capital'; } } }
+                a.add('stats.integrity', -a.rng(0, 2));
+              },
+              reply: '"Nine offices, nine establishments, and none of it in writing." He is already reaching for ' +
+                     'the phone. "This is the part of the job nobody writes a book about."' },
+            { t: 'No. If it needs nine bought men it does not deserve to pass', mood: 0,
+              run: function (a) { a.add('stats.integrity', a.rng(2, 5)); a.add('media', a.rng(1, 4)); a.add('party', -a.rng(1, 4)); },
+              reply: 'He puts the list face down. "That is a very good sentence. I will put it on your headstone ' +
+                     'next to the bill."' },
+            { t: 'See them, and make sure they know exactly who is paying', mood: 1,
+              run: function (a) {
+                a.add('capital', -a.rng(4, 9)); a.add('fame', a.rng(2, 5));
+                var b = a.S.bill;
+                if (b) { var open2 = b.blocs.filter(function (x) { return !x.pledged; }); if (open2.length) RZ.pick(open2).lean = RZ.clamp(RZ.pick(open2).lean + RZ.range(6, 14), -95, 95); }
+                a.add('leader', -a.rng(0, 3));
+              },
+              reply: '"They will know." He sighs. "They will also tell people, and one of them will tell a ' +
+                     'journalist, and you will have to decide whether you mind."' }
+          ]
+        }
+      ]
+    },
+
+    // Summoned in the middle week: somebody who does not sit in the House and
+    // has more at stake in the bill than most people who do.
+    {
+      id: 'bill-lobby', topic: 'crisis', weight: 0,
+      speaker: function (a) { return who(a, 'Director of Government Affairs', 'the chamber of industry'); },
+      where: 'A private dining room, the bill open on the table',
+      settleOn: 'business',
+      opening: function (a) {
+        var b = a.S.bill;
+        return 'He has a copy of your bill with four clauses tabbed in yellow. "I have read it properly, which ' +
+          'puts me ahead of most of the people voting on it. ' +
+          (b ? 'Clause nine is the one that matters and you know it is."' : 'And I would like ten minutes."');
+      },
+      beats: [
+        {
+          q: function (a) {
+            return '"Here is what I am authorised to say. Take clause nine out, and eleven members who take our ' +
+              'calls will find they have always supported the rest of it. Leave it in, and we spend ' +
+              money(a, 40) + ' explaining to the country why the bill will cost jobs. Neither of those is a threat. ' +
+              'Both of them are Tuesday."';
+          },
+          answers: [
+            { t: 'Take it out. I want the rest of the bill more than clause nine', mood: 3,
+              run: function (a) {
+                var b = a.S.bill;
+                if (b) {
+                  b.concessions++;
+                  var open = b.blocs.filter(function (x) { return !x.pledged; });
+                  if (open.length) { var pk = RZ.pick(open); pk.lean = RZ.clamp(pk.lean + RZ.range(30, 50), -95, 95); if (pk.lean > 45) { pk.pledged = true; pk.how = 'concession'; } }
+                }
+                a.add('business', a.rng(5, 11)); a.add('grassroots', -a.rng(2, 6));
+              },
+              reply: '"A sensible man." He closes the folder. "You will be told by your own side that you sold ' +
+                     'something. What you sold was a clause that was never going to survive committee."' },
+            { t: 'Clause nine is the bill. Spend your money.', mood: -3,
+              run: function (a) {
+                a.add('business', -a.rng(8, 16)); a.add('grassroots', a.rng(4, 9));
+                a.add('stats.integrity', a.rng(1, 4));
+                var b = a.S.bill;
+                if (b) b.blocs.forEach(function (x) { if (x.id === 'opp' && !x.pledged) x.lean = RZ.clamp(x.lean - RZ.range(4, 12), -95, 95); });
+              },
+              reply: 'He is not angry. He puts his card on the table anyway. "Then I will see you on the ' +
+                     'television. Do keep this. The bill after this one might be one we agree about."' },
+            { t: 'Make me an offer that has nothing to do with the bill', mood: 1, tag: 'dirty',
+              run: function (a) {
+                a.add('money', a.wage(a.rng(6, 16)));
+                a.dirt('billmoney', 'Took money from an industry lobby during your own bill', 6);
+                a.add('stats.integrity', -a.rng(3, 7));
+                var b = a.S.bill;
+                if (b) { var o2 = b.blocs.filter(function (x) { return !x.pledged; }); if (o2.length) { var q = RZ.pick(o2); q.lean = RZ.clamp(q.lean + RZ.range(10, 20), -95, 95); } }
+              },
+              reply: 'A very long pause, and then a small nod, as though you have finally said something he ' +
+                     'recognised. "There is a foundation," he says. "It funds constituency work."' }
+          ]
+        },
+        {
+          q: '"One more thing, and it is genuinely a favour. When the vote comes, and it goes your way — say ' +
+             'something civil about the industry from the floor. Not support. Civil. Can you do that?"',
+          answers: [
+            { t: 'Yes. It costs me nothing and it costs the bill nothing', mood: 2,
+              run: function (a) { a.add('business', a.rng(3, 7)); a.add('grassroots', -a.rng(0, 3)); },
+              reply: '"Thank you." He means it, which is somehow worse than if he had not.' },
+            { t: 'No. They will read it as an arrangement, because it is one', mood: -1,
+              run: function (a) { a.add('stats.integrity', a.rng(1, 3)); a.add('business', -a.rng(2, 6)); },
+              reply: 'He shrugs on his coat. "You are new. It stops being a virtue somewhere around your ' +
+                     'fourth term, and you will not notice the day it does."' },
+            { t: 'I will say it, and I will say who asked me to', mood: 0,
+              run: function (a) { a.add('media', a.rng(3, 8)); a.add('business', -a.rng(4, 9)); a.add('fame', a.rng(1, 4)); },
+              reply: '"That is not a favour, that is an ambush with a delay on it." He almost laughs. "Do it. ' +
+                     'It will be good for both of us and neither of us will admit that."' }
+          ]
+        }
+      ]
+    },
+
+    // And the one from inside: the faction that shares your party card and
+    // wants to know what the bill is really for.
+    {
+      id: 'bill-faction', topic: 'crisis', weight: 0,
+      speaker: function (a) { return who(a, 'convenor', 'the other faction in caucus'); },
+      where: 'A corridor off the members’ lobby, nobody else within earshot',
+      settleOn: 'party',
+      opening: function (a) {
+        return 'She does not sit down and she does not intend to be seen. "Sixty-nine of us. You have not asked ' +
+          'a single one of us for anything, which means either you can count without us or you have not counted."';
+      },
+      beats: [
+        {
+          q: '"So ask. Properly, and in a corridor, because that is where these things are actually done. ' +
+             'What are you offering sixty-nine people for a bill with your name on it?"',
+          answers: [
+            { t: 'Two of your people on the committee that implements it', mood: 3, tag: 'cost',
+              when: function (a) { return a.P.capital >= 8; },
+              run: function (a) {
+                a.add('capital', -a.rng(8, 15));
+                var b = a.S.bill;
+                if (b) b.blocs.forEach(function (x) { if (x.id === 'faction') { x.lean = RZ.clamp(x.lean + RZ.range(22, 40), -95, 95); if (x.lean > 55) { x.pledged = true; x.how = 'capital'; } } });
+                a.add('leader', -a.rng(1, 4));
+              },
+              reply: '"Two named ones, and I choose them." She is already walking. "Then you have sixty-nine ' +
+                     'and you did not have to buy them one at a time."' },
+            { t: 'Nothing. Vote for it because it is right, or explain why not', mood: -3,
+              run: function (a) {
+                a.add('stats.integrity', a.rng(2, 5)); a.add('party', -a.rng(3, 8));
+                var b = a.S.bill;
+                if (b) b.blocs.forEach(function (x) { if (x.id === 'faction' && !x.pledged) x.lean = RZ.clamp(x.lean - RZ.range(8, 18), -95, 95); });
+              },
+              reply: '"Because it is right." She repeats it back at exactly the speed required to make it sound ' +
+                     'ridiculous, and goes to find somebody who wants to trade.' },
+            { t: 'Your convenorship, protected, at the next provincial conference', mood: 2,
+              run: function (a) {
+                a.add('leader', -a.rng(2, 6)); a.add('stats.cunning', a.rng(1, 3));
+                var b = a.S.bill;
+                if (b) b.blocs.forEach(function (x) { if (x.id === 'faction') { x.lean = RZ.clamp(x.lean + RZ.range(16, 32), -95, 95); if (x.lean > 55) { x.pledged = true; x.how = 'capital'; } } });
+                a.owePatron(null, RZ.irange(3, 6));
+              },
+              reply: 'She stops. "You are offering me something that is not yours to give." A beat. "Which is ' +
+                     'the only kind of offer worth anything in this building. Yes."' }
+          ]
+        },
+        {
+          q: '"And afterwards? A bill that passes makes the man whose name is on it bigger. Some of us have ' +
+             'to live with how much bigger. What happens to us when you are the one they are talking about?"',
+          answers: [
+            { t: 'Nothing happens to you. I do not need the whole caucus', mood: 2,
+              run: function (a) { a.add('party', a.rng(2, 6)); a.add('stats.integrity', a.rng(0, 2)); },
+              reply: '"People say that on the way up." She looks at you for a moment too long. "Almost nobody ' +
+                     'is still saying it at the top of the stairs."' },
+            { t: 'You get bigger with me, or you get nothing. Choose now', mood: -2,
+              run: function (a) { a.add('leader', a.rng(2, 6)); a.add('party', -a.rng(2, 6)); a.add('stats.cunning', a.rng(1, 3)); },
+              reply: '"There he is." She sounds almost relieved. "I was waiting for that one. At least now I ' +
+                     'know what I am voting for."' },
+            { t: 'Honestly? One of us ends this parliament without a seat', mood: 1,
+              run: function (a) { a.add('stats.integrity', a.rng(2, 4)); a.add('party', a.rng(0, 3)); a.makeRival(); },
+              reply: 'A long silence in a corridor with very good acoustics. "Well," she says. "That is the ' +
+                     'first true thing anybody has said to me this session."' }
+          ]
+        }
+      ]
     }
   ];
 

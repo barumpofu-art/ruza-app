@@ -25,7 +25,7 @@
       // One turn is a month, except in the last eight weeks before a ballot,
       // when it is a week. `span` is the fraction of a month a turn covers, so
       // every monthly rate below can be written once and scaled.
-      tempo: 'month', sprint: null,
+      tempo: 'month', sprint: null, bill: null,
       ladder: ladder.map(function (r) { return r.id; }),
       player: {
         name: cfg.name, gender: cfg.gender, age: cfg.age || 34,
@@ -531,6 +531,9 @@
     // In the sprint the tactical deck comes first: a week is spent in a ward,
     // not on a five-year plan.
     if (S.tempo === 'week' && RZ.sprint) list = RZ.sprint.weekActions(S).concat(list);
+    // A bill in committee runs on the same weekly clock, and while it is
+    // running the only thing worth doing is counting and buying.
+    if (S.tempo === 'week' && RZ.bill) list = RZ.bill.weekActions(S).concat(list);
     return list.map(function (act) {
       return {
         id: act.id, ico: act.ico,
@@ -544,6 +547,7 @@
   function doAction(S, id) {
     if (S.actionsLeft <= 0) return null;
     var act = (S.tempo === 'week' && RZ.sprint && RZ.sprint.weekActionById(id)) ||
+              (S.tempo === 'week' && S.bill && RZ.bill && RZ.bill.weekActionById(id)) ||
               RZ.actionById[id] || RZ.gov.actionById(id);
     if (!act) return null;
     // A ward blitz needs to know which ward; main.js asks, then calls back.
@@ -649,6 +653,7 @@
       S.date.week = (S.date.week || 1) + 1;
       if (S.date.week > 4) { S.date.week = 1; advanceMonth(S); }
       if (S.sprint) S.sprint.weeksLeft = Math.max(0, S.sprint.weeksLeft - 1);
+      if (S.bill) S.bill.weeksLeft = Math.max(0, S.bill.weeksLeft - 1);
     } else {
       S.date.week = 1;
       advanceMonth(S);
@@ -659,6 +664,15 @@
     if (!S.campaign.season) { S.campaign.effort *= Math.pow(0.9, span); S.campaign.delegateSpend *= Math.pow(0.85, span); }
 
     // ---- gear change ----
+    // A bill on the order paper owns the weekly clock until it is voted on —
+    // unless the House is dissolved out from under it, in which case it falls
+    // and the campaign takes the weeks over.
+    if (RZ.bill && S.bill) {
+      if (S.tempo === 'week') out.billWeek = RZ.bill.tickWeek(S);
+      if (RZ.sprint && S.campaign.season && RZ.sprint.dissolves(S)) out.billLapsed = RZ.bill.lapse(S);
+      else if (S.bill.weeksLeft <= 0) out.billResult = RZ.bill.division(S);
+    }
+
     // Eight weeks out the game stops being a career and becomes a campaign.
     if (RZ.sprint) {
       if (S.tempo === 'month' && RZ.sprint.due(S)) { RZ.sprint.begin(S); out.sprintStarted = true; }

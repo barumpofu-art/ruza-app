@@ -17,7 +17,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FILES = [
   'core.js', 'data-countries.js', 'data-ladder.js', 'data-actions.js',
   'data-events.js', 'data-dialogue.js', 'data-origins.js', 'people.js', 'elections.js',
-  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js', 'constituency.js', 'statecraft.js'
+  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js', 'constituency.js', 'statecraft.js', 'legislation.js'
 ];
 
 function loadGame() {
@@ -1618,6 +1618,293 @@ section('9. Save/load with the new state');
   ok('creditors survive the save', back && back.capture.patrons.length === 1);
   ok('promises survive the save', back && back.player.promises.length === 1);
   ok('fading boosts survive the save', back && back.buffs.length === 1);
+}
+
+
+/* ================= 17. drafting your own bill ================= */
+section('17. Proactive legislation');
+{
+  // A backbencher cannot table anything; a member can, once, and not while
+  // the diary is already weekly.
+  {
+    const low = career('ZA', 900, 2);
+    ok('a branch official cannot draft a bill', RZ.bill.canDraft(low) === false);
+    const S = career('ZA', 901, 6);
+    S.player.capital = 40;
+    ok('a member can', RZ.bill.canDraft(S) === true);
+    S.player.capital = 4;
+    ok('but not without the capital to table it', RZ.bill.canDraft(S) === false);
+    S.player.capital = 40;
+    S.tempo = 'week';
+    ok('and not in the middle of a campaign', RZ.bill.canDraft(S) === false);
+  }
+
+  // Tabling it hands the clock to the whips.
+  {
+    const S = career('ZA', 902, 6);
+    S.player.capital = 60;
+    const b = RZ.bill.table(S, RZ.engine.mkApi(S), 'education');
+    ok('tabling a bill puts the diary on weeks', S.tempo === 'week' && S.date.week === 1);
+    ok('with four weeks to the second reading', b.weeksLeft === RZ.bill.WEEKS);
+    ok('and it cannot be drafted twice at once', RZ.bill.canDraft(S) === false);
+
+    const seats = b.blocs.reduce((n, x) => n + x.seats, 0);
+    ok('the blocs add up to the whole House', seats === RZ.bill.houseTotal(S),
+      seats + ' vs ' + RZ.bill.houseTotal(S));
+    ok('a majority is more than half of it', b.needed === Math.floor(seats / 2) + 1,
+      String(b.needed));
+    ok('every bloc has somebody in it', b.blocs.every((x) => x.seats > 0));
+    const t = RZ.bill.count(S);
+    ok('and the count reads the same House', t.total === seats);
+  }
+
+  // Each lever moves a room, and the same room twice is worth less.
+  {
+    for (const how of ['capital', 'charm', 'extort']) {
+      const S = career('ZA', 910, 6);
+      S.player.capital = 90;
+      RZ.bill.table(S, RZ.engine.mkApi(S), 'wages');
+      // Leverage lives on a rival, not in your own pocket.
+      if (how === 'extort') {
+        RZ.engine.mkApi(S).makeRival();
+        S.player.rivals[0].dirt.push({ id: 'x', label: 'A file nobody was meant to see', severity: 8 });
+      }
+      const target = S.bill.blocs.find((x) => !x.pledged);
+      const before = target.lean;
+      const r = RZ.bill.workBloc(S, RZ.engine.mkApi(S), target.id, how);
+      ok('working a bloc with ' + how + ' moves it', r && target.lean > before,
+        before + ' -> ' + (target && target.lean));
+      if (how === 'extort') {
+        ok('and extortion spends the file', S.player.rivals[0].dirt[0].used === true);
+        ok('and costs you something you cannot buy back', S.player.stats.integrity < 100);
+      }
+    }
+
+    const noFile = career('ZA', 909, 6);
+    noFile.player.capital = 90;
+    RZ.bill.table(noFile, RZ.engine.mkApi(noFile), 'wages');
+    ok('with nothing on anybody, there is nothing to threaten with',
+      RZ.bill.workBloc(noFile, RZ.engine.mkApi(noFile), noFile.bill.blocs[0].id, 'extort') === null);
+
+    const S = career('ZA', 911, 6);
+    S.player.capital = 300;
+    RZ.bill.table(S, RZ.engine.mkApi(S), 'wages');
+    const b = S.bill.blocs[0];
+    b.lean = -90;
+    const api = RZ.engine.mkApi(S);
+    const first = RZ.bill.workBloc(S, api, b.id, 'capital').moved;
+    const second = RZ.bill.workBloc(S, api, b.id, 'capital').moved;
+    const third = RZ.bill.workBloc(S, api, b.id, 'capital').moved;
+    ok('the third conversation is worth less than the first', third < first,
+      Math.round(first) + ' -> ' + Math.round(third));
+    ok('and the second is somewhere in between', second < first);
+
+    // Enough work pledges them outright.
+    const S2 = career('ZA', 912, 6);
+    S2.player.capital = 600;
+    RZ.bill.table(S2, RZ.engine.mkApi(S2), 'wages');
+    const b2 = S2.bill.blocs[0];
+    for (let i = 0; i < 12 && !b2.pledged; i++) RZ.bill.workBloc(S2, RZ.engine.mkApi(S2), b2.id, 'capital');
+    ok('a bloc worked hard enough pledges', b2.pledged === true, 'lean=' + Math.round(b2.lean));
+    const cnt = RZ.bill.count(S2);
+    ok('and a pledged bloc votes to a member', cnt.yes >= b2.seats, cnt.yes + ' >= ' + b2.seats);
+  }
+
+  // A conceded clause always wins the room and always costs the bill.
+  {
+    const S = career('ZA', 920, 6);
+    S.player.capital = 60;
+    RZ.bill.table(S, RZ.engine.mkApi(S), 'mines');
+    const worst = S.bill.blocs.slice().sort((a, b) => a.lean - b.lean)[0];
+    const before = worst.lean;
+    RZ.bill.concede(S, RZ.engine.mkApi(S), worst.id);
+    ok('a concession moves even a hostile bloc a long way', worst.lean - before >= 30,
+      before + ' -> ' + worst.lean);
+    ok('and it is on the record against the bill', S.bill.concessions === 1);
+  }
+
+  // Leaving a room alone loses it.
+  {
+    const S = career('ZA', 921, 6);
+    S.player.capital = 60;
+    RZ.bill.table(S, RZ.engine.mkApi(S), 'tax');
+    const x = S.bill.blocs.find((z) => !z.pledged);
+    x.lean = 20;
+    const before = x.lean;
+    S.bill.weeksLeft = 3;
+    RZ.bill.tickWeek(S);
+    ok('a bloc you do not visit drifts back', x.lean < before, before + ' -> ' + x.lean);
+    ok('and the week counter follows the clock', S.bill.week === 2, String(S.bill.week));
+
+    const p = S.bill.blocs[0];
+    p.pledged = true; p.lean = 60;
+    S.bill.weeksLeft = 2;
+    RZ.bill.tickWeek(S);
+    ok('a pledged bloc does not drift', p.lean === 60);
+  }
+
+  // The division: a House that is with you carries it, one that is not does not.
+  {
+    const S = career('ZA', 930, 6);
+    S.player.capital = 60;
+    RZ.bill.table(S, RZ.engine.mkApi(S), 'education');
+    S.bill.blocs.forEach((x) => { x.pledged = true; });
+    const res = RZ.bill.division(S);
+    ok('a whipped House carries the bill', res.passed === true, res.yes + '/' + res.needed);
+    ok('and the diary goes back to months', S.tempo === 'month' && S.bill === null);
+    ok('it is on the personal record', S.player.record.some((r) => /carried/.test(r.text)));
+    ok('and there is a cooling-off period', RZ.bill.canDraft(S) === false);
+
+    const S2 = career('ZA', 931, 6);
+    S2.player.capital = 60;
+    RZ.bill.table(S2, RZ.engine.mkApi(S2), 'anticorr');
+    S2.bill.blocs.forEach((x) => { x.pledged = false; x.lean = -90; });
+    const before = S2.player.standing.leader;
+    const res2 = RZ.bill.division(S2);
+    ok('a House against it throws it out', res2.passed === false, res2.yes + '/' + res2.needed);
+    ok('and losing costs you standing', S2.player.standing.leader < before);
+    ok('the loss is counted', S2.flags.billsLost === 1);
+  }
+
+  // Concessions scale down what passing is worth.
+  {
+    function passWith(concessions, seed) {
+      const S = career('ZA', seed, 6);
+      S.player.capital = 60;
+      RZ.bill.table(S, RZ.engine.mkApi(S), 'education');
+      S.bill.blocs.forEach((x) => { x.pledged = true; });
+      S.bill.concessions = concessions;
+      const edBefore = S.nation.society.education;
+      RZ.seed(4242);
+      const r = RZ.bill.division(S);
+      return { gain: S.nation.society.education - edBefore, res: r };
+    }
+    const clean = passWith(0, 940);
+    const gutted = passWith(3, 940);
+    ok('a bill passed intact does more than a gutted one',
+      gutted.gain < clean.gain, RZ.round(clean.gain, 2) + ' vs ' + RZ.round(gutted.gain, 2));
+    ok('and the sheet says how many clauses went', /3 clauses went out/.test(gutted.res.body));
+    ok('a bill passed whole says so', /Exactly as drafted/.test(clean.res.body));
+  }
+
+  // Dissolution kills whatever is on the order paper.
+  {
+    const S = career('ZA', 950, 6);
+    S.player.capital = 60;
+    RZ.bill.table(S, RZ.engine.mkApi(S), 'land');
+    const r = RZ.bill.lapse(S);
+    ok('a dissolution kills the bill', r && S.bill === null);
+    ok('and hands the clock back', S.tempo === 'month');
+    ok('without recording a defeat', !S.flags.billsLost);
+  }
+
+  // Every bill, in every country, without throwing.
+  {
+    let ran = 0;
+    Object.keys(RZ.COUNTRIES).forEach((cid, i) => {
+      RZ.bill.BILLS.forEach((bill, j) => {
+        const S = career(cid, 960 + i * 10 + j, 6);
+        S.player.capital = 60;
+        RZ.bill.table(S, RZ.engine.mkApi(S), bill.id);
+        S.bill.blocs.forEach((x) => { x.pledged = true; });
+        const res = RZ.bill.division(S);
+        if (!res.passed) throw new Error('a fully whipped House lost ' + bill.id + ' in ' + cid);
+        ran++;
+      });
+    });
+    ok('every bill passes cleanly in all ten countries', ran === Object.keys(RZ.COUNTRIES).length * RZ.bill.BILLS.length,
+      String(ran));
+  }
+
+  // The weekly deck, and the action that gets you into it.
+  {
+    const S = career('ZA', 990, 6);
+    S.player.capital = 60;
+    ok('the draft action is on the desk', RZ.engine.availableActions(S).some((a) => a.id === 'draft'));
+    RZ.bill.table(S, RZ.engine.mkApi(S), 'tax');
+    const ids = RZ.engine.availableActions(S).map((a) => a.id);
+    ok('and the whipping deck replaces it once tabled',
+      ids.includes('billwhip') && ids.includes('billconcede') && ids.includes('billcount') && !ids.includes('draft'));
+    RZ.bill.weekActions(S).forEach((wa) => {
+      if (!wa.run) return;
+      const r = wa.run(RZ.engine.mkApi(S));
+      if (!r || !r.title) throw new Error(wa.id + ' returned nothing');
+    });
+    ok('every weekly bill action runs and reports', true);
+    ok('the picker specials are declared',
+      RZ.bill.weekActionById('billwhip').special === 'bloc' &&
+      RZ.bill.weekActionById('billconcede').special === 'concede');
+  }
+
+  // The whips' count is a room, and somebody comes to find you about your own
+  // bill — but not every week, and never on top of a decision already waiting.
+  {
+    const S = career('ZA', 970, 6);
+    S.player.capital = 60;
+    RZ.bill.table(S, RZ.engine.mkApi(S), 'mines');
+    const out = RZ.engine.doAction(S, 'billcount');
+    ok('counting the House is a meeting, not a die roll', !!(out && out.dialogue));
+    if (out && out.dialogue) {
+      let g = 0;
+      while (!out.dialogue.done && g++ < 12) {
+        const usable = RZ.dialogue.options(out.dialogue).filter((o) => o.ok);
+        if (!usable.length) break;
+        RZ.dialogue.choose(out.dialogue, usable[0].i);
+      }
+      ok('and it runs to the end', out.dialogue.done === true);
+    }
+
+    // Both visits, forced.
+    const V = career('ZA', 971, 6);
+    V.player.capital = 60;
+    RZ.bill.table(V, RZ.engine.mkApi(V), 'mines');
+    ok('nobody comes in the first week', (() => {
+      V.bill.weeksLeft = 4;
+      RZ.bill.tickWeek(V);
+      return !V.pendingScene;
+    })());
+
+    let summons = 0;
+    for (let i = 0; i < 40; i++) {
+      V.bill.weeksLeft = 2;
+      V.pendingScene = null;
+      const r = RZ.bill.tickWeek(V);
+      if (r.summoned) summons++;
+    }
+    ok('somebody eventually comes to find you about it', summons >= 1, String(summons));
+    ok('and each of them only once per bill', summons <= RZ.bill.VISITS.length, String(summons));
+
+    const B = career('ZA', 972, 6);
+    B.player.capital = 60;
+    RZ.bill.table(B, RZ.engine.mkApi(B), 'mines');
+    B.bill.weeksLeft = 2;
+    B.pendingEvent = { id: 'x', choices: [] };
+    let any = false;
+    for (let i = 0; i < 20; i++) { if (RZ.bill.tickWeek(B).summoned) any = true; }
+    ok('nobody arrives on top of a decision already on the table', any === false);
+
+    const L = career('ZA', 973, 6);
+    L.player.capital = 60;
+    RZ.bill.table(L, RZ.engine.mkApi(L), 'mines');
+    let lastWeek = false;
+    for (let i = 0; i < 20; i++) { L.bill.weeksLeft = 0; L.pendingScene = null; if (RZ.bill.tickWeek(L).summoned) lastWeek = true; }
+    ok('and not in the week of the division itself', lastWeek === false);
+
+    ok('every summoned visitor is a scene that exists',
+      RZ.bill.VISITS.every((v) => !!RZ.dialogue.byId(v.id)));
+  }
+
+  // A bill in flight survives being written to disk mid-division.
+  {
+    const S = career('ZA', 995, 6);
+    S.player.capital = 60;
+    RZ.bill.table(S, RZ.engine.mkApi(S), 'mines');
+    S.bill.blocs[0].pledged = true;
+    RZ.engine.save(S);
+    const back = RZ.engine.load();
+    ok('a bill in committee round-trips', back && back.bill && back.bill.id === 'mines');
+    ok('with its blocs and its pledges', back.bill.blocs.length === S.bill.blocs.length && back.bill.blocs[0].pledged === true);
+  }
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

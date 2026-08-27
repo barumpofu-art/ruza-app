@@ -21,6 +21,14 @@
   // Two months out, in the cycle the player is actually contesting.
   function due(S) {
     if (S.sprint || S.tempo === 'week') return false;
+    return dissolves(S);
+  }
+
+  // The same window asked without the tempo guard. A bill already running on
+  // the weekly clock still needs to know the House is about to be dissolved
+  // underneath it.
+  function dissolves(S) {
+    if (S.sprint) return false;
     if (!S.campaign.season) return false;
     var em = RZ.engine.ELECTION_MONTH[S.countryId];
     var months = (S.nextElection - S.date.year) * 12 + (em - S.date.month);
@@ -773,7 +781,7 @@
 
   RZ.sprint = {
     WEEKS: WEEKS,
-    due: due, begin: begin, end: end, tickWeek: tickWeek,
+    due: due, dissolves: dissolves, begin: begin, end: end, tickWeek: tickWeek,
     tally: tally, blitz: blitz, surge: surge,
     raise: raise, spend: spend, warFunds: warFunds, canAfford: canAfford,
     dirtyShare: dirtyShare, seedWarChest: seedWarChest,

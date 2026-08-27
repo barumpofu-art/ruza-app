@@ -814,6 +814,15 @@
     })
   ];
 
+  // Everything else on this list is a reaction to somebody. This is the one
+  // action where the House is reacting to you.
+  ACTIONS.push({
+    id: 'draft', ico: '📜', ap: 1, tier: [4, 13], special: 'draft',
+    name: 'Draft a bill',
+    desc: 'Put your own name on the order paper and then go and find fifty-one per cent.',
+    when: function (a) { return !!(RZ.bill && RZ.bill.canDraft(a.S)); }
+  });
+
   ACTIONS.forEach(function (act) {
     if (act.id === 'church') {
       act.name = function (a) { return 'Work the churches'; };

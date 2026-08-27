@@ -101,7 +101,7 @@
         RZ.engine.pushFeed(S, entry);
         RZ.engine.save(S);
         RZ.ui.showOutcome(entry, afterAction);
-      }, out.special);
+      });
       return;
     }
 
@@ -120,6 +120,89 @@
 
     var out = RZ.engine.doAction(S, id);
     if (!out) return;
+
+    // Tabling a bill, working a bloc and dropping a clause all need a choice
+    // made in a modal before there is anything to resolve.
+    if (out.special === 'draft') {
+      RZ.ui.showDraft(function (billId) {
+        if (!billId) return;
+        var api = RZ.engine.mkApi(S);
+        var b = RZ.bill.table(S, api, billId);
+        if (!b) return;
+        S.actionsLeft--;
+        S.actionsThisMonth = (S.actionsThisMonth || 0) + 1;
+        var t = RZ.bill.count(S);
+        var entry = {
+          kind: 'big', src: 'The order paper', title: b.name + ' is tabled',
+          body: b.blurb + ' Second reading in four weeks. The whips make it <strong>' + t.yes +
+                ' of ' + t.needed + '</strong> this morning' +
+                (t.short
+                  ? ', and the ' + t.short + ' missing are all in rooms you have not been in yet.'
+                  : ' — a margin of the kind that does not survive a fortnight of being left alone.'),
+          deltas: api.deltas.slice(), tone: 'good'
+        };
+        RZ.engine.pushFeed(S, entry);
+        RZ.engine.save(S);
+        RZ.ui.showOutcome(entry, afterAction);
+      });
+      return;
+    }
+
+    if (out.special === 'bloc') {
+      RZ.ui.showBloc(function (blocId, how) {
+        if (!blocId || !how) return;
+        var api = RZ.engine.mkApi(S);
+        var r = RZ.bill.workBloc(S, api, blocId, how);
+        if (!r) { RZ.ui.toast('Not possible', 'n'); return; }
+        S.actionsLeft--;
+        S.actionsThisMonth = (S.actionsThisMonth || 0) + 1;
+        var t = RZ.bill.count(S);
+        var entry = {
+          kind: r.pledged ? 'good' : (r.moved > 8 ? 'flat' : 'bad'),
+          src: r.bloc.name,
+          title: r.pledged
+            ? r.bloc.name + ' will vote for it'
+            : (r.moved > 8 ? 'Movement, and not enough of it' : 'A week for very little'),
+          body: 'A week of ' + r.note + '. ' +
+            (r.pledged
+              ? 'All ' + r.bloc.seats + ' of them, pledged in a room with no minutes taken. ' +
+                (how === 'extort' ? 'Nobody in it looked at anybody else.' : 'Which holds until somebody offers them more.')
+              : 'They have moved ' + Math.round(r.moved) + ' points and they are still not yours. ') +
+            ' The count is ' + t.yes + ' of ' + t.needed + '.',
+          deltas: api.deltas.slice(), tone: r.pledged ? 'good' : 'flat'
+        };
+        RZ.engine.pushFeed(S, entry);
+        RZ.engine.save(S);
+        RZ.ui.showOutcome(entry, afterAction);
+      });
+      return;
+    }
+
+    if (out.special === 'concede') {
+      RZ.ui.showConcede(function (blocId) {
+        if (!blocId) return;
+        var api = RZ.engine.mkApi(S);
+        var r = RZ.bill.concede(S, api, blocId);
+        if (!r) return;
+        S.actionsLeft--;
+        S.actionsThisMonth = (S.actionsThisMonth || 0) + 1;
+        var t = RZ.bill.count(S);
+        var entry = {
+          kind: 'flat', src: 'Committee stage',
+          title: 'A clause came out for ' + r.bloc.name,
+          body: (r.bloc.pledged
+            ? r.bloc.name + ' will vote for what is left of it. '
+            : r.bloc.name + ' have moved a long way and still have not committed. ') +
+            'The drafters were in the room and said nothing, which is how you know it mattered. ' +
+            'The count is ' + t.yes + ' of ' + t.needed + '.',
+          deltas: api.deltas.slice(), tone: 'flat'
+        };
+        RZ.engine.pushFeed(S, entry);
+        RZ.engine.save(S);
+        RZ.ui.showOutcome(entry, afterAction);
+      });
+      return;
+    }
 
     // Blitzing and surging both need a target before they can resolve.
     if (out.special === 'blitz' || out.special === 'surge') {
@@ -267,6 +350,28 @@
         body: 'Delegates from every ' + c.terms.region + ' are arriving. Leadership positions are on the ballot this year, ' +
               'and everything decided here will hold for five years.', tone: 'good' });
       RZ.ui.toast('Conference year — leadership is contestable', 'p');
+    }
+
+    // Four weeks are up and the House has divided. This is the loudest thing
+    // that happens outside an election, so it gets the sheet rather than a toast.
+    if (out.billResult) {
+      var br = out.billResult;
+      var bEntry = {
+        kind: br.passed ? 'big' : 'bad', alert: !br.passed,
+        src: 'The ' + c.house.name, title: br.title, body: br.body,
+        deltas: br.deltas || [], tone: br.tone
+      };
+      RZ.engine.pushFeed(S, bEntry);
+      RZ.engine.save(S);
+      RZ.ui.showOutcome(bEntry, function () {
+        if (S.over) { RZ.ui.showEnd(); return; }
+        if (out.election) { runElectionFlow(); return; }
+        afterAction();
+      });
+      return;
+    }
+    if (out.billLapsed) {
+      RZ.ui.toast(out.billLapsed.name + ' fell with the House', 'n');
     }
 
     if (out.sprintStarted) {

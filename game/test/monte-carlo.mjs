@@ -22,7 +22,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FILES = [
   'core.js', 'data-countries.js', 'data-ladder.js', 'data-actions.js',
   'data-events.js', 'data-dialogue.js', 'data-origins.js', 'people.js', 'elections.js',
-  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js', 'constituency.js', 'statecraft.js'
+  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js', 'constituency.js', 'statecraft.js', 'legislation.js'
 ];
 
 function loadGame() {
@@ -122,6 +122,29 @@ function chooseAction(RZ, S, acts, policy) {
     if (blitz.length) return blitz[0];
   }
 
+  // A bill on the order paper owns the four weeks it has. Count once, buy the
+  // room that is closest, and drop a clause when the arithmetic will not come.
+  if (S.tempo === 'week' && S.bill) {
+    const t = RZ.bill.count(S);
+    if (!S.bill.counted) {
+      const cnt = acts.filter((a) => a.id === 'billcount');
+      if (cnt.length) return cnt[0];
+    }
+    if (t.short && S.bill.weeksLeft <= 1) {
+      const con = acts.filter((a) => a.id === 'billconcede');
+      if (con.length) return con[0];
+    }
+    const whip = acts.filter((a) => a.id === 'billwhip');
+    if (whip.length) return whip[0];
+  }
+
+  // A member with capital and a majority in reach puts their own name on
+  // something. It is the only way the record ever says what you were for.
+  if (RZ.bill && RZ.bill.canDraft(S) && S.player.capital >= 30 && RZ.rnd() < 0.35) {
+    const d = acts.filter((a) => a.id === 'draft');
+    if (d.length) return d[0];
+  }
+
   // Go home before the body makes the decision for you.
   if (S.player.health < 34) {
     const rest = acts.filter((a) => a.id === 'rest');
@@ -193,6 +216,8 @@ function playCareer(seed, { trace = false, policy = 'random' } = {}) {
     crossings: 0, purges: 0, amendmentsTried: 0, amendmentsPassed: 0,
     coalitionCollapses: 0, elections: 0, promisesMade: 0, promisesBroken: 0,
     sprints: 0, blitzes: 0, weeklyTurns: 0, bestPoll: 0, swings: [],
+    billsTabled: 0, billsPassed: 0, billsLost: 0, billsLapsed: 0,
+    blocsWorked: 0, blocsPledged: 0, concessions: 0,
     revolts: 0, revoltsWon: 0, exiled: 0, apologies: 0, blackmails: 0,
     raised: 0, spentOwn: 0, dirtyShares: [], audits: 0, brokeWeeks: 0, cheques: 0, favours: 0,
     sadcWarned: 0,
@@ -241,6 +266,58 @@ function playCareer(seed, { trace = false, policy = 'random' } = {}) {
         S.actionsLeft--; S.actionsThisMonth = (S.actionsThisMonth || 0) + 1;
         continue;
       }
+      // The order paper: tabling picks a bill, whipping picks a room and a
+      // lever, conceding picks who the clause is for.
+      if (pick.id === 'draft') {
+        const bills = RZ.bill.BILLS;
+        const b = policy === 'directed'
+          ? bills[seed % bills.length]
+          : bills[Math.floor(RZ.rnd() * bills.length)];
+        RZ.bill.table(S, RZ.engine.mkApi(S), b.id);
+        r.billsTabled++;
+        say('tabled ' + b.id);
+        S.actionsLeft--; S.actionsThisMonth = (S.actionsThisMonth || 0) + 1;
+        continue;
+      }
+      if (pick.id === 'billwhip') {
+        const blocs = (S.bill && S.bill.blocs) || [];
+        const open = blocs.filter((x) => !x.pledged);
+        if (!open.length) { S.actionsLeft--; continue; }
+        // Directed: the room closest to pledging, bought with whatever is to hand.
+        const target = policy === 'directed'
+          ? open.slice().sort((a, b) => b.lean - a.lean)[0]
+          : open[Math.floor(RZ.rnd() * open.length)];
+        const api = RZ.engine.mkApi(S);
+        let how = 'charm';
+        if (policy === 'directed') {
+          if (S.player.capital >= 20) how = 'capital';
+        } else {
+          how = ['capital', 'charm', 'extort'][Math.floor(RZ.rnd() * 3)];
+        }
+        const wr = RZ.bill.workBloc(S, api, target.id, how);
+        if (wr) { r.blocsWorked++; if (wr.pledged) r.blocsPledged++; }
+        S.actionsLeft--; S.actionsThisMonth = (S.actionsThisMonth || 0) + 1;
+        continue;
+      }
+      if (pick.id === 'billconcede') {
+        const open = ((S.bill && S.bill.blocs) || []).filter((x) => !x.pledged);
+        if (!open.length) { S.actionsLeft--; continue; }
+        const target = open.slice().sort((a, b) => b.seats - a.seats)[0];
+        RZ.bill.concede(S, RZ.engine.mkApi(S), target.id);
+        r.concessions++;
+        S.actionsLeft--; S.actionsThisMonth = (S.actionsThisMonth || 0) + 1;
+        continue;
+      }
+      // A surge needs a ward before it can spend the war chest on one.
+      if (pick.id === 'surge') {
+        const wards = (S.sprint && S.sprint.wards) || [];
+        const open = wards.filter((w) => !w.held);
+        if (!open.length) { S.actionsLeft--; continue; }
+        const w = open.slice().sort((a, b) => Math.abs(50 - a.support) - Math.abs(50 - b.support))[0];
+        RZ.sprint.surge(S, w.id, RZ.engine.mkApi(S));
+        S.actionsLeft--; S.actionsThisMonth = (S.actionsThisMonth || 0) + 1;
+        continue;
+      }
       if (pick.id === 'budget') {
         const b = { health: 14, education: 16, infra: 14, security: 13, social: 13, debtsvc: 14, admin: 16 };
         RZ.gov.applyBudget(S, b);
@@ -280,6 +357,11 @@ function playCareer(seed, { trace = false, policy = 'random' } = {}) {
 
     if (S.tempo === 'week') r.weeklyTurns++;
     if (turnOut.sprintStarted) { r.sprints++; say('the sprint began'); }
+    if (turnOut.billResult) {
+      if (turnOut.billResult.passed) { r.billsPassed++; say(turnOut.billResult.name + ' carried'); }
+      else { r.billsLost++; say(turnOut.billResult.name + ' lost'); }
+    }
+    if (turnOut.billLapsed) { r.billsLapsed++; say('a bill fell with the House'); }
     if (turnOut.sprintResult && turnOut.sprintResult.finalTally) {
       r.bestPoll = Math.max(r.bestPoll, turnOut.sprintResult.finalTally.support);
       if (typeof turnOut.sprintResult.swing === 'number') r.swings.push(turnOut.sprintResult.swing);
@@ -504,6 +586,14 @@ console.log(`  campaign poll at close   ${fmt(quantile((r) => r.bestPoll, 0.5), 
   console.log(`  swing over the 8 weeks   ${sw.length ? fmt(sw[Math.floor(sw.length / 2)], 1) + ' pts median, ' +
     fmt(sw[0], 1) + ' worst, ' + fmt(sw[sw.length - 1], 1) + ' best' : 'none recorded'}`);
 }
+console.log(`  bills  tabled ${fmt(mean((r) => r.billsTabled), 2)}/career, carried ${
+  sum((r) => r.billsPassed) + sum((r) => r.billsLost)
+    ? fmt((100 * sum((r) => r.billsPassed)) / (sum((r) => r.billsPassed) + sum((r) => r.billsLost))) + '%'
+    : 'n/a'}${sum((r) => r.billsLapsed) ? ', ' + sum((r) => r.billsLapsed) + ' fell with the House' : ''}`);
+if (sum((r) => r.billsTabled)) {
+  console.log(`  the whipping             ${fmt(mean((r) => r.blocsWorked), 1)} blocs worked, ${
+    fmt(mean((r) => r.blocsPledged), 1)} pledged, ${fmt(mean((r) => r.concessions), 2)} clauses dropped per career`);
+}
 console.log(`  amendments  tried ${fmt(mean((r) => r.amendmentsTried), 2)}/career, carried ${
   sum((r) => r.amendmentsTried) ? fmt((100 * sum((r) => r.amendmentsPassed)) / sum((r) => r.amendmentsTried)) + '%' : 'n/a'}`);
 console.log(`  promises made ${fmt(mean((r) => r.promisesMade), 2)}, broken ${fmt(mean((r) => r.promisesBroken), 2)} per career`);
@@ -557,4 +647,15 @@ if (pct((r) => r.purges > 0) > 85) w('the congress purge hits nearly everybody')
 if (mean((r) => r.promisesMade) === 0) w('no promises were ever made — the ledger is unreachable');
 if (mean((r) => r.sprints) === 0) w('the campaign sprint never started — its trigger may be unreachable');
 if (mean((r) => r.sprints) > 0 && mean((r) => r.blitzes) === 0) w('the sprint runs but no ward was ever blitzed');
+if (policy === 'directed' && mean((r) => r.billsTabled) === 0) {
+  w('no bill was ever tabled — the order paper may be unreachable');
+}
+{
+  const tried = sum((r) => r.billsPassed) + sum((r) => r.billsLost);
+  if (tried >= 20) {
+    const rate = sum((r) => r.billsPassed) / tried;
+    if (rate > 0.95) w('almost every bill carries — four weeks of whipping is not a real fight');
+    if (rate < 0.06) w('almost no bill carries — the House may be unwinnable');
+  }
+}
 }
