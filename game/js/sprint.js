@@ -570,8 +570,11 @@
     { id: 'dump', ico: '🗞️', ap: 1, risky: true,
       name: 'The Friday news dump',
       desc: 'Put the dossier out at four on a Friday and let it run all weekend.',
-      when: function (a) { return a.hasLeverage(); },
+      // A dump goes through a friendly journalist, and journalists are
+      // friendly because of standing, not money.
+      when: function (a) { return a.hasLeverage() && a.P.capital >= 6; },
       run: function (a) {
+        a.add('capital', -RZ.range(6, 11));
         var res = a.doLeak(false);
         // Friday is the point: it runs unanswered for three days.
         a.add('media', a.rng(8, 16));
@@ -601,10 +604,12 @@
     { id: 'kgotla', ico: '🌳', ap: 1,
       name: function (a) { return 'Mobilise the ' + a.t.meetingPl; },
       desc: function (a) { return 'The ' + a.t.elder + 's can deliver the rural wards. They will not do it for money.'; },
-      when: function (a) { return a.P.stats.integrity >= 52; },
+      // No money changes hands. Standing does: an endorsement is spent
+      // influence, and the one thing a broke campaign can still afford.
+      when: function (a) { return a.P.stats.integrity >= 52 && a.P.capital >= 5; },
       run: function (a) {
         var ok = a.roll('integrity', 46);
-        // No money at all — this is the one thing a broke campaign can still do.
+        a.add('capital', -RZ.range(5, 9));
         a.add('health', -a.rng(2, 5));
         var moved = 0;
         a.S.sprint.wards.forEach(function (w) {

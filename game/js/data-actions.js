@@ -604,6 +604,11 @@
         a.dirt('crossed', 'Crossed the floor from ' + from.abbr + ' to ' + to.abbr, 2);
         a.makeRival();
 
+        // Whatever a nemesis had over you was branch machinery, and it is not
+        // your branch any more.
+        var freed = RZ.revolt && RZ.revolt.nemesisOf(a.S)
+          ? RZ.revolt.tryNeutralise(a.S, null, 'defect') : null;
+
         // In most of these systems the seat belongs to the party, not to you.
         var lostSeat = a.tier() >= 4 && RZ.chance(0.55);
         if (lostSeat) a.demote();
@@ -614,6 +619,7 @@
           body: (a.S.flags.crossings > 1
             ? 'The second crossing is not a conviction, it is a habit, and the press said so within the hour. '
             : 'It was done at a press conference at eleven, in front of a banner that had been printed the night before. ') +
+            (freed ? 'It has also put you out of ' + freed.name + '’s reach for good, which was half the point. ' : '') +
             (lostSeat
               ? 'The seat was the party’s, not yours. The Speaker declared it vacant on Thursday and you are outside the House ' +
                 'looking in — famous, and without a vote.'

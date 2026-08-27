@@ -291,7 +291,22 @@ await evaluate(`(() => { const i = document.getElementById('in-name');
   i.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
 await click('[data-b="teacher"]');
 await click('#btn-begin');
+
+// 4b. Character creation is a scene now: an afternoon that decides what kind
+//     of politician you are, played before the first month starts.
+await waitFor("!!document.querySelector('#modal-inner .origin-scene, #modal-inner .choice')", 'the origin scene');
+const originAnswers = await count('#modal-inner .choice');
+console.log('origin answers offered:', originAnswers);
+if (originAnswers !== 3) throw new Error(`expected three answers in the origin scene, saw ${originAnswers}`);
+await click('#modal-inner .choice');
+await waitFor("!!document.querySelector('.origin-trait-n')", 'the trait the answer earned');
+console.log('trait:', await text('.origin-trait-n'));
+await click('[data-go]');
+
 await waitFor("!!document.querySelector('.hud-name')", 'the desk');
+const trait = await evaluate('RZ.ui.UI.S.player.trait');
+console.log('trait on the career:', trait);
+if (!trait) throw new Error('the origin scene did not leave a trait on the career');
 const who = await text('.hud-name');
 const office = await text('.hud-office');
 console.log('player:', who, '|', office);

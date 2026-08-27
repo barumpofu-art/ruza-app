@@ -363,6 +363,15 @@ body{
 .choice[disabled]{ opacity:.4; }
 .choice.is-on{ border-color:var(--gold); background:#221d13; }
 
+/* the origin scene */
+.origin-trait{
+  margin:14px 0 16px; padding:12px 14px; border-radius:var(--radius-sm);
+  border:1px solid #54452a; background:linear-gradient(180deg,#241f14,#161c25);
+}
+.origin-trait-n{ font-family:var(--serif); font-size:1.05rem; font-weight:600; }
+.origin-trait-d{ font-size:.8rem; color:var(--text-dim); margin-top:4px; line-height:1.5; }
+.talk-l.me.closing .talk-tx{ text-align:left; font-style:normal; }
+
 /* the campaign sprint */
 .hud-month.sprinting{ color:var(--gold); font-weight:800; }
 .sprint{

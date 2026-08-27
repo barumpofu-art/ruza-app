@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FILES = [
   'core.js', 'data-countries.js', 'data-ladder.js', 'data-actions.js',
-  'data-events.js', 'data-dialogue.js', 'people.js', 'elections.js',
+  'data-events.js', 'data-dialogue.js', 'data-origins.js', 'people.js', 'elections.js',
   'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js'
 ];
 
@@ -1003,6 +1003,251 @@ section('12. The war chest — Capital, Money, and where it came from');
     ok('a broke campaign cannot surge', !RZ.sprint.weekActionById('surge').when(api));
     ok('but can still work the branches', !!RZ.sprint.weekActionById('branchraise'));
     ok('and can still walk a ward', RZ.sprint.weekActions(S).some((x) => x.id === 'blitz'));
+  }
+}
+
+/* ================= 13. origins and traits ================= */
+section('13. How you got into this');
+{
+  const cc = RZ.COUNTRIES.ZA;
+  const born = (origin, startAs, seed) => RZ.engine.newGame({
+    countryId: 'ZA', seed: seed || 500, name: 'C', gender: 'f',
+    regionId: cc.regions[0].id, bgId: RZ.BACKGROUNDS[0].id, partyId: cc.parties[0].id,
+    startAs: startAs, origin: origin
+  });
+
+  ok('there is an opening for each way in', !!RZ.ORIGINS.activist && !!RZ.ORIGINS.candidate);
+  ok('each offers three answers',
+    RZ.ORIGINS.activist.answers.length === 3 && RZ.ORIGINS.candidate.answers.length === 3);
+
+  // Every scene has to render in every country without leaking a placeholder.
+  const bad = [];
+  RZ.COUNTRY_ORDER.forEach((cid) => {
+    const c = RZ.COUNTRIES[cid];
+    ['activist', 'candidate'].forEach((k) => {
+      const o = RZ.ORIGINS[k];
+      const bits = [o.title(c), o.opening(c, 'Name', 'A Kingmaker'), o.question(c)]
+        .concat(o.answers.map((a) => a.t + ' ' + a.d + ' ' + a.reply(c, c.cur.sym, 'P500')));
+      bits.forEach((b) => {
+        if (!b || !String(b).trim()) bad.push(`${cid}/${k}: empty text`);
+        if (/undefined|NaN|\[object/.test(String(b))) bad.push(`${cid}/${k}: ${String(b).slice(0, 70)}`);
+      });
+      // The staple in the bag has to be the thing people actually cook.
+      if (k === 'activist' && !String(o.opening(c, 'N', 'K')).includes(RZ.originStaple(c))) {
+        bad.push(`${cid}: wrong staple`);
+      }
+    });
+  });
+  ok('every origin renders cleanly in all ten countries', bad.length === 0, bad.slice(0, 3).join('; '));
+
+  // Each answer must actually leave you somewhere different.
+  {
+    const fire = born('firebrand', 'activist');
+    const hust = born('hustler', 'activist');
+    const schem = born('schemer', 'activist');
+    ok('the firebrand gave the bag back and has nothing', fire.player.money === 0);
+    ok('and has the ground and their integrity',
+      fire.player.standing.grassroots > hust.player.standing.grassroots &&
+      fire.player.stats.integrity > hust.player.stats.integrity);
+    ok('the hustler has money and less of a conscience',
+      hust.player.money > fire.player.money && hust.player.stats.integrity < fire.player.stats.integrity);
+    ok('the schemer starts holding something on somebody',
+      schem.player.rivals.some((r) => (r.dirt || []).some((d) => !d.used)));
+    ok('and can use it immediately', RZ.engine.mkApi(schem).hasLeverage());
+    ok('the other two cannot', !RZ.engine.mkApi(fire).hasLeverage());
+
+    const tyc = born('tycoon', 'candidate');
+    const man = born('mandarin', 'candidate');
+    const adv = born('advocate', 'candidate');
+    ok('the financier arrives rich', tyc.player.money > adv.player.money * 10);
+    ok('the mandarin arrives with capital and no camera presence',
+      man.player.capital > tyc.player.capital && man.player.standing.media < adv.player.standing.media);
+    ok('the advocate arrives credible and broke',
+      adv.player.standing.media > man.player.standing.media && adv.player.capital === 0);
+    ok('each origin writes its own line into the record',
+      [fire, hust, schem, tyc, man, adv].every((S) => S.player.record.length > 0));
+  }
+
+  // Nothing may leave the player outside the legal ranges.
+  {
+    const outOfRange = [];
+    Object.keys(RZ.ORIGIN_PACKAGES).forEach((id) => {
+      RZ.COUNTRY_ORDER.forEach((cid) => {
+        const c = RZ.COUNTRIES[cid];
+        const S = RZ.engine.newGame({
+          countryId: cid, seed: 501, name: 'C', gender: 'f',
+          regionId: c.regions[0].id, bgId: RZ.BACKGROUNDS[0].id, partyId: c.parties[0].id, origin: id
+        });
+        const P = S.player;
+        Object.keys(P.stats).forEach((k) => {
+          if (P.stats[k] < 0 || P.stats[k] > 100) outOfRange.push(`${id}/${cid} ${k}=${P.stats[k]}`);
+        });
+        Object.keys(P.standing).forEach((k) => {
+          if (P.standing[k] < 0 || P.standing[k] > 100) outOfRange.push(`${id}/${cid} ${k}=${P.standing[k]}`);
+        });
+        if (P.money < 0 || P.capital < 0) outOfRange.push(`${id}/${cid} negative money or capital`);
+      });
+    });
+    ok('no origin leaves a stat outside its range', outOfRange.length === 0, outOfRange.slice(0, 3).join('; '));
+  }
+
+  // A trait is not a starting bonus. It has to keep mattering.
+  {
+    const fire = born('firebrand', 'activist', 510);
+    const adv = born('advocate', 'candidate', 510);
+    const plain = RZ.engine.newGame({
+      countryId: 'ZA', seed: 510, name: 'C', gender: 'f',
+      regionId: cc.regions[0].id, bgId: RZ.BACKGROUNDS[0].id, partyId: cc.parties[0].id
+    });
+    const gain = (S, key, amt) => {
+      const before = S.player.standing[key];
+      RZ.engine.mkApi(S).add(key, amt);
+      return S.player.standing[key] - before;
+    };
+    ok('a firebrand gains more from the ground', gain(fire, 'grassroots', 10) > gain(plain, 'grassroots', 10));
+    ok('and less from the machine', gain(fire, 'party', 10) < gain(plain, 'party', 10));
+    ok('an advocate gains more from the press', gain(adv, 'media', 10) > gain(plain, 'media', 10));
+
+    // ...including on the way down.
+    const hust = born('hustler', 'activist', 511);
+    const plain2 = RZ.engine.newGame({
+      countryId: 'ZA', seed: 511, name: 'C', gender: 'f',
+      regionId: cc.regions[0].id, bgId: RZ.BACKGROUNDS[0].id, partyId: cc.parties[0].id
+    });
+    const lose = (S) => {
+      const before = S.player.stats.integrity;
+      RZ.engine.mkApi(S).add('stats.integrity', -10);
+      return before - S.player.stats.integrity;
+    };
+    ok('a hustler loses integrity faster than anyone else', lose(hust) > lose(plain2));
+  }
+
+  // A career with no origin at all must still work — old saves, and the tests.
+  {
+    const plain = RZ.engine.newGame({
+      countryId: 'ZA', seed: 520, name: 'C', gender: 'f',
+      regionId: cc.regions[0].id, bgId: RZ.BACKGROUNDS[0].id, partyId: cc.parties[0].id
+    });
+    ok('a career without an origin has no trait and still runs', !plain.player.trait);
+    plain.actionsLeft = 0;
+    RZ.engine.endTurn(plain);
+    ok('and turns a month without complaint', plain.turn === 1);
+  }
+}
+
+/* ================= 14. the three fixes ================= */
+section('14. Capital for elite work, and the ways out of a nemesis');
+{
+  const cc = RZ.COUNTRIES.ZA;
+  const cand = (seed) => RZ.engine.newGame({
+    countryId: 'ZA', seed, name: 'C', gender: 'f',
+    regionId: cc.regions[0].id, bgId: RZ.BACKGROUNDS[0].id, partyId: cc.parties[0].id,
+    startAs: 'candidate'
+  });
+
+  // Capital buys the elite manoeuvres; money buys the logistics.
+  {
+    const S = cand(600);
+    S.player.rivals[0].dirt = [{ label: 'a tender', used: false }];
+    S.player.capital = 3;
+    const dump = RZ.sprint.weekActionById('dump');
+    ok('a dump needs standing with a journalist, not cash', !dump.when(RZ.engine.mkApi(S)));
+    S.player.capital = 40;
+    ok('and is offered when you have it', dump.when(RZ.engine.mkApi(S)));
+    dump.run(RZ.engine.mkApi(S));
+    ok('and it costs capital', S.player.capital < 40, String(S.player.capital));
+
+    const K = cand(601);
+    const kg = RZ.sprint.weekActionById('kgotla');
+    K.player.stats.integrity = 70; K.player.capital = 2;
+    ok('an endorsement is spent influence too', !kg.when(RZ.engine.mkApi(K)));
+    K.player.capital = 30;
+    const moneyBefore = K.player.money;
+    kg.run(RZ.engine.mkApi(K));
+    ok('and it costs capital, not money',
+      K.player.capital < 30 && K.player.money === moneyBefore);
+  }
+
+  // Three ways out of a nemesis, and waiting is not one of them.
+  {
+    // Out of the campaign, because he deliberately stays out of those weeks.
+    const S = cand(610);
+    S.tempo = 'month'; S.sprint = null;
+    S.player.rivals[0].nemesis = true;
+    S.flags.nemesisId = S.player.rivals[0].id;
+    ok('there is a nemesis', !!RZ.revolt.nemesisOf(S));
+    for (let i = 0; i < 40; i++) {
+      S.date.month++; if (S.date.month > 12) { S.date.month = 1; S.date.year++; }
+      RZ.revolt.nemesisTurn(S);
+    }
+    ok('he raises the pressure on you every month he is active', S.scandalRisk > 0.2,
+      String(Math.round((S.scandalRisk || 0) * 100) / 100));
+    ok('and waiting does not get rid of him', !!RZ.revolt.nemesisOf(S));
+
+    // 1. Cross the floor.
+    const D = cand(611);
+    D.player.rungIdx = 3;
+    D.player.rivals[0].nemesis = true;
+    D.flags.nemesisId = D.player.rivals[0].id;
+    D.tempo = 'month'; D.sprint = null;
+    D.scandalRisk = 1.2;
+    RZ.actionById['defect'].run(RZ.engine.mkApi(D));
+    ok('crossing the floor puts you out of his reach', !RZ.revolt.nemesisOf(D));
+    ok('and the pressure falls with him', D.scandalRisk < 1.2);
+
+    // 2. Outrank him.
+    const O = cand(612);
+    O.tempo = 'month'; O.sprint = null;
+    O.player.rungIdx = RZ.ladderFor('ZA').length - 3;
+    O.player.rivals[0].nemesis = true;
+    O.flags.nemesisId = O.player.rivals[0].id;
+    let gone = false;
+    for (let i = 0; i < 60 && !gone; i++) {
+      O.date.month++; if (O.date.month > 12) { O.date.month = 1; O.date.year++; }
+      const r = RZ.revolt.nemesisTurn(O);
+      if (r && r.ended) gone = true;
+    }
+    ok('outranking him eventually ends it', gone);
+
+    // 3. Break him in public.
+    const E = cand(613);
+    E.player.rivals[0].nemesis = true;
+    E.player.rivals[0].power = 44;
+    E.player.rivals[0].dirt = [{ label: 'a second family', used: false }];
+    E.flags.nemesisId = E.player.rivals[0].id;
+    E.player.stats.cunning = 95;
+    let ended = false;
+    for (let i = 0; i < 30 && !ended; i++) {
+      const T = cand(613);
+      T.player.rivals[0].nemesis = true;
+      T.player.rivals[0].power = 44;
+      T.player.rivals[0].dirt = [{ label: 'a second family', used: false }];
+      T.flags.nemesisId = T.player.rivals[0].id;
+      T.player.stats.cunning = 95;
+      RZ.engine.mkApi(T).doLeak();
+      if (!RZ.revolt.nemesisOf(T)) ended = true;
+    }
+    ok('a leak that lands finishes him', ended);
+  }
+
+  // The pressure has to actually change how often files break.
+  {
+    const count = (risk) => {
+      let broke = 0;
+      for (let i = 0; i < 400; i++) {
+        const S = cand(700 + i);
+        S.scandalRisk = risk;
+        RZ.engine.mkApi(S).dirt('x', 'something', 3);
+        S.player.fame = 60;
+        const before = S.player.dirt.filter((d) => d.exposed).length;
+        for (let k = 0; k < 6; k++) { S.actionsLeft = 0; S.pendingEvent = null; RZ.engine.endTurn(S); }
+        if (S.player.dirt.filter((d) => d.exposed).length > before) broke++;
+      }
+      return broke;
+    };
+    const calm = count(0), hunted = count(2.2);
+    ok('a file breaks more often while somebody is hunting you', hunted > calm,
+      `${calm} vs ${hunted} of 400`);
   }
 }
 

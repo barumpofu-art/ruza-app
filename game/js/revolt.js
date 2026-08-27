@@ -398,22 +398,17 @@
 
     S.flags.nemesisLast = monthIndex(S);
     var api = RZ.engine.mkApi(S);
+    // He has people going through your past every month he is active. The
+    // pressure itself is the threat; the events are only where it surfaces.
+    S.scandalRisk = Math.min(2.5, (S.scandalRisk || 0) + 0.18 + n.power * 0.002);
     var mv = RZ.weighted(MOVES, function (m) { return m.w; });
     var out = mv.go(S, api, n);
 
-    // He can be finished, and so can you.
     n.power = clamp(n.power + RZ.range(-2, 3), 5, 100);
-    if (S.player.standing.party > 70 && RZ.chance(0.10)) {
-      S.flags.nemesisId = null;
-      n.nemesis = false;
-      RZ.engine.pushFeed(S, {
-        kind: 'good', src: 'The structures', title: n.name + ' has been redeployed',
-        body: 'To a parastatal board, a long way from any branch of yours. You did not do it directly. ' +
-              'You did make it obvious to enough people that it needed doing.',
-        tone: 'good'
-      });
-      return { ended: true };
-    }
+    // You cannot wait him out. You can outrank him, and if you have the
+    // structures behind you he can be moved sideways.
+    var out2 = tryNeutralise(S, n, 'outrank');
+    if (out2) return out2;
 
     RZ.engine.pushFeed(S, {
       kind: 'bad', src: n.name, title: out.title, body: out.body,
@@ -422,7 +417,49 @@
     return { move: mv.id, name: n.name };
   }
 
+  // The three ways out, per the design: outrank him, leave the party he has
+  // reach in, or break him in public. Waiting is not one of them.
+  function tryNeutralise(S, n, how) {
+    n = n || nemesisOf(S);
+    if (!n) return null;
+    var tier = RZ.engine.mkApi(S).tier();
+    var done = false, why = '';
+
+    if (how === 'outrank') {
+      if (tier >= 9 && RZ.chance(0.35)) {
+        done = true;
+        why = 'You outrank him now, and rank in this party is the only argument that has ever ended anything. ' +
+              'He has been given a parastatal board a long way from any branch of yours.';
+      } else if (S.player.standing.party > 70 && RZ.chance(0.10)) {
+        done = true;
+        why = 'You did not do it directly. You made it obvious to enough people in the structures that it ' +
+              'needed doing, and the structures did it.';
+      }
+    } else if (how === 'defect') {
+      done = true;
+      why = 'Whatever he had over you was branch machinery, and it is not your branch any more. ' +
+            'He cannot reach into another party’s structures, and it is visibly eating him.';
+    } else if (how === 'expose') {
+      done = true;
+      why = 'He resigned on a Thursday, in a statement that used the word "family" four times. ' +
+            'The file did what files do.';
+    }
+
+    if (!done) return null;
+    S.flags.nemesisId = null;
+    n.nemesis = false;
+    n.aggression = 30;
+    S.scandalRisk = Math.max(0, (S.scandalRisk || 0) - 0.6);
+    RZ.engine.pushFeed(S, {
+      kind: 'good', src: 'The structures',
+      title: n.name + ' has stopped being your problem',
+      body: why, tone: 'good'
+    });
+    return { ended: true, how: how, name: n.name };
+  }
+
   RZ.revolt = {
+    tryNeutralise: tryNeutralise,
     monthIndex: monthIndex,
     grantMandate: grantMandate, mandateActive: mandateActive, pngActive: pngActive,
     canRevolt: canRevolt, revoltOdds: revoltOdds, revolt: revolt, incumbent: incumbent,

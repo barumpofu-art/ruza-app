@@ -40,9 +40,15 @@
       },
       parties: {}, nation: {}, campaign: { effort: 0, delegateSpend: 0, season: false },
       startAs: cfg.startAs || 'activist',
+      // Which answer you gave in the yard, or at the table. It sets the
+      // starting position and then keeps mattering.
+      origin: cfg.origin || null,
       flags: {}, feed: [], pendingEvent: null, seenEvents: {},
       actionsLeft: 3, actionsPerTurn: 3, skipTurns: 0, actionsThisMonth: 0,
       buffs: [], capture: { patrons: [], granted: 0, refused: 0 },
+      // Rises while somebody is actively looking for something on you, and
+      // falls back when nobody is. Multiplies the chance a file breaks.
+      scandalRisk: 0,
       over: false, ending: null, legacyMarks: {}
     };
 
@@ -137,6 +143,20 @@
     }
     S.player.rivals[0].regionId = cfg.regionId;
 
+    // The scene you played before the first month. Applied here rather than
+    // with the background because one of the answers is a photograph of
+    // somebody, and the rivals have only just been made.
+    if (cfg.origin && RZ.ORIGIN_PACKAGES && RZ.ORIGIN_PACKAGES[cfg.origin]) {
+      S.player.trait = cfg.origin;
+      RZ.ORIGIN_PACKAGES[cfg.origin](S, c, null);
+      S.player.money = Math.max(0, Math.round(S.player.money));
+      S.player.capital = Math.max(0, Math.round(S.player.capital));
+      ['grassroots', 'party', 'leader', 'media', 'business', 'security', 'intl'].forEach(function (k) {
+        S.player.standing[k] = C100(S.player.standing[k]);
+      });
+      Object.keys(S.player.stats).forEach(function (k) { S.player.stats[k] = C100(S.player.stats[k]); });
+    }
+
     if (cfg.startAs === 'candidate') {
       pushFeed(S, {
         kind: 'big', src: 'The nomination',
@@ -189,6 +209,7 @@
 
       wage: function (m) { return Math.round(wageBase * m); },
       tier: function () { return RZ.ladderFor(c.id)[P.rungIdx].tier; },
+      trait: function () { return (RZ.TRAITS && RZ.TRAITS[P.trait]) || {}; },
       rung: function () { return RZ.ladderFor(c.id)[P.rungIdx]; },
       month: function () { return S.date.month; },
       homeName: function () { return c.regionById[P.regionId].name; },
@@ -203,7 +224,25 @@
         return (v + RZ.range(-18, 18) + (P.health - 70) * 0.15) >= dc;
       },
 
+      // A trait is not a starting bonus that fades. It bends every gain you
+      // make for the rest of the career, in the one place they all pass.
+      traitScale: function (key, amt) {
+        var t = (RZ.TRAITS && RZ.TRAITS[P.trait]) || null;
+        if (!t) return amt;
+        if (amt > 0) {
+          if (key === 'grassroots' && t.grassrootsGain) return amt * t.grassrootsGain;
+          if (key === 'party' && t.partyGain) return amt * t.partyGain;
+          if (key === 'media' && t.mediaGain) return amt * t.mediaGain;
+          if (key === 'money' && t.moneyGain) return amt * t.moneyGain;
+          if (key === 'capital' && t.capitalGain) return amt * t.capitalGain;
+        } else {
+          if (key === 'stats.integrity' && t.integrityDecay) return amt * t.integrityDecay;
+        }
+        return amt;
+      },
+
       add: function (key, amt) {
+        amt = api.traitScale(key, amt);
         if (!amt) return;
         if (key.indexOf('stats.') === 0) {
           var k = key.slice(6);
@@ -284,7 +323,8 @@
       digOnRival: function () {
         if (!P.rivals.length) return null;
         var r = RZ.pick(P.rivals);
-        if (r.dirt.length > 1 || !RZ.chance(0.55 + c.inst.patronage / 260)) return null;
+        var digT = ((RZ.TRAITS && RZ.TRAITS[P.trait]) || {}).digBonus || 0;
+        if (r.dirt.length > 1 || !RZ.chance(0.55 + c.inst.patronage / 260 + digT)) return null;
         var label = RZ.pick([
           'an undeclared property in the capital', 'a tender awarded to a relative',
           'a maintenance case they settled quietly', 'a payment from a mining company',
@@ -299,11 +339,17 @@
       doLeak: function (isDeputy) {
         var pool = P.rivals.filter(function (r) { return r.dirt.some(function (d) { return !d.used; }); });
         if (!pool.length) return { title: 'Nothing to leak', body: 'You have no file worth the risk.', tone: 'flat', fail: true };
-        var r = RZ.pick(pool);
+        // If one of them is actively hunting you, he is the one the file is for.
+        var hunted = pool.filter(function (x) { return x.nemesis; });
+        var r = hunted.length ? hunted[0] : RZ.pick(pool);
         var d = r.dirt.filter(function (x) { return !x.used; })[0];
         d.used = true;
         var clean = RZ.rnd() < (0.42 + P.stats.cunning / 260 - c.inst.media / 400);
         r.power = Math.max(5, r.power - RZ.range(15, 40));
+        // Breaking the man who has been hunting you is one of the three ways
+        // out of a nemesis, and the only one that does not require you to
+        // outrank him or leave the party.
+        if (clean && r.nemesis && r.power < 45 && RZ.revolt) RZ.revolt.tryNeutralise(S, r, 'expose');
         if (r.power < 22) P.rivals = P.rivals.filter(function (x) { return x !== r; });
         api.add('stats.integrity', -RZ.range(1, 3));
         if (clean) {
@@ -553,8 +599,10 @@
     P.health = C100(P.health + hDrift * span);
     // Standing is rented, not owned: the higher it is, the more it costs to hold.
     ['grassroots', 'media', 'leader', 'business', 'security', 'intl'].forEach(function (k) {
+      var tr = (RZ.TRAITS && RZ.TRAITS[P.trait]) || {};
+      var hold = (k === 'business' && tr.businessDecay) ? tr.businessDecay : 1;
       P.standing[k] = C100(P.standing[k] -
-        (0.15 + P.standing[k] * 0.012) * RZ.range(0.7, 1.3) * span * (k === 'leader' ? mandate : 1));
+        (0.15 + P.standing[k] * 0.012) * RZ.range(0.7, 1.3) * span * (k === 'leader' ? mandate : 1) * hold);
     });
     P.standing.party = C100(P.standing.party - (0.06 + P.standing.party * 0.005) * RZ.range(0.7, 1.3) * span * mandate);
     P.fame = C100(P.fame - (0.10 + P.fame * 0.007) * RZ.range(0.7, 1.3) * span);
@@ -1011,10 +1059,15 @@
     if (P.health <= 4) { endGame(S, 'health'); return; }
     if (P.age >= 78 && RZ.chance(0.08)) { endGame(S, 'age'); return; }
 
+    // Pressure decays when nobody is digging. The nemesis puts it back up.
+    S.scandalRisk = Math.max(0, (S.scandalRisk || 0) - 0.06);
+
     // scandal breaking on its own
     var un = P.dirt.filter(function (d) { return !d.exposed; });
     if (un.length) {
-      var risk = 0.012 * un.length * (1 + c.inst.media / 90) * (1 + P.fame / 130);
+      var traitRisk = ((RZ.TRAITS && RZ.TRAITS[P.trait]) || {}).scandalRisk || 1;
+      var risk = 0.012 * un.length * (1 + c.inst.media / 90) * (1 + P.fame / 130) *
+                 (1 + (S.scandalRisk || 0)) * traitRisk;
       if (RZ.chance(risk)) {
         var api = mkApi(S);
         var d = un.sort(function (a, b) { return b.severity - a.severity; })[0];

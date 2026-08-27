@@ -62,15 +62,22 @@
     var d = UI.draft;
     var c = RZ.COUNTRIES[d.countryId];
     var name = (d.name || '').trim() || RZ.makeName(c);
-    UI.S = RZ.engine.newGame({
-      countryId: d.countryId, name: name, gender: d.gender || 'f',
-      regionId: d.regionId, bgId: d.bgId, partyId: d.partyId,
-      age: d.startAs === 'candidate' ? 41 : 34,
-      startAs: d.startAs || 'activist'
+    d.name = name;
+
+    // You play the afternoon that got you into this before the first month
+    // starts. The answer is the character.
+    RZ.ui.showOrigin(d.startAs || 'activist', d, function (originId) {
+      UI.S = RZ.engine.newGame({
+        countryId: d.countryId, name: name, gender: d.gender || 'f',
+        regionId: d.regionId, bgId: d.bgId, partyId: d.partyId,
+        age: d.startAs === 'candidate' ? 41 : 34,
+        startAs: d.startAs || 'activist',
+        origin: originId
+      });
+      UI.pane = 'desk';
+      RZ.ui.renderGame();
+      RZ.ui.show('game');
     });
-    UI.pane = 'desk';
-    RZ.ui.renderGame();
-    RZ.ui.show('game');
   }
 
   /* ---------------- actions ---------------- */

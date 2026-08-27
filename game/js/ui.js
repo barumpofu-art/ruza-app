@@ -625,6 +625,67 @@
     inner.querySelector('[data-close]').addEventListener('click', function () { closeModal(); if (onClose) onClose(); });
   }
 
+  /* ---------------- the origin scene ---------------- */
+  // Character creation as an afternoon rather than a menu. Rendered with the
+  // conversation styles, because that is what it is.
+  function showOrigin(startAs, draft, onDone) {
+    var c = RZ.COUNTRIES[draft.countryId];
+    var o = RZ.ORIGINS[startAs === 'candidate' ? 'candidate' : 'activist'];
+    var kingmaker = RZ.makeName(c);
+    var priceLine = RZ.money(RZ.engine.WAGE_BASE[c.id] * 0.5, c.cur.sym);
+    var inner = modal('');
+    var chosen = null;
+
+    paint();
+
+    function paint() {
+      var h = '<div class="modal-kicker">' + esc(o.kicker) + '</div>' +
+        '<h2 class="modal-h">' + esc(o.title(c)) + '</h2>' +
+        '<div class="talk">' +
+          para(o.opening(c, draft.name, kingmaker)) +
+          (chosen ? '' : para(o.question(c))) +
+        '</div>';
+
+      if (!chosen) {
+        h += '<div class="choices">' + o.answers.map(function (a, i) {
+          return '<button class="choice" data-i="' + i + '">' +
+            '<div class="choice-t">' + esc(a.t) + '</div>' +
+            '<div class="choice-d">' + esc(a.d) + '</div></button>';
+        }).join('') + '</div>';
+      } else {
+        var tr = RZ.TRAITS[chosen.trait];
+        h += '<div class="talk">' + para(chosen.reply(c, c.cur.sym, priceLine), 'me') + '</div>' +
+          '<div class="origin-trait">' +
+            '<div class="origin-trait-n">' + tr.ico + ' ' + esc(tr.name) + '</div>' +
+            '<div class="origin-trait-d">' + esc(tr.note) + '</div>' +
+          '</div>' +
+          '<button class="btn btn-gold btn-block" data-go>This is where it starts</button>' +
+          '<button class="btn btn-ghost btn-block" style="margin-top:8px" data-back>Answer differently</button>';
+      }
+
+      inner.innerHTML = h;
+      inner.querySelectorAll('[data-i]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          chosen = o.answers[parseInt(b.dataset.i, 10)];
+          paint();
+          inner.scrollTop = inner.scrollHeight;
+        });
+      });
+      var back = inner.querySelector('[data-back]');
+      if (back) back.addEventListener('click', function () { chosen = null; paint(); });
+      var go = inner.querySelector('[data-go]');
+      if (go) go.addEventListener('click', function () { closeModal(); onDone(chosen.id); });
+    }
+
+    // The scenes are written as prose with blank lines between paragraphs.
+    function para(text, who) {
+      return String(text).split(/\n\n+/).map(function (p) {
+        return '<div class="talk-l ' + (who === 'me' ? 'me closing' : 'them') + '">' +
+          '<div class="talk-tx">' + esc(p) + '</div></div>';
+      }).join('');
+    }
+  }
+
   /* ---------------- the ward blitz ---------------- */
   // Which afternoon, in which place. The list is sorted worst-first, because
   // the ward you are losing is the one worth the argument.
@@ -945,7 +1006,7 @@
     UI: UI, show: show, toast: toast, modal: modal, closeModal: closeModal,
     renderCountries: renderCountries, renderCreate: renderCreate, renderGame: renderGame, renderHud: renderHud,
     showEvent: showEvent, showOutcome: showOutcome, showDialogue: showDialogue, showElection: showElection,
-    showAmend: showAmend, showBlitz: showBlitz,
+    showAmend: showAmend, showBlitz: showBlitz, showOrigin: showOrigin,
     showRigOffer: showRigOffer, showBudget: showBudget, showEnd: showEnd, showAbout: showAbout,
     paperCard: paperCard
   };
