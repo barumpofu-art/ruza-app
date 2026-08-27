@@ -202,7 +202,10 @@
 
     if (S.sprint) {
       h += wardBoard(S, c);
-    } else if (S.campaign.season) {
+    } else if (RZ.ward && RZ.engine.mkApi(S).tier() >= 4) {
+      h += constituencyCard(S, c);
+    }
+    if (!S.sprint && S.campaign.season) {
       h += '<div class="card" style="border-color:#54452a;background:linear-gradient(180deg,#241f14,#161c25)">' +
         '<div class="block-h" style="margin:0 0 6px">Campaign season</div>' +
         '<p class="note">The general election is in ' + RZ.monthName(RZ.engine.ELECTION_MONTH[c.id]) + ' ' + S.nextElection +
@@ -284,6 +287,43 @@
         : '') +
       '</div>';
   }
+
+  // Once you hold the seat, the ward's opinion of you is the whole game, and
+  // it is made of things that either exist or do not.
+  function constituencyCard(S, c) {
+    var sum = RZ.ward.summary(S);
+    var cls = sum.trust >= 60 ? 'good' : sum.trust >= 38 ? 'mid' : 'bad';
+    var h = '<div class="consty">' +
+      '<div class="consty-top">' +
+        '<div><div class="sprint-k">' + esc(c.regionById[S.player.regionId].name) + '</div>' +
+        '<div class="consty-mood">' + esc(sum.mood) + '</div></div>' +
+        '<div class="consty-t ' + cls + '">' + sum.trust + '<small>trust</small></div>' +
+      '</div>' +
+      '<div class="sprint-bar"><span class="' + cls + '" style="width:' + Math.max(2, sum.trust) + '%"></span></div>';
+
+    if (sum.building.length) {
+      h += '<div class="rows" style="margin-top:11px">' + sum.building.map(function (p) {
+        var left = Math.max(0, Math.ceil(p.monthsLeft));
+        return '<div class="row"><span class="row-dot" style="background:' +
+          (p.risk > 0.14 ? '#d8a53f' : '#4bab84') + '"></span>' +
+          '<span class="row-n">' + p.ico + ' ' + esc(cap1(p.name)) + '<small>' +
+            (left ? left + ' month' + (left === 1 ? '' : 's') + ' to go' : 'due any week now') +
+            (p.crony ? ' · a contractor you named' : '') + '</small></span></div>';
+      }).join('') + '</div>';
+    } else {
+      h += '<p class="note" style="margin:10px 0 0">Nothing is under construction. ' +
+        'You have no budget of your own — you have to go and ask somebody who does.</p>';
+    }
+
+    if (sum.done || sum.abandoned) {
+      h += '<div class="consty-tally">' +
+        (sum.done ? '<span class="dlt p">' + sum.done + ' delivered</span>' : '') +
+        (sum.abandoned ? '<span class="dlt n">' + sum.abandoned + ' abandoned</span>' : '') +
+        '</div>';
+    }
+    return h + '</div>';
+  }
+  function cap1(x) { return x.charAt(0).toUpperCase() + x.slice(1); }
 
   function wardRow(S, w) {
     var cls = w.support >= 55 ? 'safe' : w.support >= 45 ? 'close' : 'losing';

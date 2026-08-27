@@ -537,6 +537,81 @@
     }),
 
     /* ---------------- self ---------------- */
+    /* ---------------- the seat you have to hold ---------------- */
+    A({
+      id: 'lobby', ico: '🏛️', ap: 1, tier: [4, 13],
+      name: 'Lobby the ministry',
+      desc: function (a) {
+        var n = RZ.ward.needs(a.S);
+        return n.length
+          ? 'You have no budget. Go and spend influence on somebody who has: ' + n[0].name + ', perhaps.'
+          : 'Everything you can reasonably ask for is already under construction.';
+      },
+      when: function (a) { return RZ.ward && RZ.ward.canLobby(a.S); },
+      run: function (a) {
+        // Falls through to the plain roll when no conversation is available;
+        // the meeting is the normal case. There may be nothing left to ask
+        // for, which is its own kind of success.
+        var want = RZ.ward.needs(a.S);
+        if (!want.length) return { fail: true, title: 'There is nothing left to ask them for' };
+        var pick = RZ.pick(want);
+        a.add('capital', -RZ.ward.lobbyCost(a.S, pick.id) * 0.5);
+        a.startProject(pick.id, {});
+        return {
+          title: 'A letter, and then another letter',
+          body: 'No meeting, no minister, and eventually a line in the adjustment estimates that somebody in the ' +
+                'ministry put there because you would not stop writing. It is in the system now.',
+          tone: 'flat'
+        };
+      }
+    }),
+
+    A({
+      id: 'pac', ico: '📊', ap: 1, tier: [4, 12],
+      name: 'Sit on the accounts committee',
+      desc: 'Summon somebody who has spent public money and ask them where it went, on television.',
+      risky: true,
+      when: function (a) { return a.tier() >= 4 && a.P.capital >= 4; },
+      run: function (a) {
+        a.add('capital', -a.rng(2, 5));
+        a.add('media', a.rng(2, 5));
+        return {
+          title: 'The hearing was adjourned to a date to be confirmed',
+          body: 'Two of the four witnesses sent apologies and the third brought a lawyer who objected to the ' +
+                'terms of reference. Committee work is mostly this.',
+          tone: 'flat'
+        };
+      }
+    }),
+
+    A({
+      id: 'whip', ico: '🔔', ap: 1, tier: [4, 12],
+      name: 'Take the whip’s call',
+      desc: 'There is a division at four and he wants to know now, not then.',
+      when: function (a) { return a.tier() >= 4 && !a.isPresident(); },
+      run: function (a) {
+        a.add('party', a.rng(0, 2));
+        return { title: 'The division passed without you', body: 'You were paired. Nobody minded, and nobody noticed.', tone: 'flat' };
+      }
+    }),
+
+    A({
+      id: 'wardcrisis', ico: '🚱', ap: 1, tier: [4, 13],
+      name: function (a) { return 'Hold the constituency office in ' + a.homeName(); },
+      desc: 'Whoever walks in is your problem for the afternoon.',
+      when: function (a) { return a.tier() >= 4; },
+      run: function (a) {
+        a.add('grassroots', a.rng(1, 3)); a.add('health', -a.rng(1, 3));
+        a.wardTrust(a.rng(0, 2));
+        return {
+          title: 'Nine people, four hours',
+          body: 'A pension that has stopped, a school transfer, a boundary dispute and a man who wanted to ' +
+                'explain a theory. You solved one of them.',
+          tone: 'flat'
+        };
+      }
+    }),
+
     /* ---------------- forcing the issue ---------------- */
     A({
       id: 'revolt', ico: '⚔️', ap: 1, tier: [2, 9], risky: true,

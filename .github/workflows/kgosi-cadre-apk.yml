@@ -66,7 +66,7 @@ jobs:
                        assets/icon-192.png assets/icon-512.png \
                        assets/js/main.js assets/js/engine.js assets/js/ui.js \
                        assets/js/data-countries.js assets/js/elections.js assets/js/governance.js \
-                       assets/js/dialogue.js assets/js/data-dialogue.js assets/js/crisis.js assets/js/sprint.js assets/js/revolt.js assets/js/data-origins.js; do
+                       assets/js/dialogue.js assets/js/data-dialogue.js assets/js/crisis.js assets/js/sprint.js assets/js/revolt.js assets/js/data-origins.js assets/js/constituency.js; do
             unzip -Z1 "$APK" | grep -qx "$entry" || { echo "missing from APK: $entry"; exit 1; }
           done
           # Density folders come out of AGP with a -v4 qualifier.

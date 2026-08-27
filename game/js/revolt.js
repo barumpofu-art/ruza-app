@@ -53,6 +53,19 @@
   function pngActive(S) { return has(S, 'pngUntil'); }
 
   /* =======================================================================
+     THE WHIP
+     Obedience is a resource the party buys from you, and it pays out in
+     access: a whipped member's calls to a ministry get returned.
+     ======================================================================= */
+  function whipped(S) { return has(S, 'whippedUntil'); }
+  function whip(S, months, why) {
+    grant(S, 'whippedUntil', months || 18);
+    S.flags.whippedWhy = why || null;
+    S.flags.whipCount = (S.flags.whipCount || 0) + 1;
+  }
+  function unwhip(S) { S.flags.whippedUntil = 0; }
+
+  /* =======================================================================
      2. THE CAUCUS REVOLT
      ======================================================================= */
   function incumbent(S) {
@@ -462,6 +475,7 @@
     tryNeutralise: tryNeutralise,
     monthIndex: monthIndex,
     grantMandate: grantMandate, mandateActive: mandateActive, pngActive: pngActive,
+    whipped: whipped, whip: whip, unwhip: unwhip,
     canRevolt: canRevolt, revoltOdds: revoltOdds, revolt: revolt, incumbent: incumbent,
     resolveUltimatum: resolveUltimatum,
     blackmailTarget: blackmailTarget, blackmail: blackmail,

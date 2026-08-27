@@ -372,6 +372,25 @@ body{
 .origin-trait-d{ font-size:.8rem; color:var(--text-dim); margin-top:4px; line-height:1.5; }
 .talk-l.me.closing .talk-tx{ text-align:left; font-style:normal; }
 
+/* the constituency you have to hold */
+.consty{
+  border:1px solid var(--line); border-radius:var(--radius); padding:14px;
+  background:var(--panel); margin-bottom:14px;
+}
+.consty-top{ display:flex; align-items:flex-start; gap:12px; }
+.consty-mood{ font-family:var(--serif); font-size:1.02rem; margin-top:3px; color:var(--text-dim); }
+.consty-t{ margin-left:auto; text-align:right; font-family:var(--mono); font-size:1.5rem; font-weight:700; line-height:1; }
+.consty-t.good{ color:var(--green); }
+.consty-t.mid{ color:var(--gold); }
+.consty-t.bad{ color:var(--red); }
+.consty-t small{ display:block; font-family:var(--font); font-size:.6rem; letter-spacing:.13em;
+  text-transform:uppercase; font-weight:700; opacity:.75; margin-top:4px; }
+.consty .sprint-bar{ margin-top:11px; }
+.consty .sprint-bar span.good{ background:var(--green); }
+.consty .sprint-bar span.mid{ background:var(--gold); }
+.consty .sprint-bar span.bad{ background:var(--red); }
+.consty-tally{ display:flex; gap:6px; flex-wrap:wrap; margin-top:11px; }
+
 /* the campaign sprint */
 .hud-month.sprinting{ color:var(--gold); font-weight:800; }
 .sprint{

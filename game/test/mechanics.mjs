@@ -17,7 +17,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FILES = [
   'core.js', 'data-countries.js', 'data-ladder.js', 'data-actions.js',
   'data-events.js', 'data-dialogue.js', 'data-origins.js', 'people.js', 'elections.js',
-  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js'
+  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js', 'constituency.js'
 ];
 
 function loadGame() {
@@ -1248,6 +1248,180 @@ section('14. Capital for elite work, and the ways out of a nemesis');
     const calm = count(0), hunted = count(2.2);
     ok('a file breaks more often while somebody is hunting you', hunted > calm,
       `${calm} vs ${hunted} of 400`);
+  }
+}
+
+/* ================= 15. the constituency ================= */
+section('15. Holding the seat');
+{
+  const cc = RZ.COUNTRIES.ZA;
+  const mp = (seed, tier) => {
+    const S = career('ZA', seed || 800, tier === undefined ? 4 : tier);
+    RZ.ward.init(S);
+    return S;
+  };
+
+  ok('an MP has a constituency with an opinion of them', RZ.ward.summary(mp()).trust > 0);
+  ok('and nothing built yet', RZ.ward.summary(mp()).building.length === 0);
+  ok('a backbencher below the seat cannot lobby', !RZ.ward.canLobby(career('ZA', 801, 2)));
+  ok('an MP can', RZ.ward.canLobby(mp(802)));
+
+  // You have no chequebook. You have influence, and it is priced.
+  {
+    const loyal = mp(810); RZ.revolt.whip(loyal, 18, 'test');
+    const rebel = mp(811); rebel.flags.exiled = true;
+    const plain = mp(812);
+    const k = RZ.ward.KINDS[0].id;
+    ok('a whipped member gets a better price from the ministry',
+      RZ.ward.lobbyCost(loyal, k) < RZ.ward.lobbyCost(plain, k),
+      `${RZ.ward.lobbyCost(loyal, k)} vs ${RZ.ward.lobbyCost(plain, k)}`);
+    ok('and an exiled one is starved of development',
+      RZ.ward.lobbyCost(rebel, k) > RZ.ward.lobbyCost(plain, k),
+      `${RZ.ward.lobbyCost(rebel, k)} vs ${RZ.ward.lobbyCost(plain, k)}`);
+  }
+
+  // A project takes months, and announcing it is not the same as opening it.
+  {
+    const S = mp(820);
+    const before = RZ.ward.summary(S).trust;
+    const p = RZ.ward.start(S, RZ.engine.mkApi(S), 'clinic', {});
+    ok('starting one puts it under construction', p && p.status === 'building');
+    ok('and it takes months', p.monthsLeft >= 3);
+    ok('the announcement alone moves trust a little', RZ.ward.summary(S).trust > before);
+    const announced = RZ.ward.summary(S).trust;
+
+    // Run it to completion with no corruption, so it cannot be abandoned.
+    S.nation.society.corruption = 0;
+    p.risk = 0;
+    for (let i = 0; i < 12 && p.status === 'building'; i++) { S.turn++; RZ.ward.tick(S, 1, {}); }
+    ok('it eventually opens', p.status === 'done', p.status);
+    ok('and opening it is worth far more than announcing it',
+      RZ.ward.summary(S).trust > announced + 8,
+      `${Math.round(announced)} -> ${RZ.ward.summary(S).trust}`);
+    ok('it goes into the career record', S.player.record.some((r) => /Opened/.test(r.text)));
+    ok('and the ward reports it delivered', RZ.ward.summary(S).done === 1);
+  }
+
+  // Corruption is not an abstraction: it is whether the money reaches the site.
+  {
+    let cleanAbandoned = 0, rottenAbandoned = 0;
+    for (let i = 0; i < 120; i++) {
+      const A = mp(830 + i); A.nation.society.corruption = 2;
+      const B = mp(830 + i); B.nation.society.corruption = 95;
+      const pa = RZ.ward.start(A, RZ.engine.mkApi(A), 'road', {});
+      const pb = RZ.ward.start(B, RZ.engine.mkApi(B), 'road', {});
+      for (let k = 0; k < 10 && pa.status === 'building'; k++) { A.turn++; RZ.ward.tick(A, 1, {}); }
+      for (let k = 0; k < 10 && pb.status === 'building'; k++) { B.turn++; RZ.ward.tick(B, 1, {}); }
+      if (pa.status === 'abandoned') cleanAbandoned++;
+      if (pb.status === 'abandoned') rottenAbandoned++;
+    }
+    ok('sites are abandoned far more often in a corrupt state',
+      rottenAbandoned > cleanAbandoned * 2, `${cleanAbandoned} vs ${rottenAbandoned} of 120`);
+
+    // And a shock is the thing that empties the site.
+    let shockAbandoned = 0;
+    for (let i = 0; i < 120; i++) {
+      const S = mp(900 + i);
+      S.nation.society.corruption = 40;
+      const p = RZ.ward.start(S, RZ.engine.mkApi(S), 'road', {});
+      S.flags.lastShock = S.turn;                 // the markets just turned
+      for (let k = 0; k < 4 && p.status === 'building'; k++) { S.turn++; RZ.ward.tick(S, 1, {}); }
+      if (p.status === 'abandoned') shockAbandoned++;
+    }
+    ok('and a market shock empties them faster still', shockAbandoned > 8, `${shockAbandoned} of 120`);
+  }
+
+  // A half-built shell is worse than never having started.
+  {
+    const S = mp(950);
+    const p = RZ.ward.start(S, RZ.engine.mkApi(S), 'school', {});
+    const before = RZ.ward.summary(S).trust;
+    p.risk = 1;                                    // certain to be abandoned
+    S.turn++; RZ.ward.tick(S, 1, {});
+    ok('an abandoned site collapses trust', RZ.ward.summary(S).trust < before - 6,
+      `${Math.round(before)} -> ${RZ.ward.summary(S).trust}`);
+    ok('and leaves a file with your name on the sign',
+      S.player.dirt.some((d) => d.id.startsWith('stalled-')));
+    ok('and reaches the feed as an alert', S.feed.some((f) => f.alert && /abandoned/i.test(f.title)));
+  }
+
+  // Trust is the thing the ballot is actually made of.
+  {
+    const good = mp(960), bad = mp(961);
+    good.ward.trust = 90; bad.ward.trust = 10;
+    const g0 = good.player.regionSupport[good.player.regionId];
+    const b0 = bad.player.regionSupport[bad.player.regionId];
+    for (let i = 0; i < 12; i++) { good.turn++; bad.turn++; RZ.ward.tick(good, 1, {}); RZ.ward.tick(bad, 1, {}); }
+    ok('a trusted MP gains ground at home',
+      good.player.regionSupport[good.player.regionId] > g0);
+    ok('and a distrusted one loses it',
+      bad.player.regionSupport[bad.player.regionId] < b0);
+  }
+
+  // Delivering the thing closes the promise you made about it.
+  {
+    const S = mp(970);
+    const a = RZ.engine.mkApi(S);
+    a.promise('clinicpromise', 'A clinic for the ward before the next rains', { due: 12 });
+    const p = RZ.ward.start(S, RZ.engine.mkApi(S), 'clinic', {});
+    p.risk = 0;
+    for (let i = 0; i < 12 && p.status === 'building'; i++) { S.turn++; RZ.ward.tick(S, 1, {}); }
+    ok('opening the clinic settles the promise of a clinic',
+      S.player.promises[0].settled === true);
+  }
+
+  // The whip, and what rebelling against it costs.
+  {
+    const S = mp(980);
+    ok('you start unwhipped', !RZ.revolt.whipped(S));
+    RZ.revolt.whip(S, 18, 'test');
+    ok('and can be whipped', RZ.revolt.whipped(S));
+    RZ.revolt.unwhip(S);
+    ok('and can break it', !RZ.revolt.whipped(S));
+
+    const scene = RZ.DIALOGUE.filter((x) => x.id === 'whip-order')[0];
+    ok('the order paper is a conversation', !!scene && scene.beats.length >= 2);
+    const rebelAnswer = scene.beats[0].answers[2];
+    const loyal = mp(981), whippedRebel = mp(982);
+    RZ.revolt.whip(whippedRebel, 18, 'test');
+    [loyal, whippedRebel].forEach((T) => { T.player.standing.party = 70; });
+    rebelAnswer.run(RZ.engine.mkApi(loyal));
+    rebelAnswer.run(RZ.engine.mkApi(whippedRebel));
+    ok('rebelling costs a whipped member far more',
+      whippedRebel.player.standing.party < loyal.player.standing.party,
+      `${Math.round(whippedRebel.player.standing.party)} vs ${Math.round(loyal.player.standing.party)}`);
+    ok('and breaks the whip', !RZ.revolt.whipped(whippedRebel));
+    ok('while both gain at home', loyal.ward.trust > 50 && whippedRebel.ward.trust > 50);
+  }
+
+  // The state the Monte Carlo found: a long-serving member who has already
+  // delivered everything there is to deliver.
+  {
+    const S = mp(995);
+    RZ.ward.KINDS.forEach((k) => RZ.ward.start(S, RZ.engine.mkApi(S), k.id, {}));
+    ok('with everything under way there is nothing left to ask for', RZ.ward.needs(S).length === 0);
+    ok('and the lobby action is withdrawn rather than crashing', !RZ.ward.canLobby(S));
+    S.ward.lastLobby = -99;
+    ok('even once the cooldown is up', !RZ.ward.canLobby(S));
+    const res = RZ.actionById['lobby'].run(RZ.engine.mkApi(S));
+    ok('and running it anyway fails cleanly', res && res.fail === true, JSON.stringify(res).slice(0, 60));
+    const scene = RZ.DIALOGUE.filter((x) => x.id === 'lobby-ps')[0];
+    ok('and the meeting will not open either', !scene.when(RZ.engine.mkApi(S)));
+  }
+
+  // Every new constituency scene has to be reachable from an action.
+  {
+    const topics = ['lobby', 'whip', 'pac', 'wardcrisis', 'funerals'];
+    const missing = topics.filter((t) => !RZ.actionById[t]);
+    ok('every new conversation has an action that opens it', missing.length === 0, missing.join(', '));
+    const S = mp(990);
+    S.player.capital = 40;
+    const deck = RZ.engine.availableActions(S).map((x) => x.id);
+    ok('and an MP is offered them', topics.every((t) => deck.includes(t)),
+      topics.filter((t) => !deck.includes(t)).join(', '));
+    const junior = career('ZA', 991, 2);
+    const jDeck = RZ.engine.availableActions(junior).map((x) => x.id);
+    ok('while an activist is not', !jDeck.includes('lobby') && !jDeck.includes('pac'));
   }
 }
 

@@ -483,6 +483,17 @@
       brokenPromises: function () {
         return (P.promises || []).filter(function (x) { return (x.bites || 0) > 0; }).length;
       },
+      startProject: function (kindId, opts) {
+        return RZ.ward ? RZ.ward.start(S, api, kindId, opts) : null;
+      },
+      wardTrust: function (n) {
+        if (!RZ.ward) return 0;
+        RZ.ward.init(S);
+        if (n) S.ward.trust = C100(S.ward.trust + n);
+        return S.ward.trust;
+      },
+      whipped: function () { return !!(RZ.revolt && RZ.revolt.whipped(S)); },
+
       owePatron: function (name, weight) {
         return RZ.crisis ? RZ.crisis.owe(S, name, weight) : null;
       },
@@ -704,6 +715,9 @@
     // career, in which case nothing after it matters.
     if (RZ.crisis && RZ.crisis.monthly(S, out)) { save(S); return out; }
     if (RZ.revolt) out.nemesis = RZ.revolt.nemesisTurn(S);
+    // The ward keeps its own opinion of you, and the sites keep building or
+    // stop, whether or not you spent an action on them this month.
+    if (RZ.ward && mkApi(S).tier() >= 4) RZ.ward.tick(S, span, out);
     if (RZ.sprint && !S.pendingEvent) {
       var aud = RZ.sprint.auditDue(S);
       if (aud) S.pendingEvent = aud;
