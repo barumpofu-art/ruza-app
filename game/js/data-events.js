@@ -1113,6 +1113,82 @@
               'and who you did not see until afterwards.', tone: 'flat' };
           } }
       ]
+    }),
+
+    /* ================= the last question ================= */
+    E({
+      id: 'lastterm', w: 11, kicker: 'The end of it',
+      // Asked once, and late. It ends careers, so it must not come round again
+      // every second year for somebody who has already answered it.
+      once: true,
+      when: function (a) { return a.P.age >= 68 && a.tier() >= 2; },
+      title: 'They want to know if this is the last one',
+      speaker: function (a) {
+        return { name: RZ.makeName(a.C), role: 'your constituency secretary of twenty years', org: '' };
+      },
+      where: 'The constituency office, Saturday, nobody else in',
+      settleOn: 'grassroots',
+      opening: function (a) {
+        return 'She has made the tea and she has not sat down, which is how you know. ' +
+          '"I have been asked to ask you, because nobody else will. You are ' + a.P.age + '. ' +
+          'Is this the last one?"';
+      },
+      beats: [
+        {
+          q: '"And before you answer — I am not asking whether you can win it. I know you can win it. I am asking whether you should."',
+          answers: [
+            { t: 'It is the last one. Announce it and start finding my successor.', mood: 3,
+              run: function (a, convo) {
+                convo.leaving = true;
+                a.add('grassroots', a.rng(4, 9)); a.add('media', a.rng(4, 9));
+                a.add('stats.integrity', a.rng(4, 8)); a.recruitAlly();
+                a.legacyMark('leftOnOwnTerms');
+              },
+              reply: '"Thank you." She sits down at last. "Twenty years and that is the first time you have answered a question of mine straight away."' },
+            { t: 'One more term. Then I go, and you may hold me to it.', mood: 2,
+              run: function (a) { a.add('grassroots', a.rng(2, 6)); a.add('party', a.rng(1, 4)); a.promise('lastterm', 'One more term, and then out — said to a secretary of twenty years'); },
+              reply: '"I will hold you to it." She writes the year on the wall planner, in pen, where everybody who comes in can see it.' },
+            { t: 'I will go when they carry me out.', mood: -2,
+              run: function (a) { a.add('party', a.rng(1, 4)); a.add('grassroots', -a.rng(2, 6)); a.add('media', -a.rng(2, 5)); a.add('stats.grit', a.rng(1, 3)); },
+              reply: '"They will," she says, and it is not affectionate. "That is not a threat, it is a description. I have watched it happen twice."' }
+          ]
+        },
+        {
+          q: function (a) {
+            var r = a.aRival();
+            return '"Then the part I actually came to say. ' +
+              (r ? '<strong>' + a.esc(r.name) + '</strong> has been in this office twice this month asking about the branch register. ' : 'People have been asking about the branch register. ') +
+              'What am I supposed to tell them?"';
+          },
+          answers: [
+            { t: 'Tell them the truth, and give them the register.', mood: 3,
+              run: function (a) { a.add('stats.integrity', a.rng(3, 6)); a.add('party', -a.rng(1, 4)); a.add('grassroots', a.rng(2, 5)); },
+              reply: '"The register." She nods once. "Then this really is the last one, whatever you said a minute ago."' },
+            { t: 'Tell them nothing and lock the cabinet.', mood: 0,
+              run: function (a) { a.add('party', a.rng(2, 5)); a.add('stats.cunning', a.rng(1, 3)); a.add('grassroots', -a.rng(0, 3)); a.makeRival(); },
+              reply: '"Locked." She has locked it before, for the man who had this office before you, and he lost anyway.' },
+            { t: 'Tell them to come and see me. Directly.', mood: 2,
+              run: function (a) { a.add('party', a.rng(1, 4)); a.add('leader', a.rng(0, 3)); a.add('stats.charisma', a.rng(.5, 1.5)); },
+              reply: '"Directly." She almost smiles. "They will not come. They never come when you offer."' }
+          ]
+        }
+      ],
+      settles: function (a, temp, convo) {
+        if (convo.leaving) {
+          a.P.record.push({ year: a.S.date.year, text: 'Announced that this would be the last term.' });
+          a.S.flags.announcedLast = a.S.date.year;
+        }
+        a.add('grassroots', (temp === 'warm' ? 1 : temp === 'hostile' ? -1 : 0) * a.rng(2, 4));
+      },
+      close: function (a, temp, convo) {
+        if (convo.leaving) return 'She locks up behind you both. The office looks exactly as it did, and it is not the same office any more.';
+        return {
+          warm: 'She walks you to the car and says nothing else, which after twenty years is a whole conversation.',
+          fair: 'She washes the cups. You leave first.',
+          cool: 'She is still standing when you go.',
+          hostile: 'The tea goes cold on the desk. She hands in her notice in the spring.'
+        }[temp];
+      }
     })
   ];
 

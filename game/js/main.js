@@ -47,6 +47,12 @@
 
     if (RZ.engine.hasSave()) document.getElementById('btn-continue').hidden = false;
 
+    var build = document.getElementById('build-line');
+    if (build) {
+      build.textContent = 'Version ' + RZ.VERSION +
+        (location.hostname === 'appassets.androidplatform.net' ? ' · Android' : ' · web');
+    }
+
     // Service worker: only meaningful for the web build. Inside the Android APK
     // every asset is already local and served by the shell, so registering one
     // buys nothing and adds a WebView failure surface — its interception layer

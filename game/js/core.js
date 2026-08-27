@@ -2,6 +2,9 @@
 var RZ = (function () {
   'use strict';
 
+  // Kept in step with game/VERSION, which CI also stamps into the APK.
+  var VERSION = '1.1.0';
+
   var _seed = 1;
   function seed(n) { _seed = (n >>> 0) || 1; }
   // mulberry32 — deterministic, so a career can be replayed from its seed
@@ -70,6 +73,7 @@ var RZ = (function () {
   }
 
   return {
+    VERSION: VERSION,
     seed: seed, getSeed: getSeed, rnd: rnd, range: range, irange: irange, pick: pick,
     shuffle: shuffle, chance: chance, weighted: weighted, noise: noise,
     clamp: clamp, c100: c100, round: round, lerp: lerp, sum: sum,

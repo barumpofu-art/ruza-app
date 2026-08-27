@@ -132,7 +132,12 @@
     for (var i = 1; i < L.length; i++) {
       if (!isSingular(L[i])) continue;
       var sitting = strongestFirst(at(S, i));
-      for (var k = 1; k < sitting.length; k++) {
+      // The player counts as an occupant. Where there is no separate party
+      // leadership — Eswatini, where the top rung is the whole of it — this is
+      // the only thing standing between the player holding an office and
+      // somebody in the field being recorded as holding it as well.
+      var keep = S.player.rungIdx === i ? 0 : 1;
+      for (var k = keep; k < sitting.length; k++) {
         var f = sitting[k], placed = false;
         for (var j = i - 1; j >= 1; j--) {
           if (at(S, j).length < seatsAt(L, j) && S.player.rungIdx !== j) {
@@ -159,8 +164,10 @@
     if (hi !== li) at(S, hi).forEach(function (f) { f.rungIdx = li; f.role = L[li].title; });
     enforceSingular(S);
 
-    if (P.isLeader) {
-      // You hold it. Anybody still sitting in that chair is moved out of it.
+    // You hold it — either by winning the party leadership, or because in this
+    // system the leadership is not a separate office from the one you are in.
+    if (P.isLeader || P.rungIdx === li) {
+      // Anybody still sitting in that chair is moved out of it.
       at(S, li).forEach(function (f) {
         f.rungIdx = Math.max(1, li - 1);
         f.role = L[f.rungIdx].title;
@@ -214,15 +221,19 @@
     return { fig: best, incumbent: best.rungIdx === rungIdx };
   }
 
-  // What that person adds to the difficulty of taking the rung off them.
-  function difficulty(S, rungIdx) {
+  // How much of a problem the person in the doorway is, on a scale where 0 is
+  // an open field and about 1.3 is a strong incumbent at the top of their
+  // powers. Each kind of contest scales this into its own arithmetic, because a
+  // branch vote and a national conference do not run on the same numbers.
+  function pressure(S, rungIdx) {
     var con = contender(S, rungIdx);
-    if (!con) return -6;                       // an open field is easier than a contested one
-    var d = (strength(con.fig) - 52) * 0.62;
-    if (con.incumbent) d += 12;                // possession is most of the argument
+    if (!con) return -0.15;                    // an open field is easier than a contested one
+    var f = con.fig;
+    var v = (strength(f) - 30) / 70;
+    if (con.incumbent) v += 0.28;              // possession is most of the argument
     // a file you have not used is not leverage; a file you have used is
-    d -= Math.min(18, con.fig.wounded * 9);
-    return d;
+    v -= Math.min(0.45, f.wounded * 0.16);
+    return clamp(v, -0.2, 1.35);
   }
 
   /* ---------------------------------------------------------------
@@ -391,7 +402,7 @@
 
   RZ.field = {
     populate: populate, repopulate: repopulate, syncLeadership: syncLeadership,
-    contender: contender, difficulty: difficulty,
+    contender: contender, pressure: pressure,
     winsAgainstPlayer: winsAgainstPlayer, losesToPlayer: losesToPlayer,
     wound: wound, retire: retire, tick: tick,
     rivals: rivals, allies: allies, addRival: addRival, addAlly: addAlly, dropRival: dropRival,

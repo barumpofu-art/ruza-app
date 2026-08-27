@@ -87,6 +87,7 @@ body{
 .title-blurb{ color:var(--text-dim); line-height:1.62; font-size:.96rem; margin:0 auto 28px; max-width:33rem; }
 .title-actions{ display:flex; flex-direction:column; gap:11px; max-width:20rem; margin:0 auto; }
 .disclaimer{ margin:26px auto 0; font-size:.76rem; color:var(--text-faint); line-height:1.55; max-width:30rem; }
+.disclaimer.build{ margin-top:12px; font-size:.7rem; letter-spacing:.04em; opacity:.75; }
 
 /* ---------- buttons ---------- */
 .btn{

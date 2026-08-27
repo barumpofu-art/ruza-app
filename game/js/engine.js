@@ -562,7 +562,11 @@
     }
 
     // ---- appointment windows ----
-    if ((S.date.month === 1 || S.date.month === 7) && !out.election) {
+    // Reshuffles are quarterly here rather than twice a year: with eight rungs
+    // above the House and a working life of about thirty-five years, two rolls
+    // a year put the top of the ladder out of reach of anybody who did not
+    // start early and stay lucky.
+    if (S.date.month % 3 === 1 && !out.election) {
       out.promo = considerAppointment(S);
     }
 
@@ -744,7 +748,7 @@
     // Who is actually standing in the doorway, and what they add to the price
     // of getting past them.
     var con = RZ.field.contender(S, idx);
-    var fieldDiff = RZ.field.difficulty(S, idx);
+    var press = RZ.field.pressure(S, idx);
     var against = con ? { name: con.fig.name, role: con.fig.role, incumbent: con.incumbent,
                           region: (c.regionById[con.fig.regionId] || {}).name } : null;
 
@@ -766,7 +770,7 @@
     if (rung.how === 'internal') {
       S.flags.lastInternal = S.turn;
       var diff = 30 + rung.tier * 9 + (S.parties[S.player.partyId].machine - 50) * 0.45 +
-                 c.inst.incumbency * 0.12 + fieldDiff;
+                 c.inst.incumbency * 0.12 + press * 62;
       var r = RZ.elections.primaryContest(S, diff);
       if (r.won) { promote(S, 'The ' + c.terms.branch + 'es voted for you.'); }
       else { api.add('party', -RZ.range(1, 4)); api.add('grassroots', -RZ.range(0, 2)); }
@@ -777,7 +781,7 @@
       // the higher the rung and the harder the machine, the more delegates you must already own
       var pst = S.parties[S.player.partyId];
       var diff2 = 45 + rung.tier * 4.2 + (pst.machine - 50) * 0.6 +
-                  c.inst.incumbency * 0.25 + c.inst.patronage * 0.18 + fieldDiff;
+                  c.inst.incumbency * 0.25 + c.inst.patronage * 0.18 + press * 34;
       if (rung.id === 'leader' || rung.id === 'deputyleader') {
         // you do not beat a strong incumbent. You wait until they are wounded.
         diff2 += pst.gov ? 15 : -8;
@@ -800,7 +804,7 @@
       // primary first (where parties exist), then the ballot
       var pdiff = (c.house.method !== 'nonparty' ? 26 : 30) + rung.tier * 7 +
                   (S.parties[S.player.partyId].machine - 50) * 0.3 + c.inst.patronage * 0.1 +
-                  fieldDiff * 0.7;
+                  press * 55;
       var pr = RZ.elections.primaryContest(S, pdiff);
       if (!pr.won) {
         api.add('party', -RZ.range(2, 6));
@@ -852,7 +856,7 @@
     var score = req.ok
       ? P.standing.leader * 0.5 + P.standing.party * 0.28 + P.fame * 0.22 - scandal + RZ.range(-16, 16)
       : -999;
-    var need = 46 + rung.tier * 2.6 + (rung.id === 'hos' ? 26 : 0) + RZ.field.difficulty(S, idx) * 0.45;
+    var need = 46 + rung.tier * 2.6 + (rung.id === 'hos' ? 26 : 0) + RZ.field.pressure(S, idx) * 12;
 
     if (score >= need) {
       if (rung.id === 'hos') S.flags.postVacant = false;
@@ -888,7 +892,9 @@
     var c = RZ.COUNTRIES[S.countryId];
     var P = S.player;
 
-    if (P.health <= 4) { endGame(S, 'health'); return; }
+    // The body is also the clock. Past seventy a collapse is old age and should
+    // be written up as old age, not as a heart attack in an office.
+    if (P.health <= 4) { endGame(S, P.age >= 68 ? 'age' : 'health'); return; }
     if (P.age >= 78 && RZ.chance(0.08)) { endGame(S, 'age'); return; }
 
     // scandal breaking on its own
@@ -903,6 +909,18 @@
           body: 'A story you had hoped was dead: ' + RZ.esc(d.label.toLowerCase()) + '. It is on every front page and your phone will not stop.',
           deltas: api.deltas.slice(), tone: 'bad' });
       }
+    }
+
+    // You said it was the last one, in front of somebody who wrote the year on
+    // the office wall in pen. The term ends at the next general election.
+    if (S.flags.announcedLast && S.lastElectionYear > S.flags.announcedLast) {
+      P.record.push({ year: S.date.year, text: 'Stood down at the end of the term, as announced.' });
+      pushFeed(S, { kind: 'big', src: 'The end of it', title: 'You did not stand again',
+        body: 'The nomination closed without your name on it, for the first time in ' +
+              (S.date.year - c.startYear) + ' years. Somebody else is on the poster outside the office.',
+        tone: 'good' });
+      endGame(S, 'retire');
+      return;
     }
 
     // coup / palace risk

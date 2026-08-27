@@ -13,7 +13,9 @@ network calls.
 
 **As an Android app:** download `kgosi-cadre.apk` from the
 [latest build](https://github.com/barumpofu-art/ruza-app/releases/tag/kgosi-cadre-latest),
-open it, and allow installs from your browser when asked. It is a WebView shell around the
+open it, and allow installs from your browser when asked. That tag always points at the
+newest green build; each released version also gets its own permanent tag
+(`kgosi-cadre-v1.1.0`), so a build can be gone back to. It is a WebView shell around the
 same web app in `android/`, so there is only ever one copy of the source. CI installs every
 build on an Android 14 emulator and plays a career through it before publishing.
 
@@ -109,9 +111,12 @@ js/engine.js          state, the monthly loop, the action API, promotion and dan
 js/governance.js      the presidency, budgets, election night, legacy and obituary
 js/ui.js              rendering
 js/main.js            bootstrap and flow control
+VERSION               the released version; js/core.js must carry the same string
 android/              WebView wrapper that packages the above as an APK
 test/dialogue-sim.mjs walks every branch of every conversation
 test/career-sim.mjs   plays whole careers in every country, asserting invariants
+test/page-smoke.mjs   plays the real page in a real browser over devtools
+test/page-smoke.sh    serves game/, starts Chromium, and hands it to that test
 test/apk-smoke.mjs    drives the packaged app in a real WebView over devtools
 test/apk-smoke.sh     installs the APK on an emulator and hands it to that test
 ```
@@ -129,17 +134,33 @@ chromium --headless=new --remote-debugging-port=9222 http://127.0.0.1:8899/index
 PAGE_ORIGIN=127.0.0.1 node test/apk-smoke.mjs
 ```
 
-Both simulations run in CI before anything is built:
+All three run in CI before anything is built:
 
 ```
 node game/test/dialogue-sim.mjs
 node game/test/career-sim.mjs --careers 4 --verbose
+bash game/test/page-smoke.sh
 ```
+
+The first two load the game's modules into a Node sandbox, which means neither ever loads
+`ui.js` or `main.js`. `page-smoke` covers those: it serves the folder, opens it in headless
+Chromium, renders every pane, plays a year, reloads and resumes the saved career through
+the Continue button, and renders the obituary — failing on any exception or console error.
+Set `CHROME` if it cannot find a browser.
 
 `career-sim` plays each country twice over — once as a player who takes whatever is on the
 desk, and once as one that reads what the next rung wants and buys it. The two bracket the
 balance: if the drifter reaches State House the ladder is too soft, and if the climber
 never does it is impossible.
+
+## Releasing
+
+`game/VERSION` is the single source of truth, and `js/core.js` carries the same string so
+the title screen can print it. CI checks the two agree, stamps both into the APK's
+`versionName`, checks the built package really says so, and then publishes: the rolling
+`kgosi-cadre-latest` tag moves on every green build of `main`, and a permanent
+`kgosi-cadre-v<version>` tag is cut the first time a given version gets there. To release,
+bump both files in the same commit.
 
 Careers are saved to `localStorage` after every turn. The RNG is seeded, so a career is
 reproducible from its seed.
