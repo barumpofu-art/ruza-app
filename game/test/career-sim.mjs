@@ -184,6 +184,8 @@ function climbPick(S, avail) {
   return RZ.pick(avail);
 }
 
+const shares = [];
+
 function playCareer(countryId, seed, strategy) {
   const c = RZ.COUNTRIES[countryId];
   RZ.seed(seed);
@@ -243,6 +245,10 @@ function playCareer(countryId, seed, strategy) {
     // ---- contest whatever is contestable ----
     const cs = RZ.engine.contestStatus(S);
     if (cs.available && (strategy === 'climb' || RZ.chance(0.85))) {
+      // What the whip count said before committing. The distribution of this
+      // across many careers is the real measure of whether a contest is a
+      // decision or a formality.
+      if (cs.count) shares.push(cs.count.share);
       const r = RZ.engine.contest(S);
       if (r) {
         stats.contests++;
@@ -330,7 +336,72 @@ function playCareer(countryId, seed, strategy) {
            years: S.date.year - c.startYear, score: Math.round(lg.score) };
 }
 
-/* ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------
+   Balance: how hard is a contest for somebody who has only just become
+   eligible for it?
+
+   This is the number that decides whether the ladder is a decision or a
+   formality, and it is not the same as the win rate the careers above
+   report — those players grind every month with nothing else to do, so
+   they arrive at a contest far past the bar. This sets up a player who has
+   exactly what the rung asks for and no more, and asks what share of the
+   room they would take. Somewhere near half is the target: qualifying gets
+   you into the contest, it does not win it.
+   ------------------------------------------------------------------ */
+function marginalContests() {
+  const rows = [];
+  for (const cid of Object.keys(RZ.COUNTRIES)) {
+    const c = RZ.COUNTRIES[cid];
+    for (let seed = 0; seed < 5; seed++) {
+      RZ.seed(4000 + seed * 131);
+      const S = RZ.engine.newGame({
+        countryId: cid, name: 'Marginal', gender: 'f',
+        regionId: RZ.pick(c.regions).id, bgId: RZ.pick(RZ.BACKGROUNDS).id,
+        partyId: c.parties[0].id, age: 34, seed: 4000 + seed * 131
+      });
+      const L = RZ.ladderFor(cid);
+      for (let idx = 1; idx < L.length; idx++) {
+        const rung = L[idx];
+        if (!['internal', 'public', 'conference'].includes(rung.how)) continue;
+        S.player.rungIdx = idx - 1;
+        const req = rung.req || {};
+        // exactly the bar, nothing above it
+        S.player.standing.grassroots = Math.max(S.player.standing.grassroots, req.grassroots || 0);
+        S.player.standing.party = Math.max(S.player.standing.party, req.party || 0);
+        S.player.fame = Math.max(S.player.fame, req.fame || 0);
+        S.player.regionSupport[S.player.regionId] = Math.min(100, 24 + idx * 4);
+        RZ.field.syncLeadership(S);
+        const con = RZ.field.contender(S, idx);
+        const r = rung.how === 'conference'
+          ? RZ.elections.conferenceVote(S, con, { noNoise: true })
+          : RZ.elections.primaryContest(S, con, { noNoise: true });
+        if (!Number.isFinite(r.pct)) fail(`${cid} rung ${rung.id}`, `marginal share is ${r.pct}`);
+        rows.push({ tier: rung.tier, how: rung.how, share: r.pct });
+      }
+    }
+  }
+  return rows;
+}
+
+const marginal = marginalContests();
+{
+  const sorted = marginal.map((r) => r.share).sort((a, b) => a - b);
+  const med = sorted[Math.floor(sorted.length / 2)];
+  console.log(`marginal contests (a player who has only just qualified): median share ${med.toFixed(1)}%`);
+  const byHow = {};
+  for (const r of marginal) (byHow[r.how] ||= []).push(r.share);
+  for (const how of Object.keys(byHow).sort()) {
+    const g = byHow[how].sort((a, b) => a - b);
+    console.log(`  ${how.padEnd(11)} median ${g[Math.floor(g.length / 2)].toFixed(1)}%  (n=${g.length})`);
+  }
+  // Qualifying must neither win the contest nor be hopeless. If a change
+  // pushes this out of range the ladder has stopped being a decision, and
+  // that is worth failing over rather than discovering months later.
+  if (med > 55) fail('balance', `qualifying all but wins the contest (median ${med.toFixed(1)}%) — the ladder is a formality`);
+  if (med < 32) fail('balance', `qualifying leaves you hopeless (median ${med.toFixed(1)}%) — the requirements and the contest are both walls`);
+  console.log('');
+}
+
 const ids = Object.keys(RZ.COUNTRIES);
 console.log(`playing ${CAREERS} careers in each of ${ids.length} countries, as ${STRATEGIES.join(' and ')}\n`);
 
@@ -363,6 +434,13 @@ for (const strategy of STRATEGIES) {
 console.log(`\n  ${totals.turns} months played, ${totals.actions} actions, ${totals.meetings} meetings,`);
 console.log(`  ${totals.events} events (${totals.eventRooms} of them rooms), ${totals.contests} contests (${totals.wins} won, ${totals.beatenBy} lost to a named rival),`);
 console.log(`  ${totals.elections} general elections, ${totals.appointments} appointments, ${totals.budgets} budgets.`);
+if (shares.length) {
+  const sorted = shares.slice().sort((a, b) => a - b);
+  const at = (q) => sorted[Math.floor(sorted.length * q)].toFixed(0);
+  const tight = shares.filter((v) => v >= 40 && v <= 60).length / shares.length * 100;
+  console.log(`  whip count when contesting: median ${at(0.5)}%, ` +
+    `quartiles ${at(0.25)}%-${at(0.75)}%; ${tight.toFixed(0)}% entered within 40-60%.`);
+}
 console.log('  endings: ' + Object.entries(endings).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', '));
 for (const strategy of STRATEGIES) {
   const rows = Object.keys(ceilings).filter((k) => k.startsWith(strategy + ':'))

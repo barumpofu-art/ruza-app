@@ -684,6 +684,35 @@
     return { ok: missing.length === 0, missing: missing };
   }
 
+  // What your organisers think they can deliver, as of this month.
+  //
+  // This is the difference between a contest being a button and a contest being
+  // a decision: you can see roughly where you stand before you commit, and
+  // decide to wait. It is deliberately not exact — a count is only as good as
+  // the organisation doing the counting, so a player with a thin party standing
+  // and no slate is told a number they cannot trust.
+  //
+  // Held for the month rather than recomputed on every render, so the figure
+  // does not flicker while you look at it.
+  function whipCount(S, rung, con) {
+    if (!rung || ['conference', 'internal', 'public'].indexOf(rung.how) < 0) return null;
+    var held = S.flags.count;
+    if (held && held.turn === S.turn && held.rungId === rung.id) return held;
+
+    var truth = rung.how === 'conference'
+      ? RZ.elections.conferenceVote(S, con, { noNoise: true }).pct
+      : RZ.elections.primaryContest(S, con, { noNoise: true }).pct;
+    // Better organisation counts better: party standing and a slate of people
+    // who report back honestly are what shrink the error.
+    var err = Math.max(2.5, 13 - S.player.standing.party * 0.11 - RZ.field.allies(S).length * 1.1);
+    S.flags.count = {
+      turn: S.turn, rungId: rung.id,
+      share: clamp(truth + RZ.noise(err), 1, 99),
+      err: err, soft: err > 7
+    };
+    return S.flags.count;
+  }
+
   // Can you contest the next rung right now?
   function contestStatus(S) {
     var c = RZ.COUNTRIES[S.countryId];
@@ -692,6 +721,7 @@
     var req = meetsRequirements(S, rung);
     var st = { rung: rung, req: req, available: false, reason: '', how: rung.how };
     var con = RZ.field.contender(S, S.player.rungIdx + 1);
+    st.count = whipCount(S, rung, con);
     if (con) {
       st.against = {
         name: con.fig.name, role: con.fig.role, incumbent: con.incumbent,
@@ -748,7 +778,6 @@
     // Who is actually standing in the doorway, and what they add to the price
     // of getting past them.
     var con = RZ.field.contender(S, idx);
-    var press = RZ.field.pressure(S, idx);
     var against = con ? { name: con.fig.name, role: con.fig.role, incumbent: con.incumbent,
                           region: (c.regionById[con.fig.regionId] || {}).name } : null;
 
@@ -769,26 +798,14 @@
 
     if (rung.how === 'internal') {
       S.flags.lastInternal = S.turn;
-      var diff = 30 + rung.tier * 9 + (S.parties[S.player.partyId].machine - 50) * 0.45 +
-                 c.inst.incumbency * 0.12 + press * 62;
-      var r = RZ.elections.primaryContest(S, diff);
+      var r = RZ.elections.primaryContest(S, con);
       if (r.won) { promote(S, 'The ' + c.terms.branch + 'es voted for you.'); }
       else { api.add('party', -RZ.range(1, 4)); api.add('grassroots', -RZ.range(0, 2)); }
       return settle(r.won, 'internal', r);
     }
 
     if (rung.how === 'conference') {
-      // the higher the rung and the harder the machine, the more delegates you must already own
-      var pst = S.parties[S.player.partyId];
-      var diff2 = 45 + rung.tier * 4.2 + (pst.machine - 50) * 0.6 +
-                  c.inst.incumbency * 0.25 + c.inst.patronage * 0.18 + press * 34;
-      if (rung.id === 'leader' || rung.id === 'deputyleader') {
-        // you do not beat a strong incumbent. You wait until they are wounded.
-        diff2 += pst.gov ? 15 : -8;
-        if (pst.gov && S.nation.govApproval < 38) diff2 -= 24;
-        if (!pst.gov && S.player.electionsLost > 0) diff2 -= 8;
-      }
-      var cv = RZ.elections.conferenceVote(S, diff2);
+      var cv = RZ.elections.conferenceVote(S, con);
       if (cv.won) {
         promote(S, 'The ' + c.terms.conference + ' elected you.');
         if (rung.id === 'leader') { S.player.isLeader = true; S.parties[S.player.partyId].leaderName = S.player.name; }
@@ -802,10 +819,7 @@
 
     if (rung.how === 'public') {
       // primary first (where parties exist), then the ballot
-      var pdiff = (c.house.method !== 'nonparty' ? 26 : 30) + rung.tier * 7 +
-                  (S.parties[S.player.partyId].machine - 50) * 0.3 + c.inst.patronage * 0.1 +
-                  press * 55;
-      var pr = RZ.elections.primaryContest(S, pdiff);
+      var pr = RZ.elections.primaryContest(S, con);
       if (!pr.won) {
         api.add('party', -RZ.range(2, 6));
         return settle(false, 'primary', pr);
@@ -1052,7 +1066,7 @@
   RZ.engine = {
     newGame: newGame, mkApi: mkApi, availableActions: availableActions, doAction: doAction,
     endTurn: endTurn, rollEvent: rollEvent, resolveEvent: resolveEvent,
-    contestStatus: contestStatus, contest: contest, promote: promote, nextRung: nextRung,
+    contestStatus: contestStatus, contest: contest, whipCount: whipCount, promote: promote, nextRung: nextRung,
     meetsRequirements: meetsRequirements, pushFeed: pushFeed, endGame: endGame,
     finishDialogue: finishDialogue, finishEventDialogue: finishEventDialogue,
     save: save, load: load, clearSave: clearSave, hasSave: hasSave,

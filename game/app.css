@@ -435,3 +435,12 @@ body{
   .opt-grid{ grid-template-columns:1fr 1fr; }
   .sgrid{ grid-template-columns:repeat(3,1fr); }
 }
+
+/* the whip count on the contest card */
+.whip{ margin-top:12px; padding-top:11px; border-top:1px solid var(--line-soft); }
+.whip-h{ display:flex; justify-content:space-between; align-items:baseline;
+  font-size:.7rem; letter-spacing:.09em; text-transform:uppercase; color:var(--text-faint); margin-bottom:7px; }
+.whip-h .sub{ text-transform:none; letter-spacing:0; font-size:.72rem; }
+.whip-bar{ height:7px; border-radius:4px; background:var(--line-soft); overflow:hidden; margin-bottom:8px; position:relative; }
+.whip-bar::after{ content:''; position:absolute; left:50%; top:-2px; bottom:-2px; width:1px; background:var(--text-faint); opacity:.7; }
+.whip-bar span{ display:block; height:100%; border-radius:4px; transition:width .3s ease; }

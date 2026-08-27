@@ -243,6 +243,27 @@
         ' against ' + RZ.round(v.best, 1) + '% for the strongest rival. ' +
         (v.safe ? 'This is winnable ground.' : 'You cannot win a seat here. Move, or change party.') + '</p>';
     }
+    // What your people think they can deliver. The point of showing it is that
+    // contesting becomes a decision you can get wrong in either direction:
+    // going too early, or waiting while somebody else gets stronger.
+    var count = '';
+    if (st.count) {
+      var sh = st.count.share;
+      var tone = sh >= 55 ? 'var(--green)' : sh >= 45 ? 'var(--gold)' : 'var(--red)';
+      var read = sh >= 62 ? 'That is comfortable, if the count is honest.'
+               : sh >= 52 ? 'That wins it, narrowly, and narrow counts have been wrong before.'
+               : sh >= 45 ? 'That is too close to call, and the room will decide it on the day.'
+               : sh >= 35 ? 'That loses. Not by enough to be hopeless — by enough to be humiliating.'
+               : 'That is not a contest, it is a demonstration.';
+      count = '<div class="whip"><div class="whip-h">The count' +
+        '<span class="sub">' + (st.count.soft ? 'thin, from people who guess' : 'firm, from people who know') + '</span></div>' +
+        '<div class="whip-bar"><span style="width:' + RZ.clamp(sh, 0, 100) + '%;background:' + tone + '"></span></div>' +
+        '<p class="note">Your organisers count <strong style="color:' + tone + '">' +
+        (st.count.soft ? 'somewhere around ' : 'roughly ') + Math.round(sh) + '%</strong>. ' + read +
+        (st.count.soft ? ' Build the party structures and a slate, and the counting itself gets better.' : '') +
+        '</p></div>';
+    }
+
     // The rung is not empty and never was. Say whose chair it is.
     var against = '';
     if (st.against && r.how !== 'auto') {
@@ -260,7 +281,7 @@
     return '<div class="card" style="border-left:3px solid var(--gold)">' +
       '<div class="block-h" style="margin:0 0 8px">Next rung<span class="sub">' + howLabel(r.how, c) + '</span></div>' +
       '<div style="font-family:var(--serif);font-size:1.12rem;font-weight:600;margin-bottom:6px">' + esc(r.title) + '</div>' +
-      body + against + viability + '</div>';
+      body + count + against + viability + '</div>';
   }
 
   function howLabel(how, c) {

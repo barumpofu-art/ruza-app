@@ -44,13 +44,159 @@
     f.wounded = 0;                     // decays; a wounded figure is beatable
     f.retired = false;
     f.fate = null;
-    return f;
+    return dress(S, f);
   }
 
   // How hard this person is to beat, right now.
   function strength(f) {
     return f.power + f.ambition * 0.22 - f.wounded * 9;
   }
+
+  /* ---------------------------------------------------------------
+     What they have, in the same currencies the player has it in
+
+     A contest used to compare the player's six growing standings against a
+     single scalar difficulty, which is why the player won ninety per cent of
+     them: one side of the comparison grew all career and the other did not.
+     Figures carry the same three standings and a local base, and the scoring
+     below is deliberately the same arithmetic for both sides.
+     --------------------------------------------------------------- */
+
+  // A politician is not strong at everything. What a figure is made of follows
+  // from the faction they belong to: the machine man has the register, the
+  // radical has the street, the reformer has the newspapers.
+  var SHAPE = {
+    machine:  { party: 1.22, grassroots: 0.92, fame: 0.72 },
+    radical:  { party: 0.78, grassroots: 1.24, fame: 1.00 },
+    reform:   { party: 0.86, grassroots: 0.82, fame: 1.26 },
+    old:      { party: 1.14, grassroots: 1.06, fame: 0.84 },
+    business: { party: 0.98, grassroots: 0.70, fame: 1.06 }
+  };
+
+  // Standing is derived, not stored. It was stored, and that was a bug: wounding
+  // a rival lowered their `power` while the standing a contest actually reads
+  // stayed frozen at the value they were created with, so leaking a file
+  // changed nothing about beating them. Deriving it means power, seniority and
+  // damage all flow through to the vote.
+  //
+  // Only the per-person jitter is kept, so a figure stays recognisably
+  // themselves between one month and the next.
+  function dress(S, f) {
+    f.jitter = { party: RZ.range(-7, 7), grassroots: RZ.range(-7, 7),
+                 fame: RZ.range(-7, 7), base: RZ.range(-6, 10) };
+    return f;
+  }
+
+  function standingOf(S, f) {
+    var m = SHAPE[f.faction] || SHAPE.machine;
+    var L = lad(S);
+    var j = f.jitter || { party: 0, grassroots: 0, fame: 0, base: 0 };
+    // Somebody holding an office cleared the bar that office demands — that is
+    // what makes them a peer of a player who has only just cleared it too.
+    var req = (L[f.rungIdx] || {}).req || {};
+    var bar = Math.max(req.grassroots || 0, req.party || 0, req.fame || 0);
+    var lvl = Math.max(20 + f.rungIdx * 3.2 + (f.power - 50) * 0.45, bar * 0.95);
+    var hurt = (f.wounded || 0) * 5;          // a damaged politician commands less
+
+    // The faction shape says what somebody is *made of*, but it must not put
+    // them below what their own office demanded of them: a sitting member has
+    // the grassroots of a sitting member whatever their faction, or a
+    // challenger walks into a constituency held by a man with no branches.
+    // That was the single biggest reason contests were a formality.
+    function axis(mult, floor, jit) {
+      return C100(Math.max(lvl * mult, floor * 0.92) - hurt + jit);
+    }
+    return {
+      party: axis(m.party, req.party || 0, j.party),
+      grassroots: axis(m.grassroots, req.grassroots || 0, j.grassroots),
+      fame: axis(m.fame, req.fame || 0, j.fame),
+      // Where they are from they are known, and if they hold the seat they are
+      // known well. Everywhere else they are a name.
+      base: C100(Math.max(lvl * 1.35, (req.grassroots || 0) * 0.95) - hurt + j.base)
+    };
+  }
+
+  // Older saves from before figures carried a jitter.
+  function ensureDressed(S, f) {
+    if (!f.jitter) dress(S, f);
+    return f;
+  }
+
+  // How much of a figure's local base counts in a given region.
+  function baseIn(f, st, regionId) {
+    return f.regionId === regionId ? st.base : st.base * 0.26;
+  }
+
+  /* --- the two scoring functions, each used for both sides --- */
+
+  // A selection contest inside one constituency: branch chairs, a nomination.
+  function primaryScore(who, regionId) {
+    return who.here * 1.15 + who.grassroots * 0.65 + who.party * 0.45 +
+           who.fame * 0.25 + who.charisma * 0.16 + who.spend * 0.6;
+  }
+
+  // A national delegate contest: how many of one region's delegates come to you.
+  function conferencePull(who) {
+    return who.here * 0.9 + who.party * 0.55 + who.fame * 0.30 +
+           who.leader * 0.10 + who.charisma * 0.16 + who.security +
+           who.slate + who.spend * 0.5;
+  }
+
+  // The player, expressed in the shape the scorers above expect.
+  function playerSide(S, regionId) {
+    var c = RZ.COUNTRIES[S.countryId], P = S.player;
+    return {
+      // Away from your own district you are whatever your name is worth. A
+      // national figure has a floor everywhere, which is most of what fame is
+      // for at a conference: delegates from a province you have never worked
+      // still know who you are.
+      here: Math.max(P.regionSupport[regionId] || 0, P.fame * 0.28),
+      grassroots: P.standing.grassroots, party: P.standing.party, fame: P.fame,
+      leader: P.standing.leader, charisma: P.stats.charisma,
+      security: P.standing.security * (c.inst.security / 170),
+      slate: Math.min(8, allies(S).length) * 2.5,
+      spend: S.campaign.delegateSpend || 0
+    };
+  }
+
+  // A figure, expressed the same way. Where the player has allies and money,
+  // an incumbent has the machine and the years — so those are what fill the
+  // same slots.
+  // A party does not put up a nobody against somebody strong. When a challenger
+  // is visibly ahead of what the office asks for, the people who would
+  // otherwise have split the vote stand aside and the machine consolidates
+  // behind one candidate. This is why running the score up has diminishing
+  // returns: past a point you are not buying a bigger margin, you are buying a
+  // better-organised opponent.
+  function consolidation(S, targetIdx) {
+    if (targetIdx === undefined) return 0;
+    var L = lad(S), P = S.player;
+    var req = (L[targetIdx] || {}).req || {};
+    var bar = Math.max(req.grassroots || 0, req.party || 0, req.fame || 0, 20);
+    var mine = Math.max(P.standing.grassroots, P.standing.party, P.fame);
+    return clamp((mine - bar) * 0.55, 0, 26);
+  }
+
+  function figureSide(S, f, regionId, incumbent, targetIdx) {
+    var c = RZ.COUNTRIES[S.countryId];
+    ensureDressed(S, f);
+    var st = standingOf(S, f);
+    var machine = (S.parties[f.partyId] ? S.parties[f.partyId].machine : 50) - 50;
+    return {
+      here: baseIn(f, st, regionId),
+      grassroots: st.grassroots, party: st.party, fame: st.fame,
+      leader: incumbent ? 70 : 40, charisma: 40 + f.ambition * 0.2,
+      security: (incumbent ? c.inst.security : c.inst.security * 0.4) / 170 * 40,
+      // The organisation an incumbent inherits with the office, against the
+      // slate the player had to build by hand. Kept modest: it is meant to be
+      // an advantage, not a wall.
+      slate: (incumbent ? 10 : 3) + machine * 0.16 + c.inst.incumbency * 0.07 +
+             consolidation(S, targetIdx),
+      spend: (c.inst.patronage / 100) * (incumbent ? 14 : 6)
+    };
+  }
+
+  RZ._contestScorers = { primaryScore: primaryScore, conferencePull: conferencePull };
 
   function live(S) {
     return (S.field || []).filter(function (f) { return f.alive && !f.retired; });
@@ -211,14 +357,14 @@
     var sitting = at(S, rungIdx);
 
     if (isSingular(L[rungIdx]) && sitting.length) {
-      return { fig: strongestFirst(sitting)[0], incumbent: true };
+      return { fig: strongestFirst(sitting)[0], incumbent: true, targetIdx: rungIdx };
     }
     var pool = sitting.concat(at(S, rungIdx - 1));
     if (!pool.length) return null;
     var best = pool.slice().sort(function (a, b) {
       return (strength(b) + b.ambition * 0.3) - (strength(a) + a.ambition * 0.3);
     })[0];
-    return { fig: best, incumbent: best.rungIdx === rungIdx };
+    return { fig: best, incumbent: best.rungIdx === rungIdx, targetIdx: rungIdx };
   }
 
   // How much of a problem the person in the doorway is, on a scale where 0 is
@@ -403,6 +549,10 @@
   RZ.field = {
     populate: populate, repopulate: repopulate, syncLeadership: syncLeadership,
     contender: contender, pressure: pressure,
+    playerSide: playerSide, figureSide: figureSide, ensureDressed: ensureDressed,
+    consolidation: consolidation,
+    primaryScore: primaryScore, conferencePull: conferencePull, dress: dress,
+    standingOf: standingOf,
     winsAgainstPlayer: winsAgainstPlayer, losesToPlayer: losesToPlayer,
     wound: wound, retire: retire, tick: tick,
     rivals: rivals, allies: allies, addRival: addRival, addAlly: addAlly, dropRival: dropRival,

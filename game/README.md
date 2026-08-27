@@ -54,6 +54,18 @@ way — a show of hands in a branch meeting, a delegate count at national confer
 public ballot, or a phone call from the principal on a Sunday evening that you can only
 make more likely, never demand.
 
+**Contests.** A contest is a comparison, not a threshold. Both you and whoever is standing
+in the doorway are scored by the same arithmetic — local base, grassroots, party standing,
+name recognition, whatever money has already been spent — and the result is a share of the
+room. Whoever holds an office has at least what that office demanded of them, so a sitting
+member is strong in their own constituency the way you are in yours.
+
+Before you commit, your organisers give you a count. It is not exact: how wrong it is
+depends on how good your organisation is, so a candidate with thin party structures and no
+slate is told a number they cannot trust. That is the decision the ladder is built around —
+go now at forty-five per cent, or spend two more years building while the incumbent also
+gets older, and somebody else may take the opening first.
+
 **The field.** Every rung already has somebody in it. Two dozen invented politicians hold
 the offices you want and climb towards the same ones you do, and a contest is resolved
 against whichever of them is standing in the doorway — not against a difficulty number.
@@ -147,6 +159,13 @@ The first two load the game's modules into a Node sandbox, which means neither e
 Chromium, renders every pane, plays a year, reloads and resumes the saved career through
 the Continue button, and renders the obituary — failing on any exception or console error.
 Set `CHROME` if it cannot find a browser.
+
+`career-sim` also measures the thing the win rate cannot: what a contest looks like for
+somebody who has *only just* qualified for it. Grinding careers arrive at a contest far
+past the bar and win almost everything, which says nothing about whether the ladder is a
+decision. The marginal share sits near forty per cent, and CI fails if it drifts above
+fifty-five (qualifying would all but win) or below thirty-two (qualifying would be
+pointless).
 
 `career-sim` plays each country twice over — once as a player who takes whatever is on the
 desk, and once as one that reads what the next rung wants and buys it. The two bracket the
