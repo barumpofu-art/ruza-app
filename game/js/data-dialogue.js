@@ -11,7 +11,14 @@
   'use strict';
   var P = RZ.pick;
 
+  // Every scene calls this, and it used to invent a stranger each time. It now
+  // resolves to a member of the cast, so the person who made you promise
+  // something in 2029 is the person sitting opposite you in 2031, with the
+  // memory of it. Roles that genuinely are a different person every time — the
+  // woman at the front of a kgotla, the caller on the phone-in — are listed in
+  // RZ.cast.ANON and still get a stranger.
   function who(a, role, org) {
+    if (RZ.cast) return RZ.cast.who(a.S, a.C, role, org);
     return { name: RZ.makeName(a.C), role: role, org: org };
   }
   function money(a, m) { return RZ.money(a.wage(m), a.C.cur.sym); }
@@ -45,13 +52,20 @@
         } ,
           answers: [
             { t: 'Above inflation. You have my word.', mood: 3, tag: 'promise',
-              run: function (a) { a.add('grassroots', a.rng(4, 7)); a.add('business', -a.rng(2, 5)); a.promise('wages', 'An above-inflation public service wage rise'); },
+              run: function (a) {
+                a.add('grassroots', a.rng(4, 7)); a.add('business', -a.rng(2, 5));
+                a.promise('wages', 'An above-inflation public service wage rise');
+                a.remember('You gave me your word on the wage bill', 'promise');
+              },
               reply: '"Say that again outside, into a microphone, and I will believe you." She writes the date down.' },
             { t: 'I cannot promise that. I can promise not to lie to you about why.', mood: 1,
               run: function (a) { a.add('stats.integrity', a.rng(1, 3)); a.add('party', a.rng(1, 3)); a.add('grassroots', a.rng(0, 2)); },
               reply: '"Hm." She sits back. "That is the first honest answer this room has heard since March."' },
             { t: 'The fiscal position is under review by Treasury.', mood: -3,
-              run: function (a) { a.add('grassroots', -a.rng(3, 6)); a.add('media', -a.rng(0, 2)); },
+              run: function (a) {
+                a.add('grassroots', -a.rng(3, 6)); a.add('media', -a.rng(0, 2));
+                a.remember('You told a hall full of my members it was under review', 'bad');
+              },
               reply: '"Under review." She repeats it to the room and somebody at the back laughs.' }
           ]
         },
@@ -1163,6 +1177,7 @@
             { t: 'Tell them honestly that this is a council function', mood: -3,
               run: function (a) {
                 a.wardTrust(-RZ.range(8, 15)); a.add('grassroots', -a.rng(4, 9));
+                a.remember('You called it a council function while we stood in your office', 'bad');
               },
               reply: '"A council function." The chair stands up. "We will remember that it was a council function." ' +
                      'They file out and the room is very quiet and there are still six empty chairs.' }
@@ -1874,11 +1889,15 @@
               run: function (a) {
                 a.add('capital', -a.rng(5, 10)); a.add('party', a.rng(3, 7)); a.add('fame', -a.rng(1, 4));
                 var b = a.S.bill; if (b) b.blocs.forEach(function (x) { if (x.id === 'loyal') x.lean = RZ.clamp(x.lean + RZ.range(10, 22), -95, 95); });
+                a.remember('You let me put the party\u2019s name on your bill', 'good');
               },
               reply: '"Then it is the party’s bill and the party’s win, and your name is in paragraph four." ' +
                      'He makes a mark against eleven names on the loyal side without being asked.' },
             { t: 'It is mine. That is the whole point of it.', mood: -1,
-              run: function (a) { a.add('fame', a.rng(3, 7)); a.add('stats.integrity', a.rng(1, 3)); a.add('party', -a.rng(2, 5)); },
+              run: function (a) {
+                a.add('fame', a.rng(3, 7)); a.add('stats.integrity', a.rng(1, 3)); a.add('party', -a.rng(2, 5));
+                a.remember('You wanted your own name on it and you got it', 'flat');
+              },
               reply: '"Then it is yours on the way down as well." He does not say it unkindly. He says it the ' +
                      'way a man says a thing he has watched happen four times.' },
             { t: 'It is the leader’s bill. He simply has not been told yet.', mood: 2,
@@ -2272,6 +2291,7 @@
                 a.promise('bloc-' + id, 'What you promised ' + RZ.blocs.byId[id].name.toLowerCase() +
                   ' in front of a room', { due: 8 });
                 a.add('capital', -a.rng(3, 8));
+                a.remember('You said you were ours, in front of everybody', 'promise');
               },
               reply: 'They write it down and they read it back to you and they make you say yes to the read-back. ' +
                      'That is not a conversation any more. That is a document.' },
@@ -2281,6 +2301,7 @@
                 var d = {}; d[id] = -RZ.range(3, 9);
                 a.blocs(d);
                 a.add('stats.integrity', a.rng(1, 4)); a.add('media', a.rng(1, 4));
+                a.remember('You said you represented everybody, which meant no', 'bad');
               },
               reply: '"Everybody." The chairperson closes the file. "Everybody is what people say when the ' +
                      'answer is no. We are not angry. We are just going to stop coming."' },

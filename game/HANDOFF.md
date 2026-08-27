@@ -3,7 +3,7 @@
 State of the build, the conventions it is written to, and what is next. Written so a
 fresh session can pick the work up without re-reading the whole tree.
 
-Last updated at commit `86747fb`.
+Last updated at commit `89f410d` plus the persistent cast.
 
 ---
 
@@ -42,8 +42,12 @@ price.
 | `js/legislation.js` | Drafting a bill and the four-week whipping sprint |
 | `js/contender.js` | The rival who starts the same year and climbs the same ladder |
 | `js/blocs.js` | Six demographic blocs cutting across the regions |
+| `js/cast.js` | The persistent cast: the same people, meeting after meeting |
 | `js/ui.js` | All rendering. One module, no framework |
 | `js/main.js` | Bootstrap and flow control |
+
+The conversation engine also hands each scene `a.them` (the person opposite),
+`a.remember(what, tone)`, `a.recalls(tone)` and `a.rel()`.
 
 ## Conventions that matter
 
@@ -107,7 +111,7 @@ node game/test/monte-carlo.mjs      # what do the rules do at scale?
   topic reachable through an action or a summon. If a scene needs state to exist, build
   it in `prepare()` rather than making the scene defensive about a state the game never
   produces.
-- **mechanics** builds the exact state each system needs. 440 checks in 19 sections.
+- **mechanics** builds the exact state each system needs. 474 checks in 20 sections.
   This is where anything gated on high office gets tested, because no automated policy
   reaches the presidency reliably.
 - **monte-carlo** runs 1,000 seeded careers in two cohorts — `random` (a coin, the honest
@@ -131,7 +135,7 @@ Two traps that have cost time:
 
 Working and tested: the ten countries and their electoral systems · the origin scenes
 and six persistent traits · the monthly action deck and event cards · 39 conversation
-scenes · elections at every level · the eight-week campaign sprint with a war chest that
+scenes and a persistent cast that remembers them · elections at every level · the eight-week campaign sprint with a war chest that
 cannot be filled cleanly · constituency projects, trust and abandonment · MP duties ·
 tier-distinct phases for minister, VP and president · burnout, black swans, purges,
 promises, state capture and SADC intervention · the caucus revolt with a non-fatal
@@ -143,13 +147,14 @@ contender · six demographic blocs.
 The direction agreed with the user is **towards Suzerain**: a scene-based narrative
 engine rather than a dashboard with prose on it. Build order, highest leverage first:
 
-1. **A persistent named cast.** *This is the single biggest gap.* `who()` in
-   `data-dialogue.js` currently generates a fresh random name every scene, so the union
-   leader you made a promise to in 2029 is a different person in 2031. You cannot betray
-   somebody you have never met twice. Ten to fourteen named people per career, with
-   roles, factions and a relationship score, resolved by role rather than invented.
-2. **Scenes that remember.** Answers write to a per-person memory; later scenes quote it
-   back. *"You told me in 2029 you would fight for the wage bill."*
+1. ~~**A persistent named cast.**~~ **Done** (`js/cast.js`). `who()` resolves a role to a
+   permanent person with a relationship score, a meeting count and a short memory. Roles
+   that genuinely are a stranger each time are listed in `RZ.cast.ANON`. No scene had to
+   be rewritten — the change is entirely inside the helper they all already called.
+2. ~~**Scenes that remember.**~~ **Mostly done.** `a.remember(what, tone)` files
+   something said in front of somebody; `RZ.cast.greeting()` opens a later meeting by
+   quoting it back. Seven answers are seeded so far — *more scenes should call
+   `a.remember()`*, which is the cheapest remaining writing task in the game.
 3. **Multi-speaker rooms.** `convo.speaker` is singular today. An `argument` beat type
    where two NPCs trade lines and your answer sides with one of them.
 4. **The Docket.** Replace the action grid with a scheduled day of named appointments

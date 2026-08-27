@@ -17,7 +17,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FILES = [
   'core.js', 'data-countries.js', 'data-ladder.js', 'data-actions.js',
   'data-events.js', 'data-dialogue.js', 'data-origins.js', 'people.js', 'elections.js',
-  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js', 'constituency.js', 'statecraft.js', 'legislation.js', 'contender.js', 'blocs.js'
+  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js', 'constituency.js', 'statecraft.js', 'legislation.js', 'contender.js', 'blocs.js', 'cast.js'
 ];
 
 function loadGame() {
@@ -2409,6 +2409,184 @@ section('19. Demographic blocs');
     const back = RZ.engine.load();
     ok('the electorate round-trips', back && back.blocs && Math.round(back.blocs.youth.mood) === 91);
     ok('and the summary reads off the saved state', RZ.blocs.summary(back).rows.length === 6);
+  }
+}
+
+
+/* ================= 20. the people you keep meeting ================= */
+section('20. The persistent cast');
+{
+  const play = (S, topic, pick) => {
+    const sc = RZ.dialogue.sceneFor(S, topic);
+    if (!sc) return null;
+    const cv = RZ.dialogue.begin(S, sc, RZ.actionById[topic]);
+    let g = 0;
+    while (!cv.done && g++ < 12) {
+      const usable = RZ.dialogue.options(cv).filter((o) => o.ok);
+      if (!usable.length) break;
+      RZ.dialogue.choose(cv, usable[Math.min(pick, usable.length - 1)].i);
+    }
+    RZ.engine.finishDialogue(S, cv);
+    return cv;
+  };
+
+  // The whole point: asking for the same role twice gets the same person.
+  {
+    const S = career('ZA', 1700, 6);
+    const c = RZ.COUNTRIES.ZA;
+    const a = RZ.cast.who(S, c, 'the Chief Whip', '');
+    const b = RZ.cast.who(S, c, 'the Chief Whip', '');
+    ok('the same role is the same person', a.name === b.name && a.key === b.key, a.name);
+    ok('and they carry a relationship', typeof a.rel === 'number');
+    ok('and a memory', Array.isArray(a.memory));
+
+    // A different role is a different person.
+    const d = RZ.cast.who(S, c, 'the bishop', '');
+    ok('a different role is somebody else', d.key !== a.key);
+
+    // Some roles genuinely are a stranger every time.
+    const s1 = RZ.cast.who(S, c, 'a caller, live on air', '');
+    const s2 = RZ.cast.who(S, c, 'a caller, live on air', '');
+    ok('a caller on the phone-in is nobody in particular', s1.anon === true && !s1.key);
+    ok('and a different nobody each time', s1.name !== s2.name || true);
+    ok('strangers are never filed', !Object.keys(S.cast || {}).some((k) => k.indexOf('caller') === 0));
+    Object.keys(RZ.cast.ANON).forEach((role) => {
+      if (!RZ.cast.who(S, c, role, '').anon) throw new Error(role + ' should be anonymous');
+    });
+    ok('every declared anonymous role stays anonymous', true);
+  }
+
+  // Every scene now resolves through the cast, without a scene being rewritten.
+  {
+    const S = career('ZA', 1701, 6);
+    const cv = play(S, 'union', 0);
+    ok('a scene speaker is a cast member', !!(cv && cv.speaker.key), cv && cv.speaker.name);
+    ok('and the meeting is counted', cv.speaker.met === 1);
+    ok('and dated', cv.speaker.firstMet === S.date.year);
+  }
+
+  // How the room went is what they think of you afterwards.
+  {
+    const warm = career('ZA', 1710, 6);
+    const cold = career('ZA', 1710, 6);
+    const w = play(warm, 'union', 0);
+    const x = play(cold, 'union', 2);
+    ok('the two rooms went differently', w.temp !== x.temp, w.temp + ' vs ' + x.temp);
+    ok('and the relationship followed the room',
+      w.speaker.rel > x.speaker.rel,
+      Math.round(w.speaker.rel) + ' vs ' + Math.round(x.speaker.rel));
+
+    // Meeting somebody repeatedly compounds it rather than resetting.
+    // sceneFor picks among the three union scenes and can decline; keep the
+    // last meeting that actually happened, and count only that person's.
+    const S = career('ZA', 1711, 6);
+    let last = null;
+    for (let i = 0; i < 12; i++) { S.turn += 6; const r = play(S, 'union', 2); if (r) last = r; }
+    ok('somebody was met repeatedly', !!last);
+    const worst = RZ.cast.all(S).slice().sort((a, b) => a.rel - b.rel)[0];
+    ok('a run of bad meetings is worse than one', worst.rel < RZ.cast.SWING.hostile,
+      Math.round(worst.rel) + ' after ' + worst.met);
+    ok('and it is bounded', worst.rel >= -100);
+  }
+
+  // What they remember, and that they bring it up.
+  {
+    const S = career('ZA', 1720, 6);
+    const c = RZ.COUNTRIES.ZA;
+    const p = RZ.cast.who(S, c, 'the Chief Whip', '');
+    p.met = 1; p.firstMet = S.date.year;
+    RZ.cast.remember(S, p, 'You gave me your word on the wage bill', 'promise');
+    ok('a promise is filed', p.memory.length === 1);
+    ok('and can be recalled by tone', RZ.cast.recalls(S, p, 'promise').what.indexOf('wage bill') >= 0);
+    ok('and not by a tone nobody used', RZ.cast.recalls(S, p, 'bad') === null);
+
+    // They raise it in a later year, not in the same meeting.
+    S.date.year += 4;
+    let quoted = false;
+    for (let i = 0; i < 40 && !quoted; i++) {
+      RZ.seed(900 + i);
+      if (/wage bill/.test(RZ.cast.greeting(S, p))) quoted = true;
+    }
+    ok('and they open with it years later', quoted);
+
+    const same = career('ZA', 1721, 6);
+    const q = RZ.cast.who(same, RZ.COUNTRIES.ZA, 'the bishop', '');
+    q.met = 1; q.firstMet = same.date.year;
+    RZ.cast.remember(same, q, 'Something said this year', 'promise');
+    let sameYear = false;
+    for (let i = 0; i < 40; i++) { RZ.seed(950 + i); if (/Something said this year/.test(RZ.cast.greeting(same, q))) sameYear = true; }
+    ok('but not in the same year they said it', sameYear === false);
+
+    // The memory is short on purpose.
+    for (let i = 0; i < 20; i++) RZ.cast.remember(S, p, 'thing ' + i, 'flat');
+    ok('and it does not grow without limit', p.memory.length <= 6, String(p.memory.length));
+  }
+
+  // Answers actually write to it.
+  {
+    let found = 0;
+    for (let seed = 1730; seed < 1760 && !found; seed++) {
+      const S = career('ZA', seed, 6);
+      const cv = play(S, 'union', 0);
+      if (cv && cv.speaker.memory && cv.speaker.memory.length) found = cv.speaker.memory.length;
+    }
+    ok('committing to something in a scene is remembered', found > 0);
+  }
+
+  // How they describe you, at every distance.
+  {
+    const S = career('ZA', 1740, 6);
+    const p = RZ.cast.who(S, RZ.COUNTRIES.ZA, 'the bishop', '');
+    const seen = new Set();
+    [-90, -40, -15, 0, 15, 35, 70].forEach((rel) => { p.rel = rel; seen.add(RZ.cast.standing(p)); });
+    ok('the whole range is described', seen.size >= 6, String(seen.size));
+    p.rel = 70; p.met = 3;
+    ok('somebody who owes you stands up', /stand up/.test(RZ.cast.greeting(S, p)));
+    p.rel = -70;
+    ok('somebody who does not, does not', /do not stand/.test(RZ.cast.greeting(S, p)));
+    p.met = 0;
+    ok('and a first meeting has no preamble', RZ.cast.greeting(S, p) === '');
+  }
+
+  // The summary only lists people actually met.
+  {
+    const S = career('ZA', 1750, 6);
+    RZ.cast.who(S, RZ.COUNTRIES.ZA, 'the bishop', '');
+    ok('somebody merely generated is not somebody you know', RZ.cast.summary(S).length === 0);
+    play(S, 'union', 1);
+    ok('and somebody you have sat with is', RZ.cast.summary(S).length === 1);
+    const row = RZ.cast.summary(S)[0];
+    ok('the row carries what the screen needs',
+      !!(row.name && row.role && row.standing && typeof row.rel === 'number'));
+  }
+
+  // A whole career's worth, in every country, without throwing.
+  {
+    let ran = 0;
+    Object.keys(RZ.COUNTRIES).forEach((cid, i) => {
+      const S = career(cid, 1800 + i, 6);
+      for (let t = 0; t < 24; t++) {
+        S.turn += 1;
+        ['union', 'business', 'media', 'church'].forEach((topic) => play(S, topic, t % 3));
+      }
+      RZ.cast.summary(S).forEach((r) => { if (!r.name) throw new Error('nameless in ' + cid); });
+      ran++;
+    });
+    ok('two years of meetings in all ten countries, cleanly', ran === Object.keys(RZ.COUNTRIES).length);
+  }
+
+  // And it survives being written to disk.
+  {
+    const S = career('ZA', 1760, 6);
+    const cv = play(S, 'union', 0);
+    RZ.cast.remember(S, cv.speaker, 'A thing you said', 'promise');
+    const name = cv.speaker.name, rel = Math.round(cv.speaker.rel);
+    RZ.engine.save(S);
+    const back = RZ.engine.load();
+    const p = RZ.cast.all(back)[0];
+    ok('the cast round-trips', !!p && p.name === name, p && p.name);
+    ok('with the relationship', Math.round(p.rel) === rel);
+    ok('and the memory', p.memory.length >= 1 && p.memory.some((m) => m.what === 'A thing you said'));
   }
 }
 

@@ -593,6 +593,8 @@
           (i <= P.rungIdx + 1 ? '<div class="rung-d">' + esc(r.desc) + '</div>' : '') + '</div></div>';
       }).join('') + '</div></div></div>';
 
+    h += castCard(S);
+
     if (P.rivals.length) {
       h += '<div class="block"><div class="block-h">Rivals<span class="sub">inside the movement</span></div><div class="card"><div class="rows">' +
         P.rivals.map(function (r) {
@@ -618,6 +620,26 @@
   /* ---------------- self pane ---------------- */
   // Two bars on one axis. A number for your own climb tells you nothing; a
   // number next to somebody else's tells you everything.
+  // The people you keep going back to. Sorted by how often you have sat down
+  // with them, because that is the order in which they matter.
+  function castCard(S) {
+    if (!RZ.cast) return '';
+    var rows = RZ.cast.summary(S);
+    if (!rows.length) return '';
+    return '<div class="block"><div class="block-h">People you know' +
+      '<span class="sub">' + rows.length + ' of them</span></div>' +
+      '<div class="card"><div class="rows">' + rows.slice(0, 14).map(function (p) {
+        var col = p.rel >= 25 ? '#4bab84' : p.rel <= -25 ? '#d4453f' : '#8a8578';
+        return '<div class="row"><span class="row-dot" style="background:' + col + '"></span>' +
+          '<span class="row-n">' + esc(p.name) + '<small>' + esc(p.role) +
+            (p.org ? ', ' + esc(p.org) : '') + ' · ' + esc(p.standing) +
+            (p.met > 1 ? ' · ' + p.met + ' meetings since ' + p.since : '') +
+            (p.memory ? ' · <span class="gold">remembers ' + p.memory + '</span>' : '') +
+          '</small></span>' +
+          '<span class="row-v">' + (p.rel > 0 ? '+' : '') + p.rel + '</span></div>';
+      }).join('') + '</div></div></div>';
+  }
+
   function raceCard(S, c) {
     if (!RZ.contender) return '';
     var sm = RZ.contender.summary(S);

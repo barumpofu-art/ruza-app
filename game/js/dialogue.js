@@ -49,6 +49,16 @@
       where: text(scene.where, api, null),
       beat: 0, mood: 0, done: false, transcript: []
     };
+    // Two things the answers need, and they need the speaker to be resolved
+    // first, which is why they are attached here rather than in mkApi.
+    api.them = speaker;
+    api.remember = function (what, tone) { return RZ.cast && RZ.cast.remember(S, speaker, what, tone); };
+    api.recalls = function (tone) { return RZ.cast && RZ.cast.recalls(S, speaker, tone); };
+    api.rel = function () { return speaker && speaker.rel !== undefined ? speaker.rel : 0; };
+
+    // A meeting with somebody you have met before does not start from nothing.
+    var hello = RZ.cast ? RZ.cast.greeting(S, speaker) : '';
+    if (hello) convo.transcript.push({ who: 'them', text: hello });
     convo.transcript.push({ who: 'them', text: text(scene.opening, api, convo) });
     pushQuestion(convo);
     return convo;

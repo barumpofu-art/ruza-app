@@ -25,7 +25,7 @@
       // One turn is a month, except in the last eight weeks before a ballot,
       // when it is a week. `span` is the fraction of a month a turn covers, so
       // every monthly rate below can be written once and scaled.
-      tempo: 'month', sprint: null, bill: null, contender: null, blocs: null,
+      tempo: 'month', sprint: null, bill: null, contender: null, blocs: null, cast: {},
       ladder: ladder.map(function (r) { return r.id; }),
       player: {
         name: cfg.name, gender: cfg.gender, age: cfg.age || 34,
@@ -1265,6 +1265,8 @@
   // it lands in the feed with everything the answers cost or bought.
   function finishDialogue(S, convo) {
     var tone = convo.mood >= 2 ? 'good' : (convo.mood <= -2 ? 'bad' : 'flat');
+    // How the room went is what that person now thinks of you, and they keep it.
+    if (RZ.cast) RZ.cast.afterMeeting(S, convo);
     var entry = {
       kind: tone === 'good' ? 'good' : (tone === 'bad' ? 'bad' : 'flat'),
       src: convo.speaker.name + ', ' + convo.speaker.role,
