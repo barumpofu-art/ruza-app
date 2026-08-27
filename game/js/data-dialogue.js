@@ -1195,6 +1195,609 @@
       ]
     },
 
+    /* ==================== THE MINISTRY ==================== */
+    {
+      id: 'reshuffle-rumour', topic: 'crisis', weight: 0,
+      speaker: function (a) { return who(a, 'the President’s chief of staff', ''); },
+      where: 'A corridor outside the Cabinet room, unscheduled',
+      settleOn: 'leader',
+      opening: function (a) {
+        return 'She is waiting when you come out, which never happens, and she walks beside you rather than ' +
+          'stopping, which is worse. "There is a list," she says. "There is always a list. This one has a date on it."';
+      },
+      beats: [
+        {
+          q: function (a) {
+            return '"Your name is on it. Not at the top." She keeps walking. "He has been asking who briefed the ' +
+              'paper about ' + P(a.C.issues) + '. It was not you. That is not the same as him believing it was not you."';
+          },
+          answers: [
+            { t: 'Go to him today. Not through you, and not through anybody', mood: 3, tag: 'cost',
+              run: function (a) {
+                a.add('capital', -RZ.range(6, 12)); a.add('leader', a.rng(5, 11));
+                a.add('health', -a.rng(1, 4));
+              },
+              reply: '"He is free at nine." She finally stops. "Go alone, say it in one sentence, and do not bring ' +
+                     'a file. Men who bring files look like men who prepared."' },
+            { t: 'Find out who did brief the paper, and hand him that', mood: 1, tag: 'risk',
+              run: function (a) {
+                a.add('stats.cunning', a.rng(.5, 1.5)); a.add('leader', a.rng(1, 5));
+                a.makeRival();
+                if (a.chance(0.4)) a.dirt('briefing', 'A colleague handed to the President to save your own portfolio', 2);
+              },
+              reply: '"You are going to give him a name." She considers this without approval or disapproval. ' +
+                     '"It will work. It works every time. That is rather the problem with it."' },
+            { t: 'Say nothing. If he wants the portfolio he can have it', mood: -2,
+              run: function (a) {
+                a.add('leader', -RZ.range(4, 10)); a.add('stats.integrity', a.rng(1, 4));
+                a.S.flags.reshuffleRisk = true;
+              },
+              reply: '"Dignity." She starts walking again. "I have watched a great deal of dignity get announced ' +
+                     'at ten at night on the state broadcaster."' }
+          ]
+        },
+        {
+          q: '"One more thing, because I am the one who writes the note." She stops walking again. ' +
+             '"If you are moved — up or sideways — who comes with you? Give me one name."',
+          answers: [
+            { t: 'My director-general. She is the only reason the ministry works', mood: 3,
+              run: function (a) { a.add('leader', a.rng(2, 6)); a.add('capital', a.rng(1, 4)); a.recruitAlly(); },
+              reply: '"An official." She writes it down. "Not a cousin, not a fundraiser, not a man from your ' +
+                     'branch. He will read that and he will read it correctly."' },
+            { t: 'Nobody. Whoever is there is there', mood: 1,
+              run: function (a) { a.add('stats.integrity', a.rng(1, 3)); a.add('party', -a.rng(0, 3)); },
+              reply: '"Nobody." A short pause. "That is either principle or it is not having anybody, and I ' +
+                     'genuinely cannot tell which."' },
+            { t: 'The three from my province, obviously', mood: -2,
+              run: function (a) { a.add('party', a.rng(2, 5)); a.add('leader', -a.rng(3, 8)); a.nation('corruption', a.rng(.2, .9)); },
+              reply: '"Three." She does not write it down, which is worse than writing it down. ' +
+                     '"He counts, you know. He has always counted."' }
+          ]
+        }
+      ],
+      close: function (a, temp) {
+        return {
+          warm: 'The list came out on Friday. You moved sideways to a bigger portfolio, which in this government is the only compliment there is.',
+          fair: 'The list came out and your name was not on it at all, which is neither good news nor bad, only news.',
+          cool: 'You kept the portfolio and lost the deputy you liked. Nobody explained the connection and there does not have to be one.',
+          hostile: 'It was announced at ten at night, between the sport and the weather. Your successor was already in the building.'
+        }[temp];
+      },
+      settles: function (a, temp) {
+        if (temp === 'hostile' && RZ.chance(0.55)) a.demote();
+        else a.add('leader', { warm: 6, fair: 2, cool: -2, hostile: -8 }[temp]);
+      }
+    },
+
+    {
+      id: 'poisoned-chalice', topic: 'crisis', weight: 0,
+      speaker: function (a) { return { name: a.S.nation.presidentName, role: a.t.hos, org: '' }; },
+      where: 'The residence, on a Sunday, with the television on mute',
+      settleOn: 'leader',
+      opening: function (a) {
+        return 'He asks about your mother and he means it, and then he does not get to the point for eleven ' +
+          'minutes. When he does, he does it while looking at the television.\n\n' +
+          '"The airline," he says. "I want you to take the airline."';
+      },
+      beats: [
+        {
+          q: function (a) {
+            return 'Everybody in the country knows what the airline is: four aircraft, two of which fly, ' +
+              'eleven thousand employees, and a debt that is a rounding error away from being the health budget. ' +
+              'The last three ministers left politics.\n\n"Well?" he says. "You are the only one I trust with it."';
+          },
+          answers: [
+            { t: 'Take it, and ask for the authority to actually close routes', mood: 3, tag: 'risk',
+              run: function (a) {
+                a.add('capital', -RZ.range(8, 16)); a.add('leader', a.rng(4, 9));
+                a.nation('unrest', a.rng(2, 6)); a.add('grassroots', -a.rng(3, 8));
+                a.nation('growth', a.rng(0.2, 0.8));
+                a.promise('airline', 'To fix the national airline', { due: 24, to: 'The President' });
+              },
+              reply: '"Authority." He turns the television off, which he has not done all afternoon. ' +
+                     '"You are the first one to ask for that instead of for money. You may have it. ' +
+                     'You will not enjoy having it."' },
+            { t: 'Take it, and say nothing about what it will cost', mood: 2,
+              run: function (a) {
+                a.add('leader', a.rng(3, 7)); a.add('capital', -RZ.range(4, 9));
+                a.add('media', -a.rng(2, 6));
+                a.promise('airline', 'To fix the national airline', { due: 18, to: 'The President' });
+              },
+              reply: '"Good man." He is already reaching for the remote. The photograph of the two of you shaking ' +
+                     'hands is issued that evening, which is the part of this that was always going to happen.' },
+            { t: 'Decline. Politely, and in a way he will remember', mood: -3,
+              run: function (a) {
+                a.add('leader', -RZ.range(8, 16)); a.add('stats.integrity', a.rng(2, 5));
+                a.add('capital', a.rng(2, 6));
+              },
+              reply: 'He does not argue. He asks about your mother again, differently, and then a young man appears ' +
+                     'to show you out. You have refused the President of the Republic something in his own house.' }
+          ]
+        },
+        {
+          q: '"Anything else?" he says, and it is not really a question, and this is the only moment in the ' +
+             'next two years when it will cost him something to say no to you.',
+          answers: [
+            { t: 'Your signature on the restructuring, before I leave this room', mood: 3, tag: 'risk',
+              run: function (a) { a.add('capital', RZ.range(6, 14)); a.add('leader', a.rng(1, 5)); a.S.flags.chaliceSigned = true; },
+              reply: 'He looks at you properly for the first time all afternoon. Then he calls for the aide, ' +
+                     'and signs it on the arm of the chair, and you both know exactly what you have just done.' },
+            { t: 'That when it goes badly you say it was your decision', mood: 2,
+              run: function (a) { a.add('leader', a.rng(3, 8)); a.add('media', a.rng(1, 4)); },
+              reply: '"When." He notes the word. "Not if." He agrees, and he means it today, which is a ' +
+                     'different thing from meaning it in eighteen months.' },
+            { t: 'Nothing. I will manage', mood: 0,
+              run: function (a) { a.add('stats.grit', a.rng(1, 3)); a.add('capital', -a.rng(0, 3)); },
+              reply: '"Good." The television goes back on. You have just been handed eleven thousand employees ' +
+                     'and no cover at all, and you said thank you.' }
+          ]
+        }
+      ]
+    },
+
+    /* ==================== THE SUCCESSION ==================== */
+    {
+      id: 'succession-trap', topic: 'crisis', weight: 0,
+      speaker: function (a) { return { name: a.S.nation.presidentName, role: a.t.hos, org: '' }; },
+      where: 'The presidential aircraft, somewhere over the interior',
+      settleOn: 'leader',
+      opening: function (a) {
+        return 'He has the whole cabin and he has sent everybody else to the back of it. The engines are loud ' +
+          'enough that nothing said here is on any record.\n\n' +
+          '"They are asking me about the term," he says. "The lawyers say the clause is ambiguous. ' +
+          'Everybody knows the clause is not ambiguous."';
+      },
+      beats: [
+        {
+          q: '"You are the one who would be next. So I am going to ask you where you are, and I would like the ' +
+             'answer you would give somebody else."',
+          answers: [
+            { t: 'Endorse him, publicly, tomorrow', mood: 3,
+              run: function (a) {
+                a.add('leader', a.rng(6, 13)); a.add('party', a.rng(2, 6));
+                a.add('media', -a.rng(4, 10)); a.add('stats.integrity', -a.rng(3, 7));
+                a.S.flags.endorsedThirdTerm = true;
+              },
+              reply: '"Say it in Setswana as well," he says, "and say it in the north." He is asleep before ' +
+                     'the descent. You are not.' },
+            { t: 'Tell him the clause is not ambiguous, to his face', mood: 1, tag: 'risk',
+              run: function (a) {
+                a.add('stats.integrity', a.rng(4, 9)); a.add('media', a.rng(2, 6));
+                a.add('leader', -RZ.range(5, 12)); a.add('party', -a.rng(1, 5));
+              },
+              reply: 'The engines fill a very long silence. "You are the only one who has said that," he says ' +
+                     'eventually, "and you have said it where nobody can hear you. I notice both halves of that."' },
+            { t: 'Say nothing here, and brief the press when you land', mood: -3, tag: 'risk',
+              run: function (a) {
+                var ok = a.roll('cunning', 52);
+                a.add('media', ok ? a.rng(6, 13) : -a.rng(3, 8));
+                a.add('leader', -RZ.range(6, 14));
+                if (!ok) { a.dirt('treachery', 'Briefing against the Head of State from inside his own aircraft', 4); a.makeRival(); }
+                a.nation('stability', -a.rng(1, 4));
+              },
+              reply: function (a, convo) {
+                return 'You tell him you will think about it, and you are on the phone from the car. ' +
+                  'By Thursday the story is everywhere. The only question is whether anybody can prove where ' +
+                  'it came from, and there were eleven people on that aircraft.';
+              } }
+          ]
+        },
+        {
+          q: '"And if it were not me." The engines fill the pause. "If the clause held and I went. ' +
+             'Who would you tell the provinces to back?"',
+          answers: [
+            { t: 'Me. You asked, and I am not going to insult you by pretending', mood: 2,
+              run: function (a) { a.add('leader', a.rng(2, 7)); a.add('party', a.rng(3, 8)); a.add('fame', a.rng(1, 4)); },
+              reply: 'He laughs, once, genuinely. "At least you did not say you had not thought about it. ' +
+                     'Everybody says they have not thought about it. I have never believed one of them."' },
+            { t: 'Whoever the conference chooses. That is what it is for', mood: 1,
+              run: function (a) { a.add('party', a.rng(2, 5)); a.add('stats.integrity', a.rng(1, 4)); a.add('leader', -a.rng(0, 3)); },
+              reply: '"The conference." He closes his eyes. "I have controlled four of those. So have you, ' +
+                     'from further down the table. Let us not do this part."' },
+            { t: 'Name somebody else, and watch his face', mood: -2, tag: 'risk',
+              run: function (a) { a.add('stats.cunning', a.rng(1, 3)); a.add('leader', -a.rng(2, 7)); a.makeRival(); },
+              reply: 'He does not react at all, which is itself the reaction, and the name you gave will be in ' +
+                     'a ministry within the month with a great deal more to lose than he had this morning.' }
+          ]
+        }
+      ]
+    },
+
+    /* ==================== THE PRESIDENCY ==================== */
+    {
+      id: 'debt-ultimatum', topic: 'crisis', weight: 0,
+      speaker: function (a) { return who(a, 'the Governor of the central bank', ''); },
+      where: 'The residence, 6am, before anybody else is awake',
+      settleOn: 'intl',
+      opening: function (a) {
+        return 'He came himself rather than sending it, and he came at six, which tells you everything. ' +
+          'He puts one page on the table.\n\n' +
+          '"We have ' + RZ.round(a.S.nation.economy.reserves, 1) + ' months of import cover," he says. ' +
+          '"Salaries are the twenty-fifth. I can pay them once."';
+      },
+      beats: [
+        {
+          q: '"There are two telephone numbers. I am not going to tell you which one to ring, because whichever ' +
+             'one you ring, in ten years they will say it was the moment."',
+          answers: [
+            { t: 'The Fund. Conditions, austerity, and a country that hates you for it', mood: 2,
+              run: function (a) {
+                a.S.nation.intl.imf = true;
+                a.add('intl', RZ.range(10, 20)); a.nation('reserves', RZ.range(2, 4));
+                a.nation('debt', -RZ.range(4, 12)); a.nation('inflation', -RZ.range(1, 4));
+                a.nation('unrest', RZ.range(10, 22)); a.add('grassroots', -RZ.range(10, 20));
+                a.add('stats.integrity', a.rng(1, 4));
+                a.legacyMark('tookTheFund');
+              },
+              reply: '"They will want the fuel subsidy inside ninety days and the wage bill inside a year." ' +
+                     'He folds the page. "I will make the call. You will have to make the speech."' },
+            { t: 'The other one. Cash by Friday, and they will name their own security', mood: 1, tag: 'risk',
+              run: function (a) {
+                a.add('money', a.wage(30)); a.nation('reserves', RZ.range(3, 6));
+                a.add('intl', -RZ.range(12, 24)); a.add('stats.integrity', -RZ.range(6, 13));
+                a.nation('corruption', RZ.range(2, 6));
+                a.dirt('concession', 'A strategic asset pledged to a foreign state against an emergency loan', 4);
+                a.legacyMark('pledgedTheAssets');
+              },
+              reply: '"They do not want conditions," he says carefully. "They want the port, and a thirty-year ' +
+                     'lease on the corridor. There is no austerity and there is no sovereignty either. ' +
+                     'I want it minuted that I said that."' },
+            { t: 'Neither. Default, and tell the country why', mood: -1, tag: 'risk',
+              run: function (a) {
+                a.nation('debt', -RZ.range(15, 30)); a.nation('inflation', RZ.range(8, 20));
+                a.add('intl', -RZ.range(15, 30)); a.nation('growth', -RZ.range(2, 5));
+                a.add('grassroots', RZ.range(4, 12)); a.add('stats.integrity', a.rng(4, 9));
+                a.nation('unrest', RZ.range(4, 12));
+                a.legacyMark('defaulted');
+              },
+              reply: 'He is quiet for a long time. "It has been done," he says. "Twice on this continent. ' +
+                     'Both times the man who did it was right and finished." He stands. "I will resign on ' +
+                     'Monday, so that it is clearly your decision and not mine."' }
+          ]
+        },
+        {
+          q: '"Whichever number you ring, there is still the twenty-fifth." He does not sit down. ' +
+             '"Nurses, teachers, soldiers. In that order or a different one. You choose the order."',
+          answers: [
+            { t: 'Nurses and teachers first. The soldiers can wait a week', mood: 2, tag: 'risk',
+              run: function (a) { a.add('grassroots', RZ.range(4, 10)); a.add('security', -RZ.range(6, 14)); a.nation('coup', RZ.range(3, 9)); },
+              reply: '"A week." He writes it down without expression. "I will tell the Commander myself. ' +
+                     'I would rather he heard it from a banker than read it in a newspaper."' },
+            { t: 'Soldiers first. Everything else follows from that', mood: 1,
+              run: function (a) { a.add('security', RZ.range(5, 11)); a.nation('coup', -RZ.range(3, 8)); a.add('grassroots', -RZ.range(4, 10)); a.nation('unrest', a.rng(2, 6)); },
+              reply: '"That is the answer of a man who intends to still be here in March." He does not say ' +
+                     'whether he approves. "It is also, historically, the correct one."' },
+            { t: 'Everybody at once, at seventy per cent', mood: 0,
+              run: function (a) { a.nation('unrest', RZ.range(3, 8)); a.add('grassroots', -a.rng(2, 6)); a.add('security', -a.rng(2, 6)); a.add('stats.integrity', a.rng(1, 4)); },
+              reply: '"Seventy per cent of everybody." He almost smiles. "Then everybody will be angry and ' +
+                     'nobody will be desperate. It is not a good answer. It may be the only fair one."' }
+          ]
+        }
+      ]
+    },
+
+    {
+      id: 'midnight-generals', topic: 'crisis', weight: 0,
+      speaker: function (a) { return who(a, 'the Commander of the Defence Force', ''); },
+      where: 'A room at the barracks, twenty past eleven at night',
+      settleOn: 'security',
+      opening: function (a) {
+        return 'They did not come to the residence and they did not ask you to come during office hours. ' +
+          'There are four of them and only one is speaking.\n\n' +
+          '"The men have not been paid since the fifteenth," he says. "I am telling you before I am asked ' +
+          'to tell you by somebody else."';
+      },
+      beats: [
+        {
+          q: function (a) {
+            return '"Unrest is at ' + Math.round(a.S.nation.society.unrest) + '. My officers are being asked in ' +
+              'their own villages why they are still taking orders from you. I would like to be able to give ' +
+              'them an answer that is not about the constitution."';
+          },
+          answers: [
+            { t: 'Double the defence vote. Tonight, before you leave this room', mood: 3, tag: 'cost',
+              run: function (a) {
+                a.add('security', RZ.range(12, 22)); a.nation('coup', -RZ.range(10, 20));
+                a.nation('growth', -RZ.range(0.8, 2.2)); a.nation('debt', RZ.range(3, 8));
+                a.nation('health', -RZ.range(3, 8)); a.nation('education', -RZ.range(3, 8));
+                a.add('media', -a.rng(3, 8));
+              },
+              reply: 'He does not smile and he does not thank you. He nods once to the man on his left, who ' +
+                     'leaves the room, and you understand that the man was leaving either way and the ' +
+                     'difference is what he was going to say when he got there.' },
+            { t: 'Pay the arrears, and nothing more. Every cent, this week', mood: 1,
+              run: function (a) {
+                a.add('security', RZ.range(4, 9)); a.nation('coup', -RZ.range(3, 9));
+                a.nation('debt', RZ.range(1, 3)); a.add('stats.integrity', a.rng(1, 4));
+              },
+              reply: '"The arrears." He weighs it. "That is what I asked for, and we both know it is not what ' +
+                     'I came for." A pause. "It will hold until the next one."' },
+            { t: 'Remind him what the constitution says about this meeting', mood: -3, tag: 'risk',
+              run: function (a) {
+                a.add('stats.integrity', a.rng(3, 7)); a.add('intl', a.rng(2, 6));
+                a.add('security', -RZ.range(10, 20)); a.nation('coup', RZ.range(8, 18));
+              },
+              reply: '"The constitution." He stands, and the other three stand a half-second after him, which is ' +
+                     'the most frightening thing that happens all night. "Thank you for coming, Your Excellency. ' +
+                     'At this hour. To a barracks."' }
+          ]
+        },
+        {
+          q: '"There is a second thing." He does not sit. "If the crowds come back to the square — and they ' +
+             'will — do you want us on the street, or do you want us in the barracks?"',
+          answers: [
+            { t: 'In the barracks. Whatever happens in that square', mood: 2, tag: 'risk',
+              run: function (a) { a.add('stats.integrity', RZ.range(4, 9)); a.add('intl', RZ.range(4, 10)); a.nation('unrest', RZ.range(3, 9)); a.add('security', -a.rng(2, 6)); },
+              reply: '"Whatever happens." He wants it said again and you say it again. "Then I will need that ' +
+                     'in writing, Your Excellency, and so will you, in about a year."' },
+            { t: 'On the street, unarmed, and standing still', mood: 1,
+              run: function (a) { a.nation('unrest', -RZ.range(4, 10)); a.add('security', a.rng(2, 6)); a.add('media', -a.rng(1, 5)); a.nation('deaths', a.irange(0, 3)); },
+              reply: '"Unarmed." One of the others looks at the floor. "It is a fine distinction at two in the ' +
+                     'morning with eight thousand people in front of you, but I will give the order."' },
+            { t: 'On the street. Do what is necessary', mood: 3,
+              run: function (a) { a.nation('unrest', -RZ.range(10, 20)); a.add('security', RZ.range(6, 13)); a.add('intl', -RZ.range(8, 18)); a.add('media', -RZ.range(6, 14)); a.nation('deaths', a.irange(4, 40)); a.add('stats.integrity', -RZ.range(5, 11)); a.dirt('square', 'An order given at a barracks at midnight, and a count nobody published', 4); },
+              reply: 'He nods, and all four of them are gone within a minute, and the room is very quiet, ' +
+                     'and you are the only person in it who has to decide what to do tomorrow.' }
+          ]
+        }
+      ]
+    },
+
+    /* ==================== WHAT YOU DO ON PURPOSE ==================== */
+    {
+      id: 'mega-tender', topic: 'megatender', weight: 12,
+      when: function (a) { return a.tier() >= 6 && a.inGov(); },
+      speaker: function (a) { return who(a, 'the director of procurement', 'your own ministry'); },
+      where: 'Your office, with the door closed and the diary blocked',
+      settleOn: 'business',
+      opening: function (a) {
+        return 'The file is four hundred pages and he has flagged eleven of them. It is the largest thing your ' +
+          'ministry will sign this year and possibly this decade.\n\n' +
+          '"Three bidders qualified," he says. "Technically." He does not open the file.';
+      },
+      beats: [
+        {
+          q: '"One of them can actually do the work. One of them is cheaper and cannot. And one of them is a ' +
+             'consortium whose directors I would rather you asked me about in a different room."',
+          answers: [
+            { t: 'Award it to the one who can do the work', mood: 3,
+              run: function (a) {
+                a.nation('growth', RZ.range(0.4, 1.3)); a.nation('infra', RZ.range(2, 6));
+                a.add('intl', a.rng(2, 6)); a.add('media', a.rng(2, 5));
+                a.add('party', -a.rng(3, 8)); a.add('business', -a.rng(0, 3));
+                a.nation('corruption', -a.rng(0.2, 1));
+              },
+              reply: '"Then I will need the evaluation minuted properly, because there will be a review." ' +
+                     'He almost looks pleased. "There is always a review when nobody was paid."' },
+            { t: 'Award it to the consortium, and do not ask', mood: 1, tag: 'risk',
+              run: function (a) {
+                a.add('money', a.wage(RZ.range(18, 34))); a.add('capital', RZ.range(6, 14));
+                a.add('business', a.rng(5, 11)); a.add('stats.integrity', -RZ.range(5, 11));
+                a.nation('corruption', RZ.range(1.5, 4)); a.nation('infra', -RZ.range(0, 2));
+                a.owePatron(RZ.makeName(a.C), RZ.range(8, 14));
+                a.dirt('megatender', 'A national contract awarded to a consortium whose directors were never discussed', 4);
+              },
+              reply: 'He closes the file without opening it. "I will minute it as a value-for-money determination." ' +
+                     'The first payment clears on a Friday afternoon into an account in a different name.' },
+            { t: 'Split it. Half to the competent one, half to theirs', mood: 2, tag: 'risk',
+              run: function (a) {
+                a.add('money', a.wage(RZ.range(6, 14))); a.add('capital', RZ.range(3, 8));
+                a.add('party', a.rng(2, 6)); a.add('stats.integrity', -RZ.range(2, 6));
+                a.nation('corruption', RZ.range(0.6, 2)); a.nation('infra', RZ.range(0.5, 2.5));
+                a.add('stats.cunning', a.rng(.5, 1.5));
+              },
+              reply: '"A joint venture." He writes it down. "Everybody is paid, the road gets built badly, and ' +
+                     'nobody resigns. It is the most common outcome in this building."' }
+          ]
+        },
+        {
+          q: '"Last question, and it is the one the unions will ask." He finally opens the file. ' +
+             '"Local content. Forty per cent adds nine months and a great deal of money. Do we require it?"',
+          answers: [
+            { t: 'Require it. Forty per cent, written into the contract', mood: 3,
+              run: function (a) { a.add('grassroots', a.rng(3, 8)); a.nation('unemployment', -a.rng(.3, 1.1)); a.add('business', -a.rng(2, 6)); a.add('money', -a.wage(a.rng(0, 3))); },
+              reply: '"Nine months longer and four hundred jobs in the district." He writes it in. ' +
+                     '"You will be asked about the nine months every one of them."' },
+            { t: 'Require it on paper. Waive it quietly at the first delay', mood: 0, tag: 'risk',
+              run: function (a) { a.add('stats.cunning', a.rng(.5, 1.5)); a.add('stats.integrity', -a.rng(2, 5)); a.add('business', a.rng(2, 5)); if (a.chance(0.35)) a.dirt('localcontent', 'A local content requirement announced and then quietly waived', 2); },
+              reply: '"A variation order in month four." He has clearly done this before. "It will be signed ' +
+                     'by a deputy director and it will never have your name on it."' },
+            { t: 'No. Build it fast and build it properly', mood: 1,
+              run: function (a) { a.nation('infra', a.rng(1, 4)); a.add('business', a.rng(3, 7)); a.add('grassroots', -a.rng(3, 8)); },
+              reply: '"The unions will be at the ministry by Thursday." He shrugs. "They will also be driving ' +
+                     'on it in two years, which is the argument nobody ever wins with."' }
+          ]
+        }
+      ]
+    },
+
+    {
+      id: 'central-purge', topic: 'purge', weight: 12,
+      when: function (a) { return a.tier() >= 9 && !a.isPresident(); },
+      speaker: function (a) { return who(a, 'your organiser', 'the provinces'); },
+      where: 'A room with the curtains closed, two days before nominations',
+      settleOn: 'party',
+      opening: function (a) {
+        return 'He has the central committee list, annotated, in three colours. "Forty-one names," he says. ' +
+          '"Nineteen are his. Fourteen are yours. Eight will go whichever way the room goes, and the room goes ' +
+          'wherever the nineteen tell it to."';
+      },
+      beats: [
+        {
+          q: '"We can move on eleven of the nineteen before nominations close. It will cost you, and it will be ' +
+             'obvious, and once it starts we cannot stop it halfway."',
+          answers: [
+            { t: 'All eleven. Do it in one night', mood: 3, tag: 'risk',
+              run: function (a) {
+                a.add('capital', -RZ.range(22, 38)); a.add('party', RZ.range(10, 20));
+                a.add('leader', -RZ.range(8, 18)); a.makeRival(); a.makeRival();
+                a.add('stats.cunning', a.rng(1, 3));
+                a.S.flags.purgedCentral = true;
+              },
+              reply: '"One night." He gathers the list. "By Thursday morning your people chair eight of the ' +
+                     'eleven subcommittees and nobody will be able to say exactly when it happened."' },
+            { t: 'Four. The ones nobody will defend', mood: 2,
+              run: function (a) {
+                a.add('capital', -RZ.range(9, 17)); a.add('party', RZ.range(4, 9));
+                a.add('leader', -RZ.range(2, 7)); a.add('stats.cunning', a.rng(.5, 1.5));
+              },
+              reply: '"Four is quiet." He nods slowly. "Four is also four, and he has fifteen left. ' +
+                     'You are going to have to do this again."' },
+            { t: 'None. Win the room on the argument', mood: -1,
+              run: function (a) {
+                a.add('stats.integrity', a.rng(3, 6)); a.add('media', a.rng(2, 5));
+                a.add('party', -a.rng(2, 6));
+              },
+              reply: 'He puts the list away without a word, and it is the silence of a man who has done this ' +
+                     'before with somebody who is no longer in politics.' }
+          ]
+        },
+        {
+          q: '"And the eight who swing." He taps the third colour. "They are watching to see what happens to ' +
+             'the nineteen. What do I tell them is waiting for them?"',
+          answers: [
+            { t: 'Positions. Name them, and mean it', mood: 3, tag: 'promise',
+              run: function (a) { a.add('party', RZ.range(5, 11)); a.add('stats.integrity', -a.rng(2, 5)); a.promise('centralslate', 'Positions for eight central committee members who swung to you', { kind: 'cabinet', to: 'The central committee' }); },
+              reply: '"Then they are yours by Wednesday." He is already dialling. "Eight people have just ' +
+                     'stopped being a problem and started being a debt."' },
+            { t: 'The truth: that I will not be coming for them', mood: 2,
+              run: function (a) { a.add('party', a.rng(2, 6)); a.add('stats.integrity', a.rng(2, 5)); },
+              reply: '"Safety." He considers it. "It is a smaller offer and it is one you can actually keep. ' +
+                     'Six of the eight will take it. The other two want more than safety."' },
+            { t: 'Nothing. Let them work out which way the wind went', mood: 0,
+              run: function (a) { a.add('party', a.rng(0, 3)); a.add('stats.cunning', a.rng(.5, 1.5)); },
+              reply: '"They will work it out." He puts the phone down. "They will also remember that nobody ' +
+                     'asked them, which costs nothing now and something later."' }
+          ]
+        }
+      ]
+    },
+
+    {
+      id: 'shadow-diplomacy', topic: 'shadowdiplo', weight: 12,
+      when: function (a) { return a.tier() >= 10; },
+      speaker: function (a) { return who(a, 'a foreign ambassador', ''); },
+      where: 'A residence in a capital that is not yours',
+      settleOn: 'intl',
+      opening: function (a) {
+        return 'It is not on either country\'s programme and there are no officials in the room. He pours the ' +
+          'wine himself, which is the whole message.\n\n' +
+          '"We take an interest in stability," he says, "and stability is usually a person."';
+      },
+      beats: [
+        {
+          q: '"So. If there were a difficulty at home — a constitutional difficulty, let us say — what would you ' +
+             'want us to have already decided?"',
+          answers: [
+            { t: 'That the succession is constitutional, whoever it favours', mood: 3,
+              run: function (a) {
+                a.add('intl', RZ.range(8, 16)); a.add('stats.integrity', a.rng(2, 5));
+                a.add('grassroots', -a.rng(2, 6));
+              },
+              reply: '"That is a principle rather than a request." He refills your glass. "Principles are harder ' +
+                     'for us to help with and much harder for anybody to hold against you. Very well."' },
+            { t: 'That your government would recognise mine within the week', mood: 2, tag: 'risk',
+              run: function (a) {
+                a.add('intl', RZ.range(10, 20)); a.add('security', a.rng(2, 6));
+                a.add('stats.integrity', -a.rng(2, 6)); a.add('grassroots', -a.rng(3, 8));
+                a.dirt('foreignbacking', 'A foreign government sounded out about recognition before any vacancy existed', 3);
+              },
+              reply: '"Within the week." He writes nothing down, because men in his position never do. ' +
+                     '"You understand that a conversation like this has now happened, and cannot un-happen."' },
+            { t: 'Nothing. I did not come here for that', mood: 0,
+              run: function (a) {
+                a.add('intl', a.rng(3, 8)); a.add('stats.integrity', a.rng(2, 5));
+              },
+              reply: '"Then we will talk about the corridor and the tariff schedule," he says smoothly, ' +
+                     '"and both of us will remember that the other question was asked."' }
+          ]
+        },
+        {
+          q: '"And in return." He says it lightly, the way it is always said. "There is a vote at the United ' +
+             'Nations in November that matters a great deal to us and not at all to you."',
+          answers: [
+            { t: 'I will look at it on the merits, like everything else', mood: 1,
+              run: function (a) { a.add('stats.integrity', a.rng(2, 5)); a.add('intl', -a.rng(0, 4)); },
+              reply: '"On the merits." He accepts it without visible disappointment, which means he expected ' +
+                     'it and has already decided how much less you are worth.' },
+            { t: 'You have the vote. It costs my country nothing', mood: 2, tag: 'risk',
+              run: function (a) { a.add('intl', RZ.range(4, 10)); a.add('stats.integrity', -a.rng(2, 6)); a.S.flags.tradedVote = true; },
+              reply: '"It costs your country nothing today." He is scrupulously honest about this, which is ' +
+                     'the most alarming thing he has said all evening.' },
+            { t: 'Ask him what he would do with it, and listen properly', mood: 3,
+              run: function (a) { a.add('stats.intellect', a.rng(.5, 1.5)); a.add('intl', a.rng(3, 8)); a.add('stats.cunning', a.rng(.4, 1.2)); },
+              reply: 'He tells you, at some length, and by the end of it you understand his government better ' +
+                     'than any briefing has ever managed and you have promised nothing at all.' }
+          ]
+        }
+      ]
+    },
+
+    {
+      id: 'ssa-file', topic: 'ssa', weight: 12,
+      when: function (a) { return a.isPresident(); },
+      speaker: function (a) { return who(a, 'the Director-General', 'the intelligence service'); },
+      where: 'A room in the residence with no windows',
+      settleOn: 'security',
+      opening: function (a) {
+        return 'He brings nothing with him, ever. Whatever he is going to tell you he has already memorised, ' +
+          'which is a habit that took him thirty years to acquire and which you find you do not like.\n\n' +
+          '"You asked me about a name," he says.';
+      },
+      beats: [
+        {
+          q: '"We can establish things about anybody. I want to be clear about what you are instructing, and I ' +
+             'want you to be the one who says it."',
+          answers: [
+            { t: 'Establish it. I am instructing you', mood: 3, tag: 'risk',
+              run: function (a) {
+                a.digOnRival(); a.digOnRival();
+                a.add('security', a.rng(2, 6)); a.add('stats.integrity', -RZ.range(6, 12));
+                a.nation('judiciary', -a.rng(1, 4));
+                if (a.chance(0.35)) {
+                  a.dirt('ssa', 'The intelligence service turned on a domestic political rival, on your instruction', 4);
+                  a.nation('unrest', a.rng(3, 9)); a.add('intl', -a.rng(4, 10));
+                }
+              },
+              reply: '"On your instruction." He repeats it back exactly, which is how you learn that somebody ' +
+                     'in this room is keeping a record and it is not you.' },
+            { t: 'Only what is already lawfully held. Nothing new', mood: 1,
+              run: function (a) {
+                if (a.chance(0.4)) a.digOnRival();
+                a.add('stats.integrity', a.rng(2, 5)); a.add('security', -a.rng(0, 3));
+              },
+              reply: '"Lawfully held." He looks at you with something that might be respect and might be pity. ' +
+                     '"There is less of that than you would hope, Your Excellency."' },
+            { t: 'Nothing. And I want that minuted', mood: -1,
+              run: function (a) {
+                a.add('stats.integrity', RZ.range(4, 9)); a.add('intl', a.rng(2, 6));
+                a.add('security', -RZ.range(3, 9)); a.nation('judiciary', a.rng(1, 4));
+              },
+              reply: '"Minuted." He allows himself the smallest pause. "You are the first one to ask for that. ' +
+                     'I will do it, and I will keep my own copy, as I did for the others."' }
+          ]
+        },
+        {
+          q: '"And afterwards." He has not moved. "The file. Does it go into the registry, or does it go ' +
+             'to you, or does it go nowhere?"',
+          answers: [
+            { t: 'The registry. Properly, with a number', mood: 3,
+              run: function (a) { a.add('stats.integrity', a.rng(3, 7)); a.nation('judiciary', a.rng(1, 4)); a.add('security', -a.rng(0, 3)); },
+              reply: '"With a number." Something in him relaxes very slightly. "Then it can be found by a ' +
+                     'commission one day, which is the only reason any of this is survivable."' },
+            { t: 'To me. Nowhere else', mood: 1, tag: 'risk',
+              run: function (a) { a.add('capital', a.rng(3, 8)); a.add('stats.cunning', a.rng(.5, 1.5)); a.add('stats.integrity', -a.rng(2, 5)); if (a.chance(0.3)) a.dirt('privatefile', 'An intelligence file held personally rather than registered', 3); },
+              reply: '"To you." He does not blink. "Then there is one copy, Your Excellency, and there has ' +
+                     'never in my thirty years been one copy of anything."' },
+            { t: 'Nowhere. It never existed', mood: -1, tag: 'risk',
+              run: function (a) { a.nation('judiciary', -a.rng(2, 6)); a.add('stats.integrity', -a.rng(3, 8)); a.add('security', a.rng(1, 5)); },
+              reply: '"Nowhere." He says it flatly. "I will destroy it in front of a witness, because a thing ' +
+                     'destroyed without a witness has not been destroyed. That witness will remember your name."' }
+          ]
+        }
+      ]
+    },
+
     {
       id: 'delegates-broker', topic: 'delegates', weight: 12,
       speaker: function (a) { return who(a, 'a branch organiser', ''); },

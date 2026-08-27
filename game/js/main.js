@@ -22,7 +22,8 @@
         RZ.ui.renderGame(); RZ.ui.show('game');
         // Quitting with a decision on the table leaves it in the save; put it
         // back on screen rather than stranding it there forever.
-        if (S.pendingEvent) resumePendingEvent();
+        if (S.pendingScene) resumePendingScene();
+        else if (S.pendingEvent) resumePendingEvent();
       });
     });
     document.querySelectorAll('[data-act="show-about"]').forEach(function (b) {
@@ -191,8 +192,23 @@
   // the regional office there and then. Present it as soon as the outcome
   // sheet closes rather than leaving it for the end of the month.
   function afterAction() {
+    if (UI.S.pendingScene) { resumePendingScene(); return; }
     if (UI.S.pendingEvent) { resumePendingEvent(); return; }
     RZ.ui.renderGame();
+  }
+
+  // Somebody has asked to see you. It is not optional and it is not a card.
+  function resumePendingScene() {
+    var S = UI.S;
+    var convo = RZ.dialogue.beginById(S, S.pendingScene);
+    S.pendingScene = null;
+    if (!convo) { RZ.ui.renderGame(); return; }
+    RZ.engine.save(S);
+    RZ.ui.showDialogue(convo, function (c) {
+      RZ.engine.finishDialogue(S, c);
+      RZ.engine.save(S);
+      afterAction();
+    });
   }
 
   /* ---------------- contest ---------------- */
@@ -259,6 +275,7 @@
 
     if (out.election) { runElectionFlow(); return; }
 
+    if (S.pendingScene) { resumePendingScene(); return; }
     if (S.pendingEvent) { resumePendingEvent(); return; }
     RZ.ui.renderGame();
   }

@@ -718,6 +718,9 @@
     // The ward keeps its own opinion of you, and the sites keep building or
     // stop, whether or not you spent an action on them this month.
     if (RZ.ward && mkApi(S).tier() >= 4) RZ.ward.tick(S, span, out);
+    // The tiers where the job changes: a cabinet that has its own reasons for
+    // being in it, and crises that send somebody to find you.
+    if (RZ.state) out.crisis = RZ.state.tick(S, span, out);
     if (RZ.sprint && !S.pendingEvent) {
       var aud = RZ.sprint.auditDue(S);
       if (aud) S.pendingEvent = aud;

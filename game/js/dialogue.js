@@ -129,7 +129,26 @@
     a.add(field, swing * a.rng(2, 4));
   }
 
+  // A crisis that summons you is a conversation too. The engine parks a scene
+  // id on the state; main.js presents it the way it presents any other, so a
+  // reshuffle rumour arrives as the chief of staff in a corridor rather than
+  // as an alert card with three buttons.
+  function byId(id) {
+    return (RZ.DIALOGUE || []).filter(function (sc) { return sc.id === id; })[0] || null;
+  }
+  function beginById(S, id) {
+    var sc = byId(id);
+    return sc ? begin(S, sc, null) : null;
+  }
+  // Queue one for the next time the player is looking at the desk.
+  function summon(S, id) {
+    if (!byId(id)) return false;
+    S.pendingScene = id;
+    return true;
+  }
+
   RZ.dialogue = {
+    byId: byId, beginById: beginById, summon: summon,
     sceneFor: sceneFor, scenesFor: scenesFor, begin: begin,
     options: options, choose: choose, temperature: temperature
   };

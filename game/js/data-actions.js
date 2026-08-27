@@ -612,6 +612,51 @@
       }
     }),
 
+    /* ---------------- the state, once you run part of it ---------------- */
+    A({
+      id: 'megatender', ico: '✒️', ap: 1, tier: [6, 13], risky: true,
+      name: 'Sign off the national contract',
+      desc: 'Four hundred pages, three bidders, and one of them can actually do the work.',
+      when: function (a) { return a.tier() >= 6 && a.inGov(); },
+      run: function (a) {
+        a.nation('infra', a.rng(0.5, 2)); a.add('business', a.rng(1, 4));
+        return { title: 'It went to committee', body: 'Deferred for a further evaluation report. Nothing was signed and nothing was stopped.', tone: 'flat' };
+      }
+    }),
+
+    A({
+      id: 'purge', ico: '🗂️', ap: 1, tier: [9, 12], risky: true,
+      name: 'Work the central committee',
+      desc: 'Forty-one names, annotated in three colours, two days before nominations.',
+      when: function (a) { return a.tier() >= 9 && !a.isPresident() && a.P.capital >= 10; },
+      run: function (a) {
+        a.add('capital', -a.rng(3, 7)); a.add('party', a.rng(1, 4));
+        return { title: 'A long evening of telephone calls', body: 'Nobody was removed and nobody was promised anything, and four people now know you were counting.', tone: 'flat' };
+      }
+    }),
+
+    A({
+      id: 'shadowdiplo', ico: '🛬', ap: 1, tier: [10, 13],
+      name: 'Travel, quietly',
+      desc: 'Not on either country’s programme, and no officials in the room.',
+      when: function (a) { return a.tier() >= 10; },
+      run: function (a) {
+        a.add('intl', a.rng(2, 6)); a.add('grassroots', -a.rng(1, 4)); a.add('health', -a.rng(1, 3));
+        return { title: 'Four days abroad', body: 'A communiqué, two dinners and a corridor conversation that may be worth something one day. Your province noticed you were gone.', tone: 'flat' };
+      }
+    }),
+
+    A({
+      id: 'ssa', ico: '🕵️', ap: 1, tier: [13, 13], risky: true,
+      name: 'Send for the Director-General',
+      desc: 'He brings nothing with him, ever.',
+      when: function (a) { return a.isPresident(); },
+      run: function (a) {
+        a.add('security', a.rng(1, 4));
+        return { title: 'A briefing, and nothing on paper', body: 'Forty minutes on regional posture and one sentence about a domestic matter that he declined to expand on.', tone: 'flat' };
+      }
+    }),
+
     /* ---------------- forcing the issue ---------------- */
     A({
       id: 'revolt', ico: '⚔️', ap: 1, tier: [2, 9], risky: true,

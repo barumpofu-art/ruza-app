@@ -17,7 +17,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FILES = [
   'core.js', 'data-countries.js', 'data-ladder.js', 'data-actions.js',
   'data-events.js', 'data-dialogue.js', 'data-origins.js', 'people.js', 'elections.js',
-  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js', 'constituency.js'
+  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js', 'constituency.js', 'statecraft.js'
 ];
 
 function loadGame() {
@@ -1422,6 +1422,186 @@ section('15. Holding the seat');
     const junior = career('ZA', 991, 2);
     const jDeck = RZ.engine.availableActions(junior).map((x) => x.id);
     ok('while an activist is not', !jDeck.includes('lobby') && !jDeck.includes('pac'));
+  }
+}
+
+/* ================= 16. the tiers above the seat ================= */
+section('16. Minister, deputy, President');
+{
+  const at = (tier, seed) => {
+    const S = career('ZA', seed || 1100, tier);
+    S.tempo = 'month'; S.sprint = null;
+    S.parties[S.player.partyId].gov = true;
+    if (S.nation.govParties.indexOf(S.player.partyId) < 0) S.nation.govParties.push(S.player.partyId);
+    return S;
+  };
+  const pres = (seed) => {
+    const S = at(RZ.ladderFor('ZA').length - 1, seed);
+    S.player.isPresident = true; S.player.isLeader = true;
+    S.nation.presidentName = S.player.name;
+    return S;
+  };
+
+  // A crisis is a person in a room, not a card with buttons.
+  {
+    const missing = RZ.state.CRISES.filter((cr) => !RZ.dialogue.byId(cr.scene));
+    ok('every crisis has a conversation behind it', missing.length === 0,
+      missing.map((c) => c.id).join(', '));
+    const single = RZ.state.CRISES
+      .map((cr) => RZ.dialogue.byId(cr.scene))
+      .filter((sc) => sc.beats.length < 2);
+    ok('and each is more than one question', single.length === 0, single.map((s) => s.id).join(', '));
+  }
+
+  // Each crisis only fires at the tier it belongs to.
+  {
+    const fires = (S, id) => RZ.state.CRISES.filter((c) => c.id === id)[0].when(S);
+    ok('a backbencher is not summoned about a reshuffle', !fires(at(4, 1101), 'reshuffle-rumour'));
+    ok('a minister is', fires(at(6, 1102), 'reshuffle-rumour'));
+    ok('a minister is not asked about the succession', !fires(at(6, 1103), 'succession'));
+    ok('a deputy is', fires(at(11, 1104), 'succession'));
+    ok('nobody but the President gets the generals', !fires(at(11, 1105), 'generals'));
+
+    const P = pres(1106);
+    P.nation.society.unrest = 80;
+    ok('and the President does, when the streets are bad', fires(P, 'generals'));
+    P.nation.society.unrest = 20;
+    ok('but not when they are quiet', !fires(P, 'generals'));
+
+    const B = pres(1107);
+    B.nation.economy.reserves = 1.1;
+    ok('the treasury summons him when the cover runs out', fires(B, 'debt'));
+  }
+
+  // Being summoned actually puts the scene in front of the player.
+  {
+    const S = pres(1110);
+    S.nation.society.unrest = 95;
+    S.nation.economy.reserves = 0.5;
+    let summoned = null;
+    for (let i = 0; i < 200 && !summoned; i++) {
+      S.date.month++; if (S.date.month > 12) { S.date.month = 1; S.date.year++; }
+      const r = RZ.state.tick(S, 1, {});
+      if (r) summoned = r;
+    }
+    ok('a crisis eventually sends for you', !!summoned, JSON.stringify(summoned));
+    ok('and parks a scene for the desk to present', !!S.pendingScene);
+    const convo = RZ.dialogue.beginById(S, S.pendingScene);
+    ok('which opens as a real conversation', !!convo && convo.transcript.length > 0);
+    ok('with somebody who has a name and a job',
+      !!convo.speaker.name && !!convo.speaker.role, JSON.stringify(convo.speaker));
+  }
+
+  // The cabinet is a problem, not a team.
+  {
+    const S = pres(1120);
+    RZ.state.fillCabinet(S);
+    ok('a President has a cabinet', S.cabinet.length >= 5);
+    ok('each of them has a name and a portfolio',
+      S.cabinet.every((m) => m.name && RZ.state.ministryName(S, m.ministryId)));
+    ok('and three numbers that make them a problem',
+      S.cabinet.every((m) => m.competence >= 0 && m.loyalty >= 0 && m.corruption >= 0));
+
+    // Competence is growth; corruption is rot.
+    const good = pres(1121), bad = pres(1122);
+    RZ.state.fillCabinet(good); RZ.state.fillCabinet(bad);
+    good.cabinet.forEach((m) => { m.competence = 95; m.corruption = 5; m.loyalty = 90; });
+    bad.cabinet.forEach((m) => { m.competence = 5; m.corruption = 95; m.loyalty = 90; });
+    const g0 = good.nation.economy.growth, b0 = bad.nation.economy.growth;
+    const gr0 = good.nation.society.corruption, br0 = bad.nation.society.corruption;
+    for (let i = 0; i < 24; i++) { RZ.state.cabinetTick(good, 1, {}); RZ.state.cabinetTick(bad, 1, {}); }
+    ok('a competent cabinet grows the economy', good.nation.economy.growth > g0);
+    ok('an incompetent one shrinks it', bad.nation.economy.growth < b0);
+    ok('and a corrupt one rots the state',
+      bad.nation.society.corruption - br0 > good.nation.society.corruption - gr0);
+
+    // A disloyal minister is not idle.
+    const leaky = pres(1123);
+    RZ.state.fillCabinet(leaky);
+    leaky.cabinet.forEach((m) => { m.loyalty = 5; });
+    let leaks = 0;
+    for (let i = 0; i < 200; i++) {
+      leaky.date.month++; if (leaky.date.month > 12) { leaky.date.month = 1; leaky.date.year++; }
+      const before = leaky.feed.length;
+      RZ.state.cabinetTick(leaky, 1, {});
+      if (leaky.feed.length > before) leaks++;
+    }
+    ok('a disloyal cabinet leaks against you', leaks >= 3, `${leaks} leaks in 200 months`);
+    ok('and it raises the pressure on you', leaky.scandalRisk > 0);
+
+    const loyal = pres(1124);
+    RZ.state.fillCabinet(loyal);
+    loyal.cabinet.forEach((m) => { m.loyalty = 95; });
+    let loyalLeaks = 0;
+    for (let i = 0; i < 200; i++) {
+      loyal.date.month++; if (loyal.date.month > 12) { loyal.date.month = 1; loyal.date.year++; }
+      const before = loyal.feed.length;
+      RZ.state.cabinetTick(loyal, 1, {});
+      if (loyal.feed.length > before) loyalLeaks++;
+    }
+    ok('a loyal one does not', loyalLeaks === 0, String(loyalLeaks));
+  }
+
+  // The four proactive actions, and who is offered them.
+  {
+    const ids = ['megatender', 'purge', 'shadowdiplo', 'ssa'];
+    ok('every new action exists', ids.every((i) => !!RZ.actionById[i]));
+
+    const min = at(6, 1130); min.player.capital = 60;
+    const dep = at(11, 1131); dep.player.capital = 60;
+    const pr = pres(1132); pr.player.capital = 60;
+    const mp = at(4, 1133); mp.player.capital = 60;
+
+    const deck = (S) => RZ.engine.availableActions(S).map((x) => x.id);
+    ok('a minister can sign the national contract', deck(min).includes('megatender'));
+    ok('a backbencher cannot', !deck(mp).includes('megatender'));
+    ok('a deputy can work the central committee and travel quietly',
+      deck(dep).includes('purge') && deck(dep).includes('shadowdiplo'));
+    ok('a minister cannot yet', !deck(min).includes('purge'));
+    ok('only the President can send for the Director-General',
+      deck(pr).includes('ssa') && !deck(dep).includes('ssa'));
+  }
+
+  // Every branch of every new scene has to run.
+  {
+    const bad = [];
+    ['reshuffle-rumour', 'poisoned-chalice', 'succession-trap', 'debt-ultimatum',
+     'midnight-generals', 'mega-tender', 'central-purge', 'shadow-diplomacy', 'ssa-file'].forEach((id) => {
+      const sc = RZ.dialogue.byId(id);
+      if (!sc) { bad.push(`${id}: missing`); return; }
+      const widest = Math.max(...sc.beats.map((b) => b.answers.length));
+      for (let pick = 0; pick < widest; pick++) {
+        const S = pres(1140 + pick);
+        S.player.money = 5_000_000; S.player.capital = 150;
+        let convo;
+        try { convo = RZ.dialogue.begin(S, sc, null); }
+        catch (e) { bad.push(`${id} begin: ${e.message}`); continue; }
+        let guard = 0;
+        try {
+          while (!convo.done && guard++ < 10) {
+            const usable = RZ.dialogue.options(convo).filter((o) => o.ok);
+            if (!usable.length) { bad.push(`${id}: nothing sayable`); break; }
+            RZ.dialogue.choose(convo, usable[Math.min(pick, usable.length - 1)].i);
+          }
+        } catch (e) { bad.push(`${id} answer ${pick}: ${e.message}`); continue; }
+        convo.transcript.forEach((l) => {
+          if (/undefined|NaN|\[object/.test(l.text)) bad.push(`${id}: ${l.text.slice(0, 60)}`);
+        });
+        if (!convo.api.deltas.length) bad.push(`${id} path ${pick}: changed nothing`);
+      }
+    });
+    ok('every branch of every new scene runs cleanly', bad.length === 0, bad.slice(0, 3).join('; '));
+  }
+
+  // Crises stay out of the campaign, and do not stack on an open decision.
+  {
+    const S = pres(1150);
+    S.nation.society.unrest = 95;
+    S.tempo = 'week';
+    ok('nobody summons you mid-campaign', RZ.state.tick(S, 1, {}) === null);
+    S.tempo = 'month';
+    S.pendingEvent = { id: 'x', choices: [] };
+    ok('and not while a decision is already on the table', RZ.state.tick(S, 1, {}) === null);
   }
 }
 

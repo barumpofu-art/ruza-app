@@ -18,7 +18,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FILES = [
   'core.js', 'data-countries.js', 'data-ladder.js', 'data-actions.js',
   'data-events.js', 'data-dialogue.js', 'data-origins.js', 'people.js', 'elections.js',
-  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js', 'constituency.js'
+  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js', 'constituency.js', 'statecraft.js'
 ];
 
 function loadGame() {
@@ -50,14 +50,23 @@ function fail(where, msg) {
 const g = loadGame();
 const RZ = g.RZ;
 
-console.log(`loaded ${RZ.DIALOGUE.length} scenes across ${new Set(RZ.DIALOGUE.map(s => s.topic)).size} topics`);
+console.log(`loaded ${RZ.DIALOGUE.length} scenes across ${new Set(RZ.DIALOGUE.map(s => s.topic)).size} topics` +
+  ` (${RZ.DIALOGUE.filter((s) => s.topic === 'crisis').length} of them summoned rather than chosen)`);
 
 /* ---- every scene id is unique, and every topic names a real action ---- */
 const seen = new Set();
 for (const sc of RZ.DIALOGUE) {
   if (seen.has(sc.id)) fail(sc.id, 'duplicate scene id');
   seen.add(sc.id);
-  if (!RZ.actionById[sc.topic]) fail(sc.id, `topic "${sc.topic}" is not an action id`);
+  // A scene is reachable either because an action opens it, or because a
+  // crisis trigger sends somebody to find you. Anything else is unreachable
+  // content, which is the failure this check exists to catch.
+  if (sc.topic === 'crisis') {
+    const summoned = (RZ.state?.CRISES || []).some((cr) => cr.scene === sc.id);
+    if (!summoned) fail(sc.id, 'a crisis scene that no trigger ever summons');
+  } else if (!RZ.actionById[sc.topic] && !RZ.gov.actionById(sc.topic)) {
+    fail(sc.id, `topic "${sc.topic}" is not an action id`);
+  }
   // A meeting is a conversation, not a single question with a lid on it.
   if (!Array.isArray(sc.beats) || sc.beats.length < 2) fail(sc.id, 'fewer than two questions');
   for (const [i, b] of (sc.beats || []).entries()) {
