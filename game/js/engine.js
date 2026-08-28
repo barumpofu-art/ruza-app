@@ -21,7 +21,11 @@
 
     var S = {
       v: 2, seed: RZ.getSeed(), countryId: c.id,
-      date: { year: c.startYear, month: 2 }, turn: 0,
+      date: { year: c.startYear, month: 2, week: 1 }, turn: 0,
+      // One turn is a month, except in the last eight weeks before a ballot,
+      // when it is a week. `span` is the fraction of a month a turn covers, so
+      // every monthly rate below can be written once and scaled.
+      tempo: 'month', sprint: null, bill: null, contender: null, blocs: null, cast: {},
       ladder: ladder.map(function (r) { return r.id; }),
       player: {
         name: cfg.name, gender: cfg.gender, age: cfg.age || 34,
@@ -35,10 +39,32 @@
         yearsInOffice: 0, electionsWon: 0, electionsLost: 0
       },
       parties: {}, nation: {}, campaign: { effort: 0, delegateSpend: 0, season: false },
-      field: [], flags: {}, feed: [], pendingEvent: null, seenEvents: {},
-      actionsLeft: 3, actionsPerTurn: 3, skipTurns: 0,
+      field: [],
+      startAs: cfg.startAs || 'activist',
+      // Which answer you gave in the yard, or at the table. It sets the
+      // starting position and then keeps mattering.
+      origin: cfg.origin || null,
+      flags: {}, feed: [], pendingEvent: null, seenEvents: {},
+      actionsLeft: 3, actionsPerTurn: 3, skipTurns: 0, actionsThisMonth: 0,
+      buffs: [], capture: { patrons: [], granted: 0, refused: 0 },
+      // Rises while somebody is actively looking for something on you, and
+      // falls back when nobody is. Multiplies the chance a file breaks.
+      scandalRisk: 0,
       over: false, ending: null, legacyMarks: {}
     };
+
+    // A candidate has already done the climb; they start where it got them,
+    // with a nomination in hand and a ballot eight weeks out.
+    if (cfg.startAs === 'candidate') {
+      var mpIdx = 0;
+      ladder.forEach(function (r, i) { if (r.tier <= 4) mpIdx = i; });
+      S.player.rungIdx = Math.max(0, mpIdx - 1);
+      S.player.age = cfg.age || 41;
+      S.player.standing = { grassroots: 46, party: 34, leader: 18, media: 16, business: 14, security: 8, intl: 6 };
+      S.player.stats = { oratory: 48, charisma: 48, intellect: 46, cunning: 45, grit: 47, integrity: 52 };
+      S.player.fame = 18; S.player.capital = 10; S.player.health = 84;
+      S.player.record = [{ year: c.startYear - RZ.irange(6, 12), text: 'Elected to the branch, and then the region.' }];
+    }
 
     // apply background
     Object.keys(bg.stats || {}).forEach(function (k) { S.player.stats[k] = C100(S.player.stats[k] + bg.stats[k]); });
@@ -46,6 +72,9 @@
     S.player.money = Math.round(WAGE_BASE[c.id] * (bg.money || 1) * 2);
 
     c.regions.forEach(function (r) { S.player.regionSupport[r.id] = r.id === cfg.regionId ? 14 : 1; });
+    // Eleven years of branch meetings bought a name in the constituency. The
+    // campaign opens close, not hopeless — the eight weeks are the argument.
+    if (cfg.startAs === 'candidate') S.player.regionSupport[cfg.regionId] = 52;
 
     // parties
     c.parties.forEach(function (p) {
@@ -93,17 +122,82 @@
     S.lastElectionYear = c.startYear - 1;
     S.lastConferenceYear = c.startYear - 1;
 
+    // A candidate does not wait four years for the good part. Wind the clock
+    // to exactly eight weeks out and open on the sprint.
+    if (cfg.startAs === 'candidate') {
+      var em = ELECTION_MONTH[c.id];
+      S.nextElection = c.startYear + (em > 3 ? 0 : 1);
+      S.date.year = S.nextElection;
+      S.date.month = em - 2;
+      if (S.date.month < 1) { S.date.month += 12; S.date.year--; }
+      S.date.week = 1;
+      S.lastElectionYear = S.nextElection - 1;
+      S.player.officeSince = { year: S.date.year, month: S.date.month };
+      S.campaign.season = true;
+      S.flags.nominatedFor = ladder[S.player.rungIdx + 1] ? ladder[S.player.rungIdx + 1].id : null;
+    }
+
     // Everybody else on the ladder: the people already holding the rungs you
     // want, who will go on holding them unless you take them.
     RZ.field.populate(S);
 
-    pushFeed(S, {
-      kind: 'big', src: 'Your first entry in the register',
-      title: cfg.name + ' joins the ' + (c.partyById[cfg.partyId] ? c.partyById[cfg.partyId].name : 'movement'),
-      body: 'A ' + bg.name.toLowerCase() + ' from ' + c.regionById[cfg.regionId].name + ', signed up at a ' +
-            c.terms.branch + ' meeting on a Tuesday evening. Nobody present will remember it.',
-      tone: 'good'
-    });
+    // The scene you played before the first month. Applied here rather than
+    // with the background because one of the answers is a photograph of
+    // somebody, and the rivals have only just been made.
+    if (cfg.origin && RZ.ORIGIN_PACKAGES && RZ.ORIGIN_PACKAGES[cfg.origin]) {
+      S.player.trait = cfg.origin;
+      RZ.ORIGIN_PACKAGES[cfg.origin](S, c, null);
+      S.player.money = Math.max(0, Math.round(S.player.money));
+      S.player.capital = Math.max(0, Math.round(S.player.capital));
+      ['grassroots', 'party', 'leader', 'media', 'business', 'security', 'intl'].forEach(function (k) {
+        S.player.standing[k] = C100(S.player.standing[k]);
+      });
+      Object.keys(S.player.stats).forEach(function (k) { S.player.stats[k] = C100(S.player.stats[k]); });
+    }
+
+    // Six electorates rather than one, sized off this country's own numbers
+    // and tilted by the room the origin scene put you in.
+    if (RZ.blocs) RZ.blocs.init(S);
+
+    // Somebody else started this year too, with the opposite talent. Made
+    // after the origin scene, because which one you get is decided by what
+    // the answers in it made you.
+    if (RZ.contender) {
+      RZ.contender.init(S);
+      var ct0 = S.contender;
+      pushFeed(S, {
+        kind: 'flat', src: c.regionById[ct0.regionId].name,
+        title: 'A name you will hear again: ' + ct0.name,
+        body: (ct0.sameParty
+          ? 'Same party card, same year, a ' + c.terms.region + ' away. '
+          : 'The other side of the aisle, same year, a ' + c.terms.region + ' away. ') +
+          'They climb ' + RZ.contender.STYLES[ct0.trait].climbs + ', which is the one thing you cannot do, ' +
+          'and there is exactly one of each of these jobs.',
+        tone: 'flat'
+      });
+    }
+
+    if (cfg.startAs === 'candidate') {
+      pushFeed(S, {
+        kind: 'big', src: 'The nomination',
+        title: cfg.name + ' is the candidate for ' + c.regionById[cfg.regionId].name,
+        body: 'It took eleven years of branch meetings and one very long provincial general council to get your name ' +
+              'onto that list. The ballot is in eight weeks. Everything before this was the qualifying round.',
+        tone: 'good'
+      });
+      // Open directly on the sprint rather than making the player skip a month
+      // into it.
+      if (RZ.sprint) RZ.sprint.begin(S);
+      S.actionsPerTurn = 2; S.actionsLeft = 2;
+    } else {
+      pushFeed(S, {
+        kind: 'big', src: 'Your first entry in the register',
+        title: cfg.name + ' joins the ' + (c.partyById[cfg.partyId] ? c.partyById[cfg.partyId].name : 'movement'),
+        body: 'A ' + bg.name.toLowerCase() + ' from ' + c.regionById[cfg.regionId].name + ', signed up at a ' +
+              c.terms.branch + ' meeting on a Tuesday evening. Nobody present will remember it.',
+        tone: 'good'
+      });
+    }
 
     return S;
   }
@@ -135,6 +229,7 @@
 
       wage: function (m) { return Math.round(wageBase * m); },
       tier: function () { return RZ.ladderFor(c.id)[P.rungIdx].tier; },
+      trait: function () { return (RZ.TRAITS && RZ.TRAITS[P.trait]) || {}; },
       rung: function () { return RZ.ladderFor(c.id)[P.rungIdx]; },
       month: function () { return S.date.month; },
       homeName: function () { return c.regionById[P.regionId].name; },
@@ -149,7 +244,40 @@
         return (v + RZ.range(-18, 18) + (P.health - 70) * 0.15) >= dc;
       },
 
+      // A trait is not a starting bonus that fades. It bends every gain you
+      // make for the rest of the career, in the one place they all pass.
+      traitScale: function (key, amt) {
+        var t = (RZ.TRAITS && RZ.TRAITS[P.trait]) || null;
+        if (!t) return amt;
+        if (amt > 0) {
+          if (key === 'grassroots' && t.grassrootsGain) return amt * t.grassrootsGain;
+          if (key === 'party' && t.partyGain) return amt * t.partyGain;
+          if (key === 'media' && t.mediaGain) return amt * t.mediaGain;
+          if (key === 'money' && t.moneyGain) return amt * t.moneyGain;
+          if (key === 'capital' && t.capitalGain) return amt * t.capitalGain;
+        } else {
+          if (key === 'stats.integrity' && t.integrityDecay) return amt * t.integrityDecay;
+        }
+        return amt;
+      },
+
+      // A rally is a rally: it moves everybody a little, in proportion to how
+      // many of them there are. Naming winners and losers is what api.blocs()
+      // is for, and that one comes back through addRaw so the net is counted
+      // exactly once.
       add: function (key, amt) {
+        var out = api.addRaw(key, amt);
+        if (key === 'grassroots' && RZ.blocs && amt) RZ.blocs.drift(S, api.traitScale(key, amt) * 0.34);
+        return out;
+      },
+
+      // Name who gains and who loses, and let the size of each of them decide
+      // what it was worth overall.
+      blocs: function (deltas) { return RZ.blocs ? RZ.blocs.move(S, api, deltas) : null; },
+      blocMood: function (id) { var b = RZ.blocs && RZ.blocs.get(S, id); return b ? b.mood : 50; },
+
+      addRaw: function (key, amt) {
+        amt = api.traitScale(key, amt);
         if (!amt) return;
         if (key.indexOf('stats.') === 0) {
           var k = key.slice(6);
@@ -256,13 +384,21 @@
       doLeak: function (isDeputy) {
         var pool = RZ.field.live(S).filter(function (r) { return r.dirt.some(function (d) { return !d.used; }); });
         if (!pool.length) return { title: 'Nothing to leak', body: 'You have no file worth the risk.', tone: 'flat', fail: true };
-        var r = RZ.field.strongestFirst(pool)[0];
+        // If one of them is actively hunting you, he is the one the file is
+        // for. A file kept for a specific man is not spent on somebody else
+        // merely because that somebody else is more senior.
+        var hunted = pool.filter(function (x) { return x.nemesis; });
+        var r = hunted.length ? hunted[0] : RZ.field.strongestFirst(pool)[0];
         var d = r.dirt.filter(function (x) { return !x.used; })[0];
         d.used = true;
         var clean = RZ.rnd() < (0.42 + P.stats.cunning / 260 - c.inst.media / 400);
         var wasLeader = S.parties[P.partyId] && S.parties[P.partyId].leaderId === r.id;
         RZ.field.wound(S, r, RZ.irange(1, 3));
         api.add('stats.integrity', -RZ.range(1, 3));
+        // Breaking the man who has been hunting you is one of the three ways
+        // out of a nemesis, and the only one that does not require you to
+        // outrank him or leave the party.
+        if (clean && r.nemesis && r.power < 45 && RZ.revolt) RZ.revolt.tryNeutralise(S, r, 'expose');
         var who = '<strong>' + RZ.esc(r.name) + '</strong>, ' + RZ.esc(r.role);
         if (clean) {
           api.add('party', RZ.range(1, 4));
@@ -389,14 +525,40 @@
       },
 
       /* --- things you said in a room, which people remember --- */
-      promise: function (id, label) {
+      // opts: { due } months before it starts costing you, { kind } 'policy'
+      // or 'cabinet' (a cabinet promise comes due when the posts are handed
+      // out, not on a timer), { to } who you said it to.
+      promise: function (id, label, opts) {
         P.promises = P.promises || [];
         if (P.promises.some(function (x) { return x.id === id; })) return;
-        P.promises.push({ id: id, text: label, year: S.date.year, month: S.date.month });
+        opts = opts || {};
+        P.promises.push({
+          id: id, text: label, year: S.date.year, month: S.date.month,
+          due: opts.due || (opts.kind === 'cabinet' ? 60 : 18),
+          kind: opts.kind || 'policy', to: opts.to || null,
+          bites: 0, settled: false
+        });
       },
       hasPromise: function (id) { return (P.promises || []).some(function (x) { return x.id === id; }); },
       keepPromise: function (id) {
         P.promises = (P.promises || []).filter(function (x) { return x.id !== id; });
+      },
+      brokenPromises: function () {
+        return (P.promises || []).filter(function (x) { return (x.bites || 0) > 0; }).length;
+      },
+      startProject: function (kindId, opts) {
+        return RZ.ward ? RZ.ward.start(S, api, kindId, opts) : null;
+      },
+      wardTrust: function (n) {
+        if (!RZ.ward) return 0;
+        RZ.ward.init(S);
+        if (n) S.ward.trust = C100(S.ward.trust + n);
+        return S.ward.trust;
+      },
+      whipped: function () { return !!(RZ.revolt && RZ.revolt.whipped(S)); },
+
+      owePatron: function (name, weight) {
+        return RZ.crisis ? RZ.crisis.owe(S, name, weight) : null;
       },
       oldestPromise: function () {
         var ps = (P.promises || []).slice().sort(function (x, y) {
@@ -429,6 +591,12 @@
       return true;
     });
     if (S.player.isPresident) list = list.concat(RZ.gov.presidentialActions(S));
+    // In the sprint the tactical deck comes first: a week is spent in a ward,
+    // not on a five-year plan.
+    if (S.tempo === 'week' && RZ.sprint) list = RZ.sprint.weekActions(S).concat(list);
+    // A bill in committee runs on the same weekly clock, and while it is
+    // running the only thing worth doing is counting and buying.
+    if (S.tempo === 'week' && RZ.bill) list = RZ.bill.weekActions(S).concat(list);
     return list.map(function (act) {
       return {
         id: act.id, ico: act.ico,
@@ -441,8 +609,12 @@
 
   function doAction(S, id) {
     if (S.actionsLeft <= 0) return null;
-    var act = RZ.actionById[id] || RZ.gov.actionById(id);
+    var act = (S.tempo === 'week' && RZ.sprint && RZ.sprint.weekActionById(id)) ||
+              (S.tempo === 'week' && S.bill && RZ.bill && RZ.bill.weekActionById(id)) ||
+              RZ.actionById[id] || RZ.gov.actionById(id);
     if (!act) return null;
+    // A ward blitz needs to know which ward; main.js asks, then calls back.
+    if (act.special) return { special: act.special, act: act };
 
     // Some of these are meetings, not dice rolls. If a conversation is waiting
     // on this topic, the player has to sit through it and answer for himself;
@@ -450,6 +622,7 @@
     var scene = RZ.dialogue && RZ.dialogue.sceneFor(S, id);
     if (scene) {
       S.actionsLeft -= (act.ap || 1);
+      S.actionsThisMonth = (S.actionsThisMonth || 0) + (act.ap || 1);
       return { dialogue: RZ.dialogue.begin(S, scene, act) };
     }
 
@@ -457,6 +630,7 @@
     var res = act.run(api);
     if (!res || res.fail) return { fail: true, res: res, deltas: [] };
     S.actionsLeft -= (act.ap || 1);
+    S.actionsThisMonth = (S.actionsThisMonth || 0) + (act.ap || 1);
     var entry = {
       kind: res.tone === 'good' ? 'good' : (res.tone === 'bad' ? 'bad' : 'flat'),
       src: (typeof act.name === 'function' ? act.name(api) : act.name),
@@ -473,6 +647,15 @@
     var c = RZ.COUNTRIES[S.countryId];
     var P = S.player;
     var out = { events: [], election: null, conference: null, promo: null };
+    // What fraction of a month this turn covers. Everything below is written as
+    // a monthly rate and multiplied by it, so a weekly turn is a quarter of a
+    // month in every respect rather than a month that happens to be short.
+    var span = S.tempo === 'week' ? 0.25 : 1;
+    out.span = span;
+    // A mandate won on the floor holds the machine off for a year: party and
+    // leadership standing erode at half speed, which is the window the ladder
+    // needs to be climbable at all.
+    var mandate = (RZ.revolt && RZ.revolt.mandateActive(S)) ? 0.5 : 1;
 
     // ---- income & costs ----
     var lad = RZ.ladderFor(c.id);
@@ -482,8 +665,8 @@
     var bgIncome = rung.sal ? 0 : w * 1.3;         // the day job you still have
     // constituency office, funerals, school fees, and the relatives who now visit
     var costs = w * (0.85 + (rung.sal || 0) * 0.62 + P.fame / 110 + (rung.tier >= 4 ? 1.1 : 0.15));
-    P.money = Math.round(P.money + income + bgIncome - costs);
-    P.capital = Math.min(200, P.capital + (rung.cap || 0) * 0.25);
+    P.money = Math.round(P.money + (income + bgIncome - costs) * span);
+    P.capital = Math.min(200, P.capital + (rung.cap || 0) * 0.25 * span);
 
     // ---- health & decay ----
     // the body recovers between exertions when young, and stops doing so later
@@ -491,20 +674,23 @@
                : P.age < 58 ? RZ.range(0.1, 1.0)
                : P.age < 68 ? RZ.range(-0.5, 0.4)
                : RZ.range(-1.5, -0.2);
-    P.health = C100(P.health + hDrift);
+    P.health = C100(P.health + hDrift * span);
     // Standing is rented, not owned: the higher it is, the more it costs to hold.
     ['grassroots', 'media', 'leader', 'business', 'security', 'intl'].forEach(function (k) {
-      P.standing[k] = C100(P.standing[k] - (0.15 + P.standing[k] * 0.012) * RZ.range(0.7, 1.3));
+      var tr = (RZ.TRAITS && RZ.TRAITS[P.trait]) || {};
+      var hold = (k === 'business' && tr.businessDecay) ? tr.businessDecay : 1;
+      P.standing[k] = C100(P.standing[k] -
+        (0.15 + P.standing[k] * 0.012) * RZ.range(0.7, 1.3) * span * (k === 'leader' ? mandate : 1) * hold);
     });
-    P.standing.party = C100(P.standing.party - (0.06 + P.standing.party * 0.005) * RZ.range(0.7, 1.3));
-    P.fame = C100(P.fame - (0.10 + P.fame * 0.007) * RZ.range(0.7, 1.3));
+    P.standing.party = C100(P.standing.party - (0.06 + P.standing.party * 0.005) * RZ.range(0.7, 1.3) * span * mandate);
+    P.fame = C100(P.fame - (0.10 + P.fame * 0.007) * RZ.range(0.7, 1.3) * span);
     Object.keys(P.regionSupport).forEach(function (k) {
-      P.regionSupport[k] = C100(P.regionSupport[k] - (0.08 + P.regionSupport[k] * 0.008) * RZ.range(0.7, 1.3));
+      P.regionSupport[k] = C100(P.regionSupport[k] - (0.08 + P.regionSupport[k] * 0.008) * RZ.range(0.7, 1.3) * span);
     });
 
     // ---- scandals fade (slowly, and more slowly where the press has a memory) ----
     if (P.dirt.length) {
-      var forget = 0.022 * (1 - c.inst.media / 260);
+      var forget = 0.022 * (1 - c.inst.media / 260) * span;
       P.dirt.forEach(function (d) { if (d.exposed && RZ.chance(forget)) d.severity -= 1; });
       var before = P.dirt.length;
       P.dirt = P.dirt.filter(function (d) { return d.severity > 0; });
@@ -516,12 +702,20 @@
     }
 
     // ---- economy tick ----
-    tickEconomy(S);
+    tickEconomy(S, span);
 
     // ---- calendar ----
-    S.date.month++;
-    if (S.date.month > 12) { S.date.month = 1; S.date.year++; P.age++; P.yearsInOffice++;
-      if (S.parties[P.partyId] && S.parties[P.partyId].gov) S.nation.yearsInPower++; }
+    if (S.tempo === 'week') {
+      // Four weeks to a month. The month only turns when the fourth one does,
+      // so every date-based rule downstream still sees an ordinary calendar.
+      S.date.week = (S.date.week || 1) + 1;
+      if (S.date.week > 4) { S.date.week = 1; advanceMonth(S); }
+      if (S.sprint) S.sprint.weeksLeft = Math.max(0, S.sprint.weeksLeft - 1);
+      if (S.bill) S.bill.weeksLeft = Math.max(0, S.bill.weeksLeft - 1);
+    } else {
+      S.date.week = 1;
+      advanceMonth(S);
+    }
     S.turn++;
 
     // ---- everybody else's career runs too ----
@@ -529,7 +723,23 @@
     RZ.field.tick(S, out);
 
     S.campaign.season = isCampaignSeason(S);
-    if (!S.campaign.season) { S.campaign.effort *= 0.9; S.campaign.delegateSpend *= 0.85; }
+    if (!S.campaign.season) { S.campaign.effort *= Math.pow(0.9, span); S.campaign.delegateSpend *= Math.pow(0.85, span); }
+
+    // ---- gear change ----
+    // A bill on the order paper owns the weekly clock until it is voted on —
+    // unless the House is dissolved out from under it, in which case it falls
+    // and the campaign takes the weeks over.
+    if (RZ.bill && S.bill) {
+      if (S.tempo === 'week') out.billWeek = RZ.bill.tickWeek(S);
+      if (RZ.sprint && S.campaign.season && RZ.sprint.dissolves(S)) out.billLapsed = RZ.bill.lapse(S);
+      else if (S.bill.weeksLeft <= 0) out.billResult = RZ.bill.division(S);
+    }
+
+    // Eight weeks out the game stops being a career and becomes a campaign.
+    if (RZ.sprint) {
+      if (S.tempo === 'month' && RZ.sprint.due(S)) { RZ.sprint.begin(S); out.sprintStarted = true; }
+      else if (S.tempo === 'week') { out.sprintWeek = RZ.sprint.tickWeek(S); }
+    }
 
     // ---- scheduled politics ----
     if (S.lastConferenceYear === undefined) S.lastConferenceYear = c.startYear - 1;
@@ -546,6 +756,9 @@
                   (S.date.year === S.nextElection && S.date.month >= ELECTION_MONTH[c.id]);
     if (elecDue && S.lastElectionYear < S.nextElection) {
       S.lastElectionYear = S.nextElection; out.election = true;
+      // The campaign is over the moment the polls open; fold the ward result
+      // back into the numbers the count actually reads.
+      if (S.tempo === 'week' && RZ.sprint) out.sprintResult = RZ.sprint.end(S);
     }
 
     // ---- the top post falls vacant every few years where it is appointed ----
@@ -571,43 +784,89 @@
     }
 
     // ---- event roll ----
-    if (!out.election && !out.conference && RZ.chance(0.62)) {
+    if (!out.election && !out.conference && RZ.chance(0.62 * span)) {
       var ev = rollEvent(S);
       if (ev) S.pendingEvent = ev;
     }
 
+    // ---- the things that happen to you ----
+    // Burnout, market shocks, patrons calling in what they are owed, promises
+    // coming due, and the regional brigade. Returns true when it has ended the
+    // career, in which case nothing after it matters.
+    if (RZ.crisis && RZ.crisis.monthly(S, out)) { save(S); return out; }
+    if (RZ.revolt) out.nemesis = RZ.revolt.nemesisTurn(S);
+    // The other one moves whether or not you did anything this month.
+    if (RZ.contender) RZ.contender.tick(S, span, out);
+    // The electorate reads the same newspaper you do, and six different parts
+    // of it draw six different conclusions from it.
+    if (RZ.blocs) out.blocs = RZ.blocs.tick(S, span, out);
+    // The ward keeps its own opinion of you, and the sites keep building or
+    // stop, whether or not you spent an action on them this month.
+    if (RZ.ward && mkApi(S).tier() >= 4) RZ.ward.tick(S, span, out);
+    // The tiers where the job changes: a cabinet that has its own reasons for
+    // being in it, and crises that send somebody to find you.
+    if (RZ.state) out.crisis = RZ.state.tick(S, span, out);
+    if (RZ.sprint && !S.pendingEvent) {
+      var aud = RZ.sprint.auditDue(S);
+      if (aud) S.pendingEvent = aud;
+    }
+
     // ---- danger checks ----
     checkDangers(S, out);
+    if (S.over) { save(S); return out; }
+
+    // ---- the slate is drawn up before the country votes ----
+    if (out.election && RZ.crisis) out.purge = RZ.crisis.congressPurge(S);
 
     // ---- new turn ----
-    S.actionsPerTurn = Math.max(2, (rung.ap || 3) - (P.health < 40 ? 1 : 0));
+    var base = Math.max(2, (rung.ap || 3) - (P.health < 40 ? 1 : 0));
+    // A week is not a month. Two things a week is more agency than three a
+    // month, which is the point of the sprint — but it is paid for in money
+    // and health rather than granted free.
+    S.actionsPerTurn = S.tempo === 'week' ? Math.max(1, base - 1) : base;
     S.actionsLeft = S.actionsPerTurn;
-    if (S.skipTurns > 0) { S.skipTurns--; S.actionsLeft = 1; }
+    if (S.skipTurns > 0) { S.skipTurns--; S.actionsLeft = 0; }
+    S.actionsThisMonth = 0;
 
     save(S);
     return out;
   }
 
-  function tickEconomy(S) {
+  function advanceMonth(S) {
+    var P = S.player;
+    S.date.month++;
+    if (S.date.month > 12) {
+      S.date.month = 1; S.date.year++; P.age++; P.yearsInOffice++;
+      if (S.parties[P.partyId] && S.parties[P.partyId].gov) S.nation.yearsInPower++;
+    }
+  }
+
+  // `span` is the fraction of a month elapsed: the mean-reversion weights and
+  // the drifts are both scaled by it, so four weekly ticks land in the same
+  // place a single monthly tick would.
+  function tickEconomy(S, span) {
     var c = RZ.COUNTRIES[S.countryId];
     var e = S.nation.economy, s = S.nation.society;
-    e.staplePrice = clamp(e.staplePrice + RZ.noise(4), 40, 190);
-    var shock = (e.staplePrice - 100) / 100;
-    e.growth = clamp(e.growth * 0.90 + (c.econ.growth + shock * 3.2) * 0.10 + RZ.noise(0.25), -8, 12);
-    e.inflation = Math.max(0.5, e.inflation * 0.92 + c.econ.inflation * 0.08 - shock * 0.8 + RZ.noise(0.7));
-    e.unemployment = clamp(e.unemployment - (e.growth - 2.5) * 0.06 + RZ.noise(0.15), 3, 60);
-    e.debt = clamp(e.debt + (S.nation.budget.debtsvc < 10 ? 0.25 : -0.05) - e.growth * 0.05 + RZ.noise(0.15), 5, 220);
-    e.reserves = clamp(e.reserves + shock * 0.06 - (e.inflation > 20 ? 0.05 : 0) + RZ.noise(0.05), 0.1, 20);
+    span = span === undefined ? 1 : span;
+    var pull = function (w) { return w * span; };
 
-    s.unrest = C100(s.unrest + (e.inflation > 15 ? 0.7 : -0.35) + (e.unemployment > 30 ? 0.4 : -0.2) +
-                    (S.nation.govApproval < 35 ? 0.5 : -0.3) + RZ.noise(0.5));
-    s.corruption = C100(s.corruption + RZ.noise(0.3) - (s.judiciary > 65 ? 0.12 : -0.06));
-    s.coup = C100(s.coup + (s.unrest > 60 ? 0.4 : -0.25) + (c.inst.security > 60 ? 0.12 : -0.1) + RZ.noise(0.2));
+    e.staplePrice = clamp(e.staplePrice + RZ.noise(4) * span, 40, 190);
+    var shock = (e.staplePrice - 100) / 100;
+    e.growth = clamp(e.growth + (((c.econ.growth + shock * 3.2) - e.growth) * pull(0.10)) + RZ.noise(0.25) * span, -8, 12);
+    e.inflation = Math.max(0.5, e.inflation + ((c.econ.inflation - e.inflation) * pull(0.08)) - shock * 0.8 * span + RZ.noise(0.7) * span);
+    e.unemployment = clamp(e.unemployment - (e.growth - 2.5) * 0.06 * span + RZ.noise(0.15) * span, 3, 60);
+    e.debt = clamp(e.debt + ((S.nation.budget.debtsvc < 10 ? 0.25 : -0.05) - e.growth * 0.05) * span + RZ.noise(0.15) * span, 5, 220);
+    e.reserves = clamp(e.reserves + (shock * 0.06 - (e.inflation > 20 ? 0.05 : 0)) * span + RZ.noise(0.05) * span, 0.1, 20);
+
+    s.unrest = C100(s.unrest + ((e.inflation > 15 ? 0.7 : -0.35) + (e.unemployment > 30 ? 0.4 : -0.2) +
+                    (S.nation.govApproval < 35 ? 0.5 : -0.3)) * span + RZ.noise(0.5) * span);
+    s.corruption = C100(s.corruption + RZ.noise(0.3) * span - (s.judiciary > 65 ? 0.12 : -0.06) * span);
+    s.coup = C100(s.coup + ((s.unrest > 60 ? 0.4 : -0.25) + (c.inst.security > 60 ? 0.12 : -0.1)) * span + RZ.noise(0.2) * span);
 
     var target = C100(52 + (e.growth - 2.5) * 3 - Math.max(0, e.inflation - 6) * 0.7 -
                       Math.max(0, e.unemployment - 20) * 0.35 - s.unrest * 0.15 - s.corruption * 0.12 +
                       (s.health + s.education + s.infra - 135) * 0.06);
-    S.nation.govApproval = clamp(S.nation.govApproval * 0.90 + target * 0.10, 3, 95);
+    S.nation.govApproval = clamp(S.nation.govApproval + (target - S.nation.govApproval) * pull(0.10), 3, 95);
   }
 
   function isCampaignSeason(S) {
@@ -652,6 +911,77 @@
   function resolveEvent(S, choiceIndex) {
     var ev = S.pendingEvent;
     if (!ev) return null;
+
+    // The electoral commission, months after the ballot.
+    if (ev.audit) {
+      var audRes = RZ.sprint.resolveAudit(S, ev, choiceIndex);
+      S.pendingEvent = null;
+      var audEntry = {
+        kind: audRes.tone === 'bad' ? 'bad' : 'flat', src: 'The commission',
+        title: audRes.title, body: audRes.body,
+        deltas: audRes.deltas || [], tone: audRes.tone
+      };
+      pushFeed(S, audEntry);
+      save(S);
+      // The entry itself, not a wrapper around it: every caller — the outcome
+      // sheet included — expects a feed entry back from here.
+      audEntry.res = audRes;
+      return audEntry;
+    }
+
+    // The disciplinary hearing after a failed revolt.
+    if (ev.ultimatum) {
+      var ultRes = RZ.revolt.resolveUltimatum(S, ev, choiceIndex);
+      S.pendingEvent = null;
+      var ultEntry = {
+        kind: 'big', alert: ultRes.tone === 'bad', src: 'The regional office',
+        title: ultRes.title, body: ultRes.body,
+        deltas: ultRes.deltas || [], tone: ultRes.tone
+      };
+      pushFeed(S, ultEntry);
+      save(S);
+      // The entry itself, not a wrapper around it: every caller — the outcome
+      // sheet included — expects a feed entry back from here.
+      ultEntry.res = ultRes;
+      return ultEntry;
+    }
+
+    // Campaign-week events live in sprint.js, built when the week turns.
+    if (ev.weekly) {
+      var wkRes = RZ.sprint.resolveWeekly(S, ev, choiceIndex);
+      S.pendingEvent = null;
+      var wkEntry = {
+        kind: wkRes.tone === 'good' ? 'good' : (wkRes.tone === 'bad' ? 'bad' : 'flat'),
+        src: 'Week ' + (S.sprint ? S.sprint.week : '') + ' of the campaign',
+        title: wkRes.title, body: wkRes.body,
+        deltas: wkRes.deltas || [], tone: wkRes.tone
+      };
+      pushFeed(S, wkEntry);
+      save(S);
+      // The entry itself, not a wrapper around it: every caller — the outcome
+      // sheet included — expects a feed entry back from here.
+      wkEntry.res = wkRes;
+      return wkEntry;
+    }
+
+    // A patron's demand is built at the moment it is asked rather than defined
+    // in the events table, so it resolves through crisis.js instead.
+    if (ev.patron) {
+      var capRes = RZ.crisis.resolveDemand(S, ev, choiceIndex);
+      S.pendingEvent = null;
+      var capEntry = {
+        kind: capRes.tone === 'bad' ? 'bad' : 'flat', src: ev.patron,
+        title: capRes.title, body: capRes.body,
+        deltas: capRes.deltas || [], tone: capRes.tone
+      };
+      pushFeed(S, capEntry);
+      save(S);
+      // The entry itself, not a wrapper around it: every caller — the outcome
+      // sheet included — expects a feed entry back from here.
+      capEntry.res = capRes;
+      return capEntry;
+    }
+
     var def = RZ.EVENTS.filter(function (e) { return e.id === ev.id; })[0];
     var api = mkApi(S);
     var res = def.choices[choiceIndex].run(api);
@@ -785,7 +1115,7 @@
     function settle(won, kind, detail, extra) {
       var res = { kind: kind, won: won, rung: rung, detail: detail, against: against };
       if (won) {
-        var lost = RZ.field.losesToPlayer(S, idx);
+        var lost = RZ.field.losesToPlayer(S, idx, con);
         if (lost) res.deposed = { name: lost.fig.name, gone: lost.gone };
       } else {
         var winner = RZ.field.winsAgainstPlayer(S, idx);
@@ -807,8 +1137,18 @@
     if (rung.how === 'conference') {
       var cv = RZ.elections.conferenceVote(S, con);
       if (cv.won) {
-        promote(S, 'The ' + c.terms.conference + ' elected you.');
+        // settle() below takes the job off whoever was holding it; this only
+        // has to name them while they are still the incumbent.
+        var beaten = con && con.incumbent ? con.fig.name : null;
+        promote(S, 'The ' + c.terms.conference + ' elected you' + (beaten ? ', over ' + beaten + '.' : '.'));
         if (rung.id === 'leader') { S.player.isLeader = true; S.parties[S.player.partyId].leaderName = S.player.name; }
+        if (beaten) {
+          S.player.contenderBeaten = (S.player.contenderBeaten || 0) + 1;
+          pushFeed(S, { kind: 'good', src: c.terms.conference,
+            title: 'You took it off ' + beaten,
+            body: 'They congratulated you at the podium with both hands and one of the photographs of it ' +
+                  'will be used against one of you for the rest of your lives.', tone: 'good' });
+        }
       } else {
         api.add('party', -RZ.range(3, 8)); api.add('leader', -RZ.range(2, 6));
         S.player.electionsLost++;
@@ -841,7 +1181,20 @@
     S.player.rungIdx = Math.min(lad.length - 1, S.player.rungIdx + 1);
     var r = lad[S.player.rungIdx];
     S.player.officeSince = { year: S.date.year, month: S.date.month };
-    if (r.id === 'hos' && !S.flags.becameHosYear) S.flags.becameHosYear = S.date.year;
+    // Reaching the rung is not the same as holding the office. Election night
+    // used to be the only path that set these, so any other route — a revolt, a
+    // traded file, an appointment — left a president who was not president, with
+    // every president-gated mechanic still dark.
+    if (r.id === 'hos') {
+      if (!S.flags.becameHosYear) S.flags.becameHosYear = S.date.year;
+      S.player.isPresident = true;
+      S.player.isLeader = true;
+      S.nation.termNumber = S.nation.termNumber || 1;
+      S.nation.presidentName = S.player.name;
+      S.nation.presidentParty = S.player.partyId;
+      if (S.nation.govParties.indexOf(S.player.partyId) < 0) S.nation.govParties.push(S.player.partyId);
+    }
+    if (r.id === 'leader') S.player.isLeader = true;
     S.player.titles.push(r.title);
     S.player.record.push({ year: S.date.year, text: 'Became ' + r.title + '.' });
     S.player.fame = C100(S.player.fame + 4 + r.tier * 1.6);
@@ -911,10 +1264,15 @@
     if (P.health <= 4) { endGame(S, P.age >= 68 ? 'age' : 'health'); return; }
     if (P.age >= 78 && RZ.chance(0.08)) { endGame(S, 'age'); return; }
 
+    // Pressure decays when nobody is digging. The nemesis puts it back up.
+    S.scandalRisk = Math.max(0, (S.scandalRisk || 0) - 0.06);
+
     // scandal breaking on its own
     var un = P.dirt.filter(function (d) { return !d.exposed; });
     if (un.length) {
-      var risk = 0.012 * un.length * (1 + c.inst.media / 90) * (1 + P.fame / 130);
+      var traitRisk = ((RZ.TRAITS && RZ.TRAITS[P.trait]) || {}).scandalRisk || 1;
+      var risk = 0.012 * un.length * (1 + c.inst.media / 90) * (1 + P.fame / 130) *
+                 (1 + (S.scandalRisk || 0)) * traitRisk;
       if (RZ.chance(risk)) {
         var api = mkApi(S);
         var d = un.sort(function (a, b) { return b.severity - a.severity; })[0];
@@ -1010,6 +1368,8 @@
   // it lands in the feed with everything the answers cost or bought.
   function finishDialogue(S, convo) {
     var tone = convo.mood >= 2 ? 'good' : (convo.mood <= -2 ? 'bad' : 'flat');
+    // How the room went is what that person now thinks of you, and they keep it.
+    if (RZ.cast) RZ.cast.afterMeeting(S, convo);
     var entry = {
       kind: tone === 'good' ? 'good' : (tone === 'bad' ? 'bad' : 'flat'),
       src: convo.speaker.name + ', ' + convo.speaker.role,
@@ -1067,7 +1427,8 @@
     newGame: newGame, mkApi: mkApi, availableActions: availableActions, doAction: doAction,
     endTurn: endTurn, rollEvent: rollEvent, resolveEvent: resolveEvent,
     contestStatus: contestStatus, contest: contest, whipCount: whipCount, promote: promote, nextRung: nextRung,
-    meetsRequirements: meetsRequirements, pushFeed: pushFeed, endGame: endGame,
+    meetsRequirements: meetsRequirements, considerAppointment: considerAppointment,
+    pushFeed: pushFeed, endGame: endGame,
     finishDialogue: finishDialogue, finishEventDialogue: finishEventDialogue,
     save: save, load: load, clearSave: clearSave, hasSave: hasSave,
     WAGE_BASE: WAGE_BASE, ELECTION_MONTH: ELECTION_MONTH, isCampaignSeason: isCampaignSeason

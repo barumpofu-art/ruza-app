@@ -9,6 +9,16 @@
 
   function A(o) { return o; }
 
+  // Nobody crosses to a party that cannot win. The best target is the biggest
+  // one that is not your own, weighted by whether it is going anywhere.
+  function bestRivalParty(a) {
+    var others = a.C.parties.filter(function (p) { return p.id !== a.P.partyId; });
+    if (!others.length) return null;
+    return others.slice().sort(function (x, y) {
+      return (a.S.parties[y.id].vote || 0) - (a.S.parties[x.id].vote || 0);
+    })[0];
+  }
+
   var ACTIONS = [
 
     /* ---------------- ground game ---------------- */
@@ -163,6 +173,9 @@
         a.add('money', take); a.add('leader', a.rng(2, 5)); a.add('party', a.rng(1, 3));
         a.add('stats.integrity', -a.rng(1.5, 3.5));
         a.dirt('patron', 'A standing obligation to a businessman who expects to be repaid', 2);
+        // The obligation is now a line in a ledger that he keeps, and he will
+        // come back to it. The bigger the cheque, the sooner.
+        a.owePatron(RZ.makeName(a.C), 3 + a.tier() * 0.8);
         return {
           title: P(['Nothing was written down', 'A long lunch at the farm', 'He asked about your mother by name']),
           body: P(['He has funded four ministers and buried two careers. He did not ask for anything today, which is how it always starts.',
@@ -200,6 +213,7 @@
         a.add('money', take); a.add('business', a.rng(3, 7)); a.add('capital', a.rng(2, 6));
         a.add('stats.integrity', -a.rng(4, 8));
         a.dirt('tender', 'A ministry contract awarded to a company connected to you', 4);
+        a.owePatron(RZ.makeName(a.C), 5);
         a.nation('corruption', a.rng(.6, 1.8));
         return {
           title: P(['The evaluation committee found in favour', 'A consortium nobody had heard of', 'Signed on a Friday afternoon']),
@@ -523,6 +537,219 @@
     }),
 
     /* ---------------- self ---------------- */
+    /* ---------------- the seat you have to hold ---------------- */
+    A({
+      id: 'lobby', ico: '🏛️', ap: 1, tier: [4, 13],
+      name: 'Lobby the ministry',
+      desc: function (a) {
+        var n = RZ.ward.needs(a.S);
+        return n.length
+          ? 'You have no budget. Go and spend influence on somebody who has: ' + n[0].name + ', perhaps.'
+          : 'Everything you can reasonably ask for is already under construction.';
+      },
+      when: function (a) { return RZ.ward && RZ.ward.canLobby(a.S); },
+      run: function (a) {
+        // Falls through to the plain roll when no conversation is available;
+        // the meeting is the normal case. There may be nothing left to ask
+        // for, which is its own kind of success.
+        var want = RZ.ward.needs(a.S);
+        if (!want.length) return { fail: true, title: 'There is nothing left to ask them for' };
+        var pick = RZ.pick(want);
+        a.add('capital', -RZ.ward.lobbyCost(a.S, pick.id) * 0.5);
+        a.startProject(pick.id, {});
+        return {
+          title: 'A letter, and then another letter',
+          body: 'No meeting, no minister, and eventually a line in the adjustment estimates that somebody in the ' +
+                'ministry put there because you would not stop writing. It is in the system now.',
+          tone: 'flat'
+        };
+      }
+    }),
+
+    A({
+      id: 'pac', ico: '📊', ap: 1, tier: [4, 12],
+      name: 'Sit on the accounts committee',
+      desc: 'Summon somebody who has spent public money and ask them where it went, on television.',
+      risky: true,
+      when: function (a) { return a.tier() >= 4 && a.P.capital >= 4; },
+      run: function (a) {
+        a.add('capital', -a.rng(2, 5));
+        a.add('media', a.rng(2, 5));
+        return {
+          title: 'The hearing was adjourned to a date to be confirmed',
+          body: 'Two of the four witnesses sent apologies and the third brought a lawyer who objected to the ' +
+                'terms of reference. Committee work is mostly this.',
+          tone: 'flat'
+        };
+      }
+    }),
+
+    A({
+      id: 'whip', ico: '🔔', ap: 1, tier: [4, 12],
+      name: 'Take the whip’s call',
+      desc: 'There is a division at four and he wants to know now, not then.',
+      when: function (a) { return a.tier() >= 4 && !a.isPresident(); },
+      run: function (a) {
+        a.add('party', a.rng(0, 2));
+        return { title: 'The division passed without you', body: 'You were paired. Nobody minded, and nobody noticed.', tone: 'flat' };
+      }
+    }),
+
+    A({
+      id: 'wardcrisis', ico: '🚱', ap: 1, tier: [4, 13],
+      name: function (a) { return 'Hold the constituency office in ' + a.homeName(); },
+      desc: 'Whoever walks in is your problem for the afternoon.',
+      when: function (a) { return a.tier() >= 4; },
+      run: function (a) {
+        a.add('grassroots', a.rng(1, 3)); a.add('health', -a.rng(1, 3));
+        a.wardTrust(a.rng(0, 2));
+        return {
+          title: 'Nine people, four hours',
+          body: 'A pension that has stopped, a school transfer, a boundary dispute and a man who wanted to ' +
+                'explain a theory. You solved one of them.',
+          tone: 'flat'
+        };
+      }
+    }),
+
+    /* ---------------- the state, once you run part of it ---------------- */
+    A({
+      id: 'megatender', ico: '✒️', ap: 1, tier: [6, 13], risky: true,
+      name: 'Sign off the national contract',
+      desc: 'Four hundred pages, three bidders, and one of them can actually do the work.',
+      when: function (a) { return a.tier() >= 6 && a.inGov(); },
+      run: function (a) {
+        a.nation('infra', a.rng(0.5, 2)); a.add('business', a.rng(1, 4));
+        return { title: 'It went to committee', body: 'Deferred for a further evaluation report. Nothing was signed and nothing was stopped.', tone: 'flat' };
+      }
+    }),
+
+    A({
+      id: 'purge', ico: '🗂️', ap: 1, tier: [9, 12], risky: true,
+      name: 'Work the central committee',
+      desc: 'Forty-one names, annotated in three colours, two days before nominations.',
+      when: function (a) { return a.tier() >= 9 && !a.isPresident() && a.P.capital >= 10; },
+      run: function (a) {
+        a.add('capital', -a.rng(3, 7)); a.add('party', a.rng(1, 4));
+        return { title: 'A long evening of telephone calls', body: 'Nobody was removed and nobody was promised anything, and four people now know you were counting.', tone: 'flat' };
+      }
+    }),
+
+    A({
+      id: 'shadowdiplo', ico: '🛬', ap: 1, tier: [10, 13],
+      name: 'Travel, quietly',
+      desc: 'Not on either country’s programme, and no officials in the room.',
+      when: function (a) { return a.tier() >= 10; },
+      run: function (a) {
+        a.add('intl', a.rng(2, 6)); a.add('grassroots', -a.rng(1, 4)); a.add('health', -a.rng(1, 3));
+        return { title: 'Four days abroad', body: 'A communiqué, two dinners and a corridor conversation that may be worth something one day. Your province noticed you were gone.', tone: 'flat' };
+      }
+    }),
+
+    A({
+      id: 'ssa', ico: '🕵️', ap: 1, tier: [13, 13], risky: true,
+      name: 'Send for the Director-General',
+      desc: 'He brings nothing with him, ever.',
+      when: function (a) { return a.isPresident(); },
+      run: function (a) {
+        a.add('security', a.rng(1, 4));
+        return { title: 'A briefing, and nothing on paper', body: 'Forty minutes on regional posture and one sentence about a domestic matter that he declined to expand on.', tone: 'flat' };
+      }
+    }),
+
+    /* ---------------- forcing the issue ---------------- */
+    A({
+      id: 'revolt', ico: '⚔️', ap: 1, tier: [2, 9], risky: true,
+      name: 'Challenge the incumbent',
+      desc: function (a) {
+        var o = RZ.revolt.revoltOdds(a.S);
+        return o ? 'Force a vote against ' + o.name + '. Roughly ' + o.pct + '% of the room, on today’s numbers.'
+                 : 'Force an internal vote rather than wait to be chosen.';
+      },
+      when: function (a) { return RZ.revolt && RZ.revolt.canRevolt(a.S); },
+      run: function (a) {
+        var r = RZ.revolt.revolt(a.S, a);
+        if (!r) return { fail: true, title: 'There is nobody to challenge' };
+        return { title: r.title, body: r.body, tone: r.tone };
+      }
+    }),
+
+    A({
+      id: 'blackmail', ico: '🗄️', ap: 1, tier: [2, 11], risky: true,
+      name: 'Trade the file for the seat',
+      desc: function (a) {
+        var t = RZ.revolt.blackmailTarget(a.S);
+        return t ? 'You have something on ' + t.name + '. Positions have been exchanged for less.'
+                 : 'You have nothing on anybody worth the trade.';
+      },
+      when: function (a) {
+        var nr = RZ.engine.nextRung(a.S);
+        return RZ.revolt && !!RZ.revolt.blackmailTarget(a.S) && !!nr && nr.how !== 'auto' &&
+               a.S.tempo !== 'week';
+      },
+      run: function (a) { return RZ.revolt.blackmail(a.S, a); }
+    }),
+
+    /* ---------------- crossing the floor ---------------- */
+    A({
+      id: 'defect', ico: '🚪', ap: 1, tier: [2, 12], risky: true,
+      name: 'Cross the floor',
+      desc: function (a) {
+        var to = bestRivalParty(a);
+        return to ? 'Leave for ' + to.abbr + '. Everything you built here stays here.'
+                  : 'There is nowhere to go.';
+      },
+      when: function (a) { return !a.P.isPresident && !!bestRivalParty(a); },
+      run: function (a) {
+        var to = bestRivalParty(a);
+        if (!to) return { fail: true, title: 'There is nobody to cross to' };
+        var from = a.C.partyById[a.P.partyId];
+
+        // Loyalty is not transferable. Whatever you were owed here is written
+        // off the moment you walk, and the people who own you now owe you nothing.
+        a.P.standing.leader = 0;
+        a.add('party', -(a.P.standing.party * RZ.range(0.55, 0.8)));
+
+        // What you do get is a fortnight of being the only story in the country.
+        var media = a.rng(14, 26), grass = a.rng(8, 16);
+        a.add('media', media); a.add('grassroots', grass); a.add('fame', a.rng(6, 14));
+        if (RZ.crisis) {
+          RZ.crisis.addBuff(a.S, 'media', media, 5, 'crossed the floor');
+          RZ.crisis.addBuff(a.S, 'grassroots', grass, 5, 'crossed the floor');
+        }
+
+        a.P.partyId = to.id;
+        a.S.flags.crossings = (a.S.flags.crossings || 0) + 1;
+        a.P.record.push({ year: a.S.date.year, text: 'Left ' + from.abbr + ' for ' + to.abbr + '.' });
+        a.dirt('crossed', 'Crossed the floor from ' + from.abbr + ' to ' + to.abbr, 2);
+        a.makeRival();
+
+        // Whatever a nemesis had over you was branch machinery, and it is not
+        // your branch any more.
+        var freed = RZ.revolt && RZ.revolt.nemesisOf(a.S)
+          ? RZ.revolt.tryNeutralise(a.S, null, 'defect') : null;
+
+        // In most of these systems the seat belongs to the party, not to you.
+        var lostSeat = a.tier() >= 4 && RZ.chance(0.55);
+        if (lostSeat) a.demote();
+
+        return {
+          title: lostSeat ? 'You crossed, and the seat did not come with you'
+                          : 'You crossed the floor',
+          body: (a.S.flags.crossings > 1
+            ? 'The second crossing is not a conviction, it is a habit, and the press said so within the hour. '
+            : 'It was done at a press conference at eleven, in front of a banner that had been printed the night before. ') +
+            (freed ? 'It has also put you out of ' + freed.name + '’s reach for good, which was half the point. ' : '') +
+            (lostSeat
+              ? 'The seat was the party’s, not yours. The Speaker declared it vacant on Thursday and you are outside the House ' +
+                'looking in — famous, and without a vote.'
+              : 'For about three weeks you will be the most interesting person in the country. ' +
+                'After that you will be a new member of a party that watched you leave your last one.'),
+          tone: lostSeat ? 'bad' : 'flat'
+        };
+      }
+    }),
+
     A({
       id: 'study', ico: '🎓', ap: 1, tier: [0, 13],
       name: 'Take a course',
@@ -586,6 +813,50 @@
       }
     })
   ];
+
+  // Everything else on this list is a reaction to somebody. This is the one
+  // action where the House is reacting to you.
+  ACTIONS.push({
+    id: 'draft', ico: '📜', ap: 1, tier: [4, 13], special: 'draft',
+    name: 'Draft a bill',
+    desc: 'Put your own name on the order paper and then go and find fifty-one per cent.',
+    when: function (a) { return !!(RZ.bill && RZ.bill.canDraft(a.S)); }
+  });
+
+  // The other one. Almost always a meeting; the roll below is what happens
+  // when there is nothing to say to each other this month.
+  ACTIONS.push({
+    id: 'theother', ico: '🪞', ap: 1,
+    name: function (a) {
+      var ct = RZ.contender && RZ.contender.get(a.S);
+      return ct ? 'Take a reading on ' + ct.name : 'Take a reading on the other one';
+    },
+    desc: function (a) {
+      var sm = RZ.contender && RZ.contender.summary(a.S);
+      if (!sm) return 'Somebody started the same year you did.';
+      return sm.title + ', ' + sm.standing + '. They climb ' + sm.climbs + '.';
+    },
+    when: function (a) { return !!(RZ.contender && RZ.contender.get(a.S) && !RZ.contender.get(a.S).ascended); },
+    run: function (a) {
+      var ct = RZ.contender.get(a.S);
+      var sm = RZ.contender.summary(a.S);
+      // Watching costs an afternoon and tells you where they are. Occasionally
+      // an afternoon of watching finds something.
+      a.add('stats.cunning', a.rng(.2, .8));
+      if (a.roll('cunning', 55)) {
+        RZ.contender.fileOn(a.S, 'Something ' + ct.name + ' would rather you had not found');
+        return { title: 'There is something there',
+          body: 'Two afternoons with somebody who used to work for them and a company registration that ' +
+                'has the wrong surname on it. You have not used it. You have it, which is a different ' +
+                'and better thing to have.', tone: 'good' };
+      }
+      return { title: sm.name + ' is ' + sm.title,
+        body: 'They are ' + sm.standing + ' and climbing ' + sm.climbs + '. ' +
+              (sm.lastMove ? cap1(sm.name + ' ' + sm.lastMove + '.') : 'Nothing this month, which for them is unusual.'),
+        tone: sm.gap > 0 ? 'bad' : 'flat' };
+    }
+  });
+  function cap1(x) { return x.charAt(0).toUpperCase() + x.slice(1); }
 
   ACTIONS.forEach(function (act) {
     if (act.id === 'church') {

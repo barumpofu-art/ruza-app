@@ -151,7 +151,11 @@
       // for at a conference: delegates from a province you have never worked
       // still know who you are.
       here: Math.max(P.regionSupport[regionId] || 0, P.fame * 0.28),
-      grassroots: P.standing.grassroots, party: P.standing.party, fame: P.fame,
+      // "Grassroots" is an average of six electorates who want different
+      // things. What counts in a hall is which of them actually turned up, so
+      // the bloc swing is folded in here rather than at each contest.
+      grassroots: P.standing.grassroots + (RZ.blocs ? RZ.blocs.swing(S) : 0),
+      party: P.standing.party, fame: P.fame,
       leader: P.standing.leader, charisma: P.stats.charisma,
       security: P.standing.security * (c.inst.security / 170),
       slate: Math.min(8, allies(S).length) * 2.5,
@@ -398,8 +402,13 @@
 
   // You won. The person who held it has to go somewhere, and it is never
   // quietly back to the branch that sent them.
-  function losesToPlayer(S, rungIdx) {
-    var con = contender(S, rungIdx);
+  // `known` is the contender resolved *before* the player was promoted. It
+  // matters: promoting the player runs enforceSingular, which quietly moves
+  // whoever was in a singular chair out of it — so by the time this is called
+  // after a win, looking the incumbent up again finds an empty room and the
+  // person you actually beat is never recorded as having been beaten.
+  function losesToPlayer(S, rungIdx, known) {
+    var con = known || contender(S, rungIdx);
     if (!con || !con.incumbent) return null;
     var f = con.fig;
     f.power = clamp(f.power - RZ.range(8, 20), 4, 100);

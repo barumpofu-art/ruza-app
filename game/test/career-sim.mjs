@@ -20,8 +20,9 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const FILES = [
   'core.js', 'data-countries.js', 'data-ladder.js', 'data-actions.js',
-  'data-events.js', 'data-dialogue.js', 'people.js', 'field.js', 'elections.js',
-  'engine.js', 'governance.js', 'dialogue.js'
+  'data-events.js', 'data-dialogue.js', 'data-origins.js', 'people.js', 'field.js', 'elections.js',
+  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js',
+  'constituency.js', 'statecraft.js', 'legislation.js', 'contender.js', 'blocs.js', 'cast.js'
 ];
 
 function loadGame() {
@@ -224,6 +225,35 @@ function playCareer(countryId, seed, strategy) {
       const out = RZ.engine.doAction(S, pickAct.id);
       if (!out) break;
       if (out.fail) continue;
+      // Some actions are a question before they are an outcome: the app asks
+      // which ward, which bloc, which clause, and only then resolves. Answer
+      // them the way the app would rather than counting a missing entry as a
+      // fault.
+      if (out.special) {
+        stats.actions++;
+        const api = RZ.engine.mkApi(S);
+        if (out.special === 'blitz' || out.special === 'surge') {
+          const wards = (S.sprint && S.sprint.wards) || [];
+          if (wards.length) {
+            const w = RZ.pick(wards);
+            if (out.special === 'surge') RZ.sprint.surge(S, w.id, api);
+            else RZ.sprint.blitz(S, w.id, api);
+          }
+        } else if (out.special === 'draft') {
+          RZ.bill.table(S, api, RZ.pick(RZ.bill.BILLS).id);
+        } else if (out.special === 'bloc' || out.special === 'concede') {
+          const open = ((S.bill && S.bill.blocs) || []).filter((x) => !x.pledged);
+          if (open.length) {
+            const b = RZ.pick(open);
+            if (out.special === 'concede') RZ.bill.concede(S, api, b.id);
+            else RZ.bill.workBloc(S, api, b.id, api.hasLeverage() && RZ.chance(0.2) ? 'extort' : 'capital');
+          }
+        }
+        S.actionsLeft--;
+        S.actionsThisMonth = (S.actionsThisMonth || 0) + 1;
+        checkState(`${at} after ${pickAct.id}`, S);
+        continue;
+      }
       if (out.dialogue) {
         stats.meetings++;
         const convo = out.dialogue;

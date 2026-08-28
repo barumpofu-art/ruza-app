@@ -76,13 +76,25 @@ console.log('country cards rendered:', countryCards);
 
 // Skip the click-through of creation and start a career directly, then render
 // every pane and the contest card, which is where the field surfaces.
-await evaluate(`
+// begin() opens the origin scene first — the afternoon that got you into this
+// — and only creates the career once an answer has been given. Play it, the
+// way a player would, rather than expecting a game to exist synchronously.
+const origin = await evaluate(`(function(){
   RZ.ui.UI.draft = { countryId: 'ZA', name: 'Test Candidate', gender: 'f',
     regionId: RZ.COUNTRIES.ZA.regions[0].id, bgId: RZ.BACKGROUNDS[0].id,
-    partyId: RZ.COUNTRIES.ZA.parties[0].id };
+    partyId: RZ.COUNTRIES.ZA.parties[0].id, startAs: 'activist' };
   RZ.main.begin();
-  true;
-`);
+  var answers = document.querySelectorAll('#modal-inner [data-i]');
+  if (answers.length) answers[0].click();
+  var go = document.querySelector('#modal-inner [data-go]');
+  if (go) go.click();
+  return { answers: answers.length, started: !!(RZ.ui.UI.S && RZ.ui.UI.S.player),
+           trait: RZ.ui.UI.S ? RZ.ui.UI.S.player.trait : null };
+})()`);
+if (!origin.answers) throw new Error('the origin scene offered no answers');
+if (!origin.started) throw new Error('answering the origin scene did not start a career');
+if (!origin.trait) throw new Error('the origin answer left no trait on the career');
+console.log('origin scene:', JSON.stringify(origin));
 
 const panes = [];
 for (const p of ['desk', 'country', 'party', 'self']) {

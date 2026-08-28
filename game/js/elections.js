@@ -302,6 +302,9 @@
     // and how good that seat is depends on how much of the machine they control.
     var skew = 0.10 + Math.min(0.55, (P.standing.party + (P.regionSupport[r.id] || 0)) / 340);
     var mine = shares[P.partyId] * (1 + (P.standing.grassroots + (P.regionSupport[r.id] || 0)) / 300) * (1 + skew);
+    // "Grassroots" is an average of six electorates who want different things.
+    // On the day, what counts is who among them actually goes and votes.
+    if (RZ.blocs) mine += RZ.blocs.swing(S);
     var best = 0, bestId = null;
     Object.keys(shares).forEach(function (k) {
       if (k === P.partyId) return;

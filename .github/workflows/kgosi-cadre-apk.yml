@@ -13,9 +13,9 @@ permissions:
   contents: write
 
 jobs:
-  # Every branch of every conversation, and whole careers in every country,
-  # played headlessly. Game data is only otherwise exercised by a player
-  # tapping through it on a phone.
+  # Every branch of every conversation, every mechanic, and whole careers in
+  # every country, played headlessly. Game data is only otherwise exercised by
+  # a player tapping through it on a phone.
   simulate:
     runs-on: ubuntu-latest
     steps:
@@ -26,15 +26,23 @@ jobs:
       - name: Play every conversation
         run: node game/test/dialogue-sim.mjs
 
+      - name: Check every mechanic still fires
+        run: node game/test/mechanics.mjs
+
       # Whole careers, in every country, with every invariant asserted after
       # every turn. This is what catches a rule change that only breaks in
       # year thirty of a career nobody would play by hand.
       - name: Play whole careers
         run: node game/test/career-sim.mjs --careers 4
 
-      # Neither simulation above ever loads ui.js or main.js, because both run
-      # the modules in a Node sandbox. This one plays the real page in a real
-      # browser: every pane, a year of months, a reload, and the obituary.
+      # A short run: enough to catch a career that throws, without holding the
+      # APK build behind ten minutes of simulation. Run it long by hand.
+      - name: Simulate careers
+        run: node game/test/monte-carlo.mjs --runs 120 --turns 300
+
+      # None of the simulations above ever loads ui.js or main.js, because they
+      # all run the modules in a Node sandbox. This one plays the real page in a
+      # real browser: every pane, a year of months, a reload, and the obituary.
       - name: Play the real page in a browser
         run: bash game/test/page-smoke.sh
 
@@ -89,7 +97,7 @@ jobs:
                        assets/icon-192.png assets/icon-512.png \
                        assets/js/main.js assets/js/engine.js assets/js/ui.js \
                        assets/js/data-countries.js assets/js/elections.js assets/js/governance.js \
-                       assets/js/dialogue.js assets/js/data-dialogue.js assets/js/field.js; do
+                       assets/js/dialogue.js assets/js/data-dialogue.js assets/js/field.js assets/js/crisis.js assets/js/sprint.js assets/js/revolt.js assets/js/data-origins.js assets/js/constituency.js assets/js/statecraft.js assets/js/legislation.js assets/js/contender.js assets/js/blocs.js assets/js/cast.js; do
             unzip -Z1 "$APK" | grep -qx "$entry" || { echo "missing from APK: $entry"; exit 1; }
           done
           # Density folders come out of AGP with a -v4 qualifier.

@@ -21,9 +21,12 @@ if (typeof WebSocket === 'undefined') {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Ninety seconds, not thirty: on a cold-booted emulator competing with Play
+// Services' first-run work, the WebView publishes its devtools socket long
+// before it has a page to show through it.
 async function findPage() {
   let lastSeen = '(nothing)';
-  for (let attempt = 0; attempt < 30; attempt++) {
+  for (let attempt = 0; attempt < 90; attempt++) {
     try {
       const targets = await (await fetch(`${ENDPOINT}/json/list`)).json();
       const page = targets.find((t) => t.type === 'page' && String(t.url).includes(PKG_ORIGIN));
@@ -189,7 +192,14 @@ async function forwardDevtools() {
         catch { /* nothing was forwarded, which is fine */ }
         execFileSync('adb', ['forward', 'tcp:9222', `localabstract:${name}`],
           { stdio: 'ignore', timeout: 30000 });
-        return name;
+        // A listening socket is not a page. If this pid's WebView has nothing
+        // on our origin yet, go round again rather than returning a forward
+        // that findPage will then sit and stare at — the app may still be
+        // starting, or may be about to come back under a different pid.
+        try {
+          const targets = await (await fetch(`${ENDPOINT}/json/list`)).json();
+          if (targets.some((t) => t.type === 'page' && String(t.url).includes(PKG_ORIGIN))) return name;
+        } catch { /* not answering yet */ }
       }
     }
     await sleep(1000);
@@ -281,7 +291,22 @@ await evaluate(`(() => { const i = document.getElementById('in-name');
   i.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
 await click('[data-b="teacher"]');
 await click('#btn-begin');
+
+// 4b. Character creation is a scene now: an afternoon that decides what kind
+//     of politician you are, played before the first month starts.
+await waitFor("!!document.querySelector('#modal-inner .origin-scene, #modal-inner .choice')", 'the origin scene');
+const originAnswers = await count('#modal-inner .choice');
+console.log('origin answers offered:', originAnswers);
+if (originAnswers !== 3) throw new Error(`expected three answers in the origin scene, saw ${originAnswers}`);
+await click('#modal-inner .choice');
+await waitFor("!!document.querySelector('.origin-trait-n')", 'the trait the answer earned');
+console.log('trait:', await text('.origin-trait-n'));
+await click('[data-go]');
+
 await waitFor("!!document.querySelector('.hud-name')", 'the desk');
+const trait = await evaluate('RZ.ui.UI.S.player.trait');
+console.log('trait on the career:', trait);
+if (!trait) throw new Error('the origin scene did not leave a trait on the career');
 const who = await text('.hud-name');
 const office = await text('.hud-office');
 console.log('player:', who, '|', office);

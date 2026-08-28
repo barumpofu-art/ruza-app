@@ -17,8 +17,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const FILES = [
   'core.js', 'data-countries.js', 'data-ladder.js', 'data-actions.js',
-  'data-events.js', 'data-dialogue.js', 'people.js', 'field.js', 'elections.js',
-  'engine.js', 'governance.js', 'dialogue.js'
+  'data-events.js', 'data-dialogue.js', 'data-origins.js', 'people.js', 'field.js', 'elections.js',
+  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js', 'constituency.js', 'statecraft.js', 'legislation.js', 'contender.js', 'blocs.js', 'cast.js'
 ];
 
 function loadGame() {
@@ -50,14 +50,34 @@ function fail(where, msg) {
 const g = loadGame();
 const RZ = g.RZ;
 
-console.log(`loaded ${RZ.DIALOGUE.length} scenes across ${new Set(RZ.DIALOGUE.map(s => s.topic)).size} topics`);
+console.log(`loaded ${RZ.DIALOGUE.length} scenes across ${new Set(RZ.DIALOGUE.map(s => s.topic)).size} topics` +
+  ` (${RZ.DIALOGUE.filter((s) => s.topic === 'crisis').length} of them summoned rather than chosen)`);
+
+// A topic names an action on the monthly desk, a presidential one, or one of
+// the weekly decks that replace the desk during a campaign or a bill.
+function actionFor(topic) {
+  return RZ.actionById[topic] || RZ.gov.actionById(topic) ||
+         (RZ.sprint && RZ.sprint.weekActionById(topic)) ||
+         (RZ.bill && RZ.bill.weekActionById(topic)) || null;
+}
 
 /* ---- every scene id is unique, and every topic names a real action ---- */
 const seen = new Set();
 for (const sc of RZ.DIALOGUE) {
   if (seen.has(sc.id)) fail(sc.id, 'duplicate scene id');
   seen.add(sc.id);
-  if (!RZ.actionById[sc.topic]) fail(sc.id, `topic "${sc.topic}" is not an action id`);
+  // A scene is reachable either because an action opens it, or because a
+  // crisis trigger sends somebody to find you. Anything else is unreachable
+  // content, which is the failure this check exists to catch.
+  if (sc.topic === 'crisis') {
+    const summoned = (RZ.state?.CRISES || []).some((cr) => cr.scene === sc.id) ||
+                     (RZ.bill?.VISITS || []).some((v) => v.id === sc.id) ||
+                     (RZ.contender?.SUMMONS || []).includes(sc.id) ||
+                     (RZ.blocs?.SUMMONS || []).includes(sc.id);
+    if (!summoned) fail(sc.id, 'a crisis scene that no trigger ever summons');
+  } else if (!actionFor(sc.topic)) {
+    fail(sc.id, `topic "${sc.topic}" is not an action id`);
+  }
   // A meeting is a conversation, not a single question with a lid on it.
   if (!Array.isArray(sc.beats) || sc.beats.length < 2) fail(sc.id, 'fewer than two questions');
   for (const [i, b] of (sc.beats || []).entries()) {
@@ -112,6 +132,28 @@ function career(countryId, seed, tier) {
   Object.keys(P.standing).forEach(k => { P.standing[k] = 55; });
   Object.keys(P.stats).forEach(k => { P.stats[k] = 60; });
   return S;
+}
+
+// Some meetings only exist inside a machine that is already running — you
+// cannot be asked how the count is going with nothing on the order paper.
+// Build that machine rather than making the scene defensive about a state the
+// game never actually produces.
+function prepare(S, sc) {
+  // A deputation is always a specific deputation; without one named, the scene
+  // is being asked who walked through the door and nobody did.
+  if (sc.id === 'bloc-deputation' && RZ.blocs) {
+    // Seeded per career, so across the whole sweep all six of them get a turn
+    // at walking through the door.
+    S.flags.blocAngryWho = RZ.pick(RZ.blocs.BLOCS).id;
+    RZ.blocs.init(S);
+  }
+  if (RZ.contender && !S.contender) { S.player.trait = S.player.trait || 'firebrand'; RZ.contender.init(S); }
+  const needsBill = sc.topic === 'billcount' || sc.id.indexOf('bill-') === 0;
+  if (needsBill && RZ.bill) {
+    S.player.capital = 120;
+    RZ.bill.table(S, RZ.engine.mkApi(S), RZ.bill.BILLS[0].id);
+    S.player.capital = 120;
+  }
 }
 
 let played = 0, lines = 0;
@@ -175,10 +217,11 @@ for (const sc of RZ.DIALOGUE) {
       if (sc.only && sc.only.indexOf(cid) < 0) continue;
       for (const tier of [3, 8, 12]) {
         const S = career(cid, 1000 + pick * 7 + tier, tier);
+        prepare(S, sc);
         // Force the scene rather than waiting for its `when` to come true.
         let convo;
         try {
-          convo = RZ.dialogue.begin(S, sc, RZ.actionById[sc.topic]);
+          convo = RZ.dialogue.begin(S, sc, actionFor(sc.topic));
         } catch (e) {
           fail(sc.id, `begin threw in ${cid} tier ${tier}: ${e.message}`);
           continue;

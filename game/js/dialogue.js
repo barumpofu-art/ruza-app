@@ -52,11 +52,23 @@
       where: text(scene.where, api, null),
       beat: 0, mood: 0, done: false, transcript: []
     };
+    // Four things the answers need, and they need the speaker to be resolved
+    // first, which is why they are attached here rather than in mkApi.
+    api.them = speaker;
+    api.remember = function (what, tone) { return RZ.cast && RZ.cast.remember(S, speaker, what, tone); };
+    api.recalls = function (tone) { return RZ.cast && RZ.cast.recalls(S, speaker, tone); };
+    api.rel = function () { return speaker && speaker.rel !== undefined ? speaker.rel : 0; };
+
     if (resume && resume.beat > 0 && resume.beat < scene.beats.length) {
       convo.beat = resume.beat;
       convo.mood = resume.mood || 0;
       convo.transcript.push({ who: 'them', text: 'You were halfway through this. They are still waiting.' });
     } else {
+      // A meeting with somebody you have met before does not start from
+      // nothing. Only on a fresh start: you do not get greeted twice for
+      // having closed the app halfway through.
+      var hello = RZ.cast ? RZ.cast.greeting(S, speaker) : '';
+      if (hello) convo.transcript.push({ who: 'them', text: hello });
       convo.transcript.push({ who: 'them', text: text(scene.opening, api, convo) });
     }
     pushQuestion(convo);
@@ -161,7 +173,26 @@
     a.add(field, swing * a.rng(2, 4));
   }
 
+  // A crisis that summons you is a conversation too. The engine parks a scene
+  // id on the state; main.js presents it the way it presents any other, so a
+  // reshuffle rumour arrives as the chief of staff in a corridor rather than
+  // as an alert card with three buttons.
+  function byId(id) {
+    return (RZ.DIALOGUE || []).filter(function (sc) { return sc.id === id; })[0] || null;
+  }
+  function beginById(S, id) {
+    var sc = byId(id);
+    return sc ? begin(S, sc, null) : null;
+  }
+  // Queue one for the next time the player is looking at the desk.
+  function summon(S, id) {
+    if (!byId(id)) return false;
+    S.pendingScene = id;
+    return true;
+  }
+
   RZ.dialogue = {
+    byId: byId, beginById: beginById, summon: summon,
     sceneFor: sceneFor, scenesFor: scenesFor, begin: begin, beginEvent: beginEvent,
     options: options, choose: choose, temperature: temperature
   };

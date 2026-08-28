@@ -114,8 +114,23 @@
           '</button>';
       }).join('') + '</div></div>';
 
+    d.startAs = d.startAs || 'activist';
+    html += '<div><p class="field-label">Where you come in</p><div class="opt-grid" id="row-start">' +
+      [['activist', '🚩', 'Party activist',
+        'Start at the bottom in ' + c.regionById[d.regionId].name + ', unpaid and unknown. Twenty years, a month at a time.',
+        'The full climb · monthly turns'],
+       ['candidate', '🗳️', 'Parliamentary candidate',
+        'The branch years are behind you and your name is on the list. The ballot is in eight weeks.',
+        'Straight into the campaign · weekly turns']]
+      .map(function (o) {
+        return '<button class="opt' + (d.startAs === o[0] ? ' is-on' : '') + '" data-s="' + o[0] + '">' +
+          '<div class="opt-name">' + o[1] + ' ' + esc(o[2]) + '</div>' +
+          '<div class="opt-desc">' + esc(o[3]) + '</div>' +
+          '<div class="opt-stats">' + esc(o[4]) + '</div></button>';
+      }).join('') + '</div></div>';
+
     html += '<button class="btn btn-gold btn-lg btn-block" id="btn-begin">Begin the career</button>' +
-            '<p class="note center">You start as an unpaid activist in ' + esc(c.regionById[d.regionId].name) + '.</p>';
+            '<p class="note center"></p>';
 
     el('#create-body').innerHTML = html;
 
@@ -124,7 +139,21 @@
     bindChips('#row-region', 'r', 'regionId');
     bindChips('#row-party', 'p', 'partyId');
     bindChips('#row-bg', 'b', 'bgId');
+    bindChips('#row-start', 's', 'startAs');
+    refreshStartNote();
     el('#btn-begin').addEventListener('click', RZ.main.begin);
+  }
+
+  // The line under the Begin button has to answer both questions at once:
+  // where you are from, and which end of the career you are coming in at.
+  function refreshStartNote() {
+    var host = el('#create-body'); if (!host) return;
+    var note = host.querySelector('.note.center'); if (!note) return;
+    var c = RZ.COUNTRIES[UI.draft.countryId];
+    var region = c.regionById[UI.draft.regionId].name;
+    note.textContent = UI.draft.startAs === 'candidate'
+      ? 'You are the candidate for ' + region + ', eight weeks out.'
+      : 'You start as an unpaid activist in ' + region + '.';
   }
 
   function bindChips(sel, attr, key) {
@@ -134,11 +163,7 @@
         UI.draft[key] = b.dataset[attr];
         host.querySelectorAll('[data-' + attr + ']').forEach(function (x) { x.classList.remove('is-on'); });
         b.classList.add('is-on');
-        if (key === 'regionId') {
-          var note = el('#create-body').querySelector('.note.center');
-          if (note) note.textContent = 'You start as an unpaid activist in ' +
-            RZ.COUNTRIES[UI.draft.countryId].regionById[UI.draft.regionId].name + '.';
-        }
+        if (key === 'regionId' || key === 'startAs') refreshStartNote();
       });
     });
   }
@@ -153,7 +178,10 @@
         '<div class="hud-portrait">' + esc(initials) + '</div>' +
         '<div class="hud-id"><div class="hud-name">' + esc(P.name) + '</div>' +
         '<div class="hud-office">' + esc(rung.title) + (P.ministry ? ' · ' + esc(P.ministry) : '') + '</div></div>' +
-        '<div class="hud-date"><div class="hud-month">' + RZ.monthShort(S.date.month) + ' ' + S.date.year + '</div>' +
+        '<div class="hud-date">' +
+          (S.sprint
+            ? '<div class="hud-month sprinting">' + S.sprint.weeksLeft + ' week' + (S.sprint.weeksLeft === 1 ? '' : 's') + ' left</div>'
+            : '<div class="hud-month">' + RZ.monthShort(S.date.month) + ' ' + S.date.year + '</div>') +
         '<div class="hud-ap">' + S.actionsLeft + '/' + S.actionsPerTurn + ' actions</div></div>' +
       '</div>' +
       '<div class="hud-res">' +
@@ -172,7 +200,15 @@
     var S = UI.S, c = RZ.COUNTRIES[S.countryId];
     var h = '';
 
-    if (S.campaign.season) {
+    if (S.bill) {
+      h += billBoard(S, c);
+    }
+    if (S.sprint) {
+      h += wardBoard(S, c);
+    } else if (RZ.ward && RZ.engine.mkApi(S).tier() >= 4) {
+      h += constituencyCard(S, c);
+    }
+    if (!S.sprint && S.campaign.season) {
       h += '<div class="card" style="border-color:#54452a;background:linear-gradient(180deg,#241f14,#161c25)">' +
         '<div class="block-h" style="margin:0 0 6px">Campaign season</div>' +
         '<p class="note">The general election is in ' + RZ.monthName(RZ.engine.ELECTION_MONTH[c.id]) + ' ' + S.nextElection +
@@ -192,19 +228,178 @@
         '</button>';
     }).join('') + '</div></div>';
 
+    var unit = S.tempo === 'week' ? 'week' : 'month';
     h += '<div class="block"><button class="btn ' + (S.actionsLeft <= 0 ? 'btn-gold' : 'btn-ghost') +
          ' btn-lg btn-block" data-act="end-turn">' +
-         (S.actionsLeft <= 0 ? 'Next month →' : 'Skip to next month →') + '</button></div>';
+         (S.actionsLeft <= 0 ? 'Next ' + unit + ' →' : 'Skip to next ' + unit + ' →') + '</button></div>';
 
     h += '<div class="block"><div class="block-h">The record</div>' +
       S.feed.slice(0, 22).map(paperCard).join('') + '</div>';
 
     el('#pane-desk').innerHTML = h;
+    el('#pane-desk').querySelectorAll('[data-ward]').forEach(function (b) {
+      b.addEventListener('click', function () { RZ.main.act('blitz'); });
+    });
     bindDesk();
+  }
+
+  // A bill is an arithmetic problem wearing a title. The four rooms it has to
+  // pass through are not equally persuadable and they are not persuaded by the
+  // same things, so show each one's number rather than a single House bar.
+  function billBoard(S, c) {
+    var b = S.bill;
+    var t = RZ.bill.count(S);
+    var wk = Math.min(b.week, RZ.bill.WEEKS);
+    var pct = Math.min(100, (100 * t.yes) / Math.max(1, t.total));
+    var need = Math.min(100, (100 * t.needed) / Math.max(1, t.total));
+    var have = t.yes >= t.needed;
+
+    var h = '<div class="bill">' +
+      '<div class="sprint-top">' +
+        '<div><div class="sprint-k">Second reading in ' + Math.max(0, b.weeksLeft) +
+          ' week' + (b.weeksLeft === 1 ? '' : 's') + '</div>' +
+        '<div class="sprint-h">' + esc(b.name) + '</div></div>' +
+        '<div class="bill-count ' + (have ? 'up' : 'down') + '">' + t.yes +
+        '<small>of ' + t.needed + ' needed</small></div>' +
+      '</div>' +
+      '<div class="sprint-bar" style="position:relative">' +
+        '<span class="' + (have ? 'up' : '') + '" style="width:' + Math.max(2, pct) + '%"></span>' +
+        '<i style="position:absolute;top:-2px;bottom:-2px;left:' + need + '%;width:2px;background:#e8e2d4;opacity:.85"></i>' +
+      '</div>' +
+      '<p class="note" style="margin:8px 0 0">' +
+        (t.short
+          ? '<strong>' + t.short + ' short</strong> on the whips\u2019 own count, with ' + t.total +
+            ' members sitting. A bloc that has not pledged drifts back every week you spend somewhere else.'
+          : 'You have it on today\u2019s count, which is not the same as having it on the day.') +
+        (b.concessions
+          ? ' ' + b.concessions + ' clause' + (b.concessions === 1 ? '' : 's') + ' already gone.'
+          : '') +
+      '</p>' +
+      '<div class="blocs">' + b.blocs.map(blocRow).join('') + '</div>' +
+      '</div>';
+    return h;
+  }
+
+  function blocRow(x) {
+    var cls = x.pledged ? 'yes' : (x.lean > 0 ? 'lean' : 'no');
+    var w = Math.max(2, Math.min(100, (x.lean + 100) / 2));
+    return '<div class="bloc ' + cls + '">' +
+      '<div class="bloc-top"><span class="bloc-n">' + esc(x.name) +
+        (x.pledged ? '<span class="bloc-tag">pledged</span>' : '') + '</span>' +
+        '<span class="bloc-s">' + x.seats + '</span></div>' +
+      '<div class="bloc-bar"><span class="' + (x.pledged ? 'yes' : (x.lean > 0 ? '' : 'no')) +
+        '" style="width:' + w + '%"></span></div>' +
+      '<div class="bloc-d">' + esc(x.note) +
+        (x.worked ? ' \u00b7 worked ' + x.worked + ' time' + (x.worked === 1 ? '' : 's') : '') +
+        (x.how === 'concession' ? ' \u00b7 bought with a clause' : '') +
+        (x.how === 'extort' ? ' \u00b7 they had no choice' : '') + '</div>' +
+      '</div>';
+  }
+
+  // The seat, broken into the places it is actually made of. This is the whole
+  // reason the sprint exists: a number for the constituency tells you nothing
+  // about which afternoon to spend where.
+  function wardBoard(S, c) {
+    var sp = S.sprint;
+    var t = RZ.sprint.tally(S);
+    var wk = RZ.sprint.WEEKS - sp.weeksLeft + 1;
+    var lead = t.support >= 50;
+
+    var h = '<div class="sprint">' +
+      '<div class="sprint-top">' +
+        '<div><div class="sprint-k">Week ' + Math.min(wk, RZ.sprint.WEEKS) + ' of ' + RZ.sprint.WEEKS + '</div>' +
+        '<div class="sprint-h">' + esc(c.regionById[S.player.regionId].name) + '</div></div>' +
+        '<div class="sprint-poll ' + (lead ? 'up' : 'down') + '">' + RZ.round(t.support, 1) + '%' +
+        '<small>' + (lead ? 'ahead' : 'behind') + '</small></div>' +
+      '</div>' +
+      '<div class="sprint-bar"><span style="width:' + Math.max(2, Math.min(100, t.support)) + '%"></span></div>' +
+      '<p class="note" style="margin:8px 0 0">' + t.voters.toLocaleString() + ' likely voters across ' +
+        sp.wards.length + ' wards. A ward you do not visit is one somebody else is visiting.</p>' +
+      warChest(S, c, sp) +
+      '<div class="wards">' + sp.wards.slice().sort(function (a, b) { return a.support - b.support; })
+        .map(function (w) { return wardRow(S, w); }).join('') + '</div>' +
+      '</div>';
+    return h;
+  }
+
+  // What is left, where it came from, and how much of it will survive being
+  // looked at afterwards.
+  function warChest(S, c, sp) {
+    var w = sp.war;
+    var sym = c.cur.sym;
+    var dirtyPct = w.raised ? Math.round((100 * w.dirty) / w.raised) : 0;
+    var low = w.cash < RZ.engine.mkApi(S).wage(1.5);
+    return '<div class="chest">' +
+      '<div class="chest-row">' +
+        '<div class="chest-k">War chest</div>' +
+        '<div class="chest-v ' + (low ? 'low' : '') + '">' + esc(RZ.money(w.cash, sym)) + '</div>' +
+      '</div>' +
+      '<div class="chest-d">' +
+        'raised ' + esc(RZ.money(w.raised, sym)) + ' · spent ' + esc(RZ.money(w.spent, sym)) +
+        (w.personal ? ' · <span class="chest-own">' + esc(RZ.money(w.personal, sym)) + ' of it your own</span>' : '') +
+      '</div>' +
+      (w.dirty
+        ? '<div class="chest-d chest-warn">' + dirtyPct + '% of it is money the return has no line for</div>'
+        : '') +
+      '</div>';
+  }
+
+  // Once you hold the seat, the ward's opinion of you is the whole game, and
+  // it is made of things that either exist or do not.
+  function constituencyCard(S, c) {
+    var sum = RZ.ward.summary(S);
+    var cls = sum.trust >= 60 ? 'good' : sum.trust >= 38 ? 'mid' : 'bad';
+    var h = '<div class="consty">' +
+      '<div class="consty-top">' +
+        '<div><div class="sprint-k">' + esc(c.regionById[S.player.regionId].name) + '</div>' +
+        '<div class="consty-mood">' + esc(sum.mood) + '</div></div>' +
+        '<div class="consty-t ' + cls + '">' + sum.trust + '<small>trust</small></div>' +
+      '</div>' +
+      '<div class="sprint-bar"><span class="' + cls + '" style="width:' + Math.max(2, sum.trust) + '%"></span></div>';
+
+    if (sum.building.length) {
+      h += '<div class="rows" style="margin-top:11px">' + sum.building.map(function (p) {
+        var left = Math.max(0, Math.ceil(p.monthsLeft));
+        return '<div class="row"><span class="row-dot" style="background:' +
+          (p.risk > 0.14 ? '#d8a53f' : '#4bab84') + '"></span>' +
+          '<span class="row-n">' + p.ico + ' ' + esc(cap1(p.name)) + '<small>' +
+            (left ? left + ' month' + (left === 1 ? '' : 's') + ' to go' : 'due any week now') +
+            (p.crony ? ' · a contractor you named' : '') + '</small></span></div>';
+      }).join('') + '</div>';
+    } else {
+      h += '<p class="note" style="margin:10px 0 0">Nothing is under construction. ' +
+        'You have no budget of your own — you have to go and ask somebody who does.</p>';
+    }
+
+    if (sum.done || sum.abandoned) {
+      h += '<div class="consty-tally">' +
+        (sum.done ? '<span class="dlt p">' + sum.done + ' delivered</span>' : '') +
+        (sum.abandoned ? '<span class="dlt n">' + sum.abandoned + ' abandoned</span>' : '') +
+        '</div>';
+    }
+    return h + '</div>';
+  }
+  function cap1(x) { return x.charAt(0).toUpperCase() + x.slice(1); }
+
+  function wardRow(S, w) {
+    var cls = w.support >= 55 ? 'safe' : w.support >= 45 ? 'close' : 'losing';
+    var cold = S.turn - w.lastVisit;
+    return '<button class="ward ' + cls + '" data-ward="' + esc(w.id) + '">' +
+      '<div class="ward-top"><span class="ward-n">' + esc(w.name) + '</span>' +
+        '<span class="ward-p">' + Math.round(w.support) + '%</span></div>' +
+      '<div class="ward-bar"><span style="width:' + Math.max(2, Math.min(100, w.support)) + '%"></span></div>' +
+      '<div class="ward-d">' + esc(w.kindName) + ' · ' + Math.round(w.turnout) + '% turnout · ' +
+        w.voters.toLocaleString() + ' voters' +
+        (w.visits ? ' · visited ' + w.visits + 'x' : '') +
+        (cold > 3 && w.visits ? ' · going cold' : '') + '</div>' +
+      '</button>';
   }
 
   function paperCard(e) {
     var cls = e.kind === 'good' ? 'good' : (e.kind === 'bad' ? 'bad' : (e.kind === 'big' ? 'big' : ''));
+    // A shock, a collapse, a purge, a brigade on the border: big and bad at
+    // once, which is a louder card than either on its own.
+    if (e.alert) cls = 'big bad';
     return '<div class="paper ' + cls + '">' +
       '<div class="paper-src"><span>' + esc(e.src || '') + '</span><span class="when">' +
         RZ.monthShort(e.date.month) + ' ' + e.date.year + '</span></div>' +
@@ -332,6 +527,8 @@
         sbox('Reserves', RZ.round(n.economy.reserves, 1), 'months of imports') +
       '</div></div>';
 
+    h += blocBoard(S);
+
     h += '<div class="block"><div class="block-h">Condition of the state</div><div class="card"><div class="bars">' +
       plainBar('Health system', n.society.health, 'g') +
       plainBar('Schools', n.society.education, 'g') +
@@ -368,6 +565,35 @@
 
     el('#pane-country').innerHTML = h;
   }
+  // Six electorates rather than one bar. The size is how many of them there
+  // are; the mood is what they currently think; and the swing at the top is
+  // what the two of those together are worth on the day.
+  function blocBoard(S) {
+    if (!RZ.blocs) return '';
+    var sm = RZ.blocs.summary(S);
+    var cls = sm.swing >= 2 ? 'good' : sm.swing <= -2 ? 'bad' : 'mid';
+    return '<div class="block"><div class="block-h">The electorate' +
+      '<span class="sub">' + (sm.swing >= 0 ? '+' : '') + sm.swing + ' pts on the ballot</span></div>' +
+      '<div class="card">' +
+      '<p class="note" style="margin:0 0 12px">There is no such thing as the grassroots. There are six of these ' +
+      'and they want different things, and every one of them votes.</p>' +
+      '<div class="rows">' + sm.rows.map(function (r) {
+        var mc = r.mood >= 62 ? 'good' : r.mood >= 42 ? 'mid' : 'bad';
+        return '<div class="bloc-row">' +
+          '<div class="bloc-row-t"><span class="bloc-row-n">' + r.ico + ' ' + esc(r.name) + '</span>' +
+            '<span class="bloc-row-s">' + r.size + '%</span></div>' +
+          '<div class="bloc-bar"><span class="' + (mc === 'good' ? 'yes' : mc === 'bad' ? 'no' : '') +
+            '" style="width:' + Math.max(2, r.mood) + '%"></span></div>' +
+          '<div class="bloc-row-d">' + esc(r.mood_label) + ' · ' + esc(r.note) +
+            (r.turnout >= 1.2 ? ' <span class="gold">They turn out.</span>' :
+             r.turnout <= 0.8 ? ' <span class="dim">Half of them will not vote.</span>' : '') +
+          '</div></div>';
+      }).join('') + '</div>' +
+      '<p class="note" style="margin:12px 0 0">Weighted for who actually goes to the polling station: ' +
+      '<strong class="' + cls + '">' + sm.weighted + '</strong> out of a hundred.</p>' +
+      '</div></div>';
+  }
+
   function sbox(k, v, n) {
     return '<div class="sbox"><div class="sbox-k">' + esc(k) + '</div><div class="sbox-v">' + esc(v) + '</div><div class="sbox-n">' + esc(n) + '</div></div>';
   }
@@ -391,6 +617,8 @@
       '<p class="note mt">Led by <strong>' + esc(P.isLeader ? P.name : S.parties[P.partyId].leaderName) + '</strong>.</p>' +
       '</div></div>';
 
+    h += raceCard(S, c);
+
     h += '<div class="block"><div class="block-h">The ladder<span class="sub">' + esc(c.name) + '</span></div><div class="card"><div class="ladder">' +
       lad.map(function (r, i) {
         var cls = i < P.rungIdx ? 'done' : (i === P.rungIdx ? 'now' : 'future');
@@ -399,6 +627,8 @@
           '<div class="rung-body"><div class="rung-t">' + esc(r.title) + '</div>' +
           (i <= P.rungIdx + 1 ? '<div class="rung-d">' + esc(r.desc) + '</div>' : '') + '</div></div>';
       }).join('') + '</div></div></div>';
+
+    h += castCard(S);
 
     // The field: the people holding the rungs above you, and the ones coming
     // up behind. A rung with a name on it is the whole game.
@@ -443,6 +673,58 @@
   }
 
   /* ---------------- self pane ---------------- */
+  // Two bars on one axis. A number for your own climb tells you nothing; a
+  // number next to somebody else's tells you everything.
+  // The people you keep going back to. Sorted by how often you have sat down
+  // with them, because that is the order in which they matter.
+  function castCard(S) {
+    if (!RZ.cast) return '';
+    var rows = RZ.cast.summary(S);
+    if (!rows.length) return '';
+    return '<div class="block"><div class="block-h">People you know' +
+      '<span class="sub">' + rows.length + ' of them</span></div>' +
+      '<div class="card"><div class="rows">' + rows.slice(0, 14).map(function (p) {
+        var col = p.rel >= 25 ? '#4bab84' : p.rel <= -25 ? '#d4453f' : '#8a8578';
+        return '<div class="row"><span class="row-dot" style="background:' + col + '"></span>' +
+          '<span class="row-n">' + esc(p.name) + '<small>' + esc(p.role) +
+            (p.org ? ', ' + esc(p.org) : '') + ' · ' + esc(p.standing) +
+            (p.met > 1 ? ' · ' + p.met + ' meetings since ' + p.since : '') +
+            (p.memory ? ' · <span class="gold">remembers ' + p.memory + '</span>' : '') +
+          '</small></span>' +
+          '<span class="row-v">' + (p.rel > 0 ? '+' : '') + p.rel + '</span></div>';
+      }).join('') + '</div></div></div>';
+  }
+
+  function raceCard(S, c) {
+    if (!RZ.contender) return '';
+    var sm = RZ.contender.summary(S);
+    if (!sm) return '';
+    var cls = sm.gap > 0 ? 'bad' : sm.gap < 0 ? 'good' : 'mid';
+    var rel = sm.ascended ? 'they got there first'
+      : sm.relation === 'allied' ? 'running together, for now'
+      : sm.relation === 'hostile' ? 'openly against you'
+      : sm.sameParty ? 'same party card, same year' : 'the other side, same year';
+
+    return '<div class="block"><div class="block-h">The other one' +
+      '<span class="sub">' + esc(rel) + '</span></div>' +
+      '<div class="card race">' +
+        '<div class="race-top">' +
+          '<div><div class="race-n">' + sm.ico + ' ' + esc(sm.name) + '</div>' +
+          '<div class="race-r">' + esc(sm.title) + ' · ' + esc(sm.regionName) + '</div></div>' +
+          '<div class="race-gap ' + cls + '">' + (sm.gap > 0 ? '+' + sm.gap : sm.gap) +
+          '<small>' + esc(sm.standing) + '</small></div>' +
+        '</div>' +
+        '<div class="race-lane"><span class="me" style="width:' + Math.max(2, sm.yourPct) + '%"></span>' +
+          '<b>you</b></div>' +
+        '<div class="race-lane"><span class="them" style="width:' + Math.max(2, sm.pct) + '%"></span>' +
+          '<b>' + esc(sm.name.split(' ')[0]) + '</b></div>' +
+        '<p class="note" style="margin:10px 0 0">They climb ' + esc(sm.climbs) + ', which is the one thing ' +
+          'you cannot do.' + (sm.files ? ' You are holding <span class="gold">' + sm.files +
+          ' file' + (sm.files === 1 ? '' : 's') + '</span> on them.' : '') + '</p>' +
+        (sm.lastMove ? '<p class="note" style="margin:6px 0 0;opacity:.8">Last month: ' + esc(sm.lastMove) + '.</p>' : '') +
+      '</div></div>';
+  }
+
   function renderSelf() {
     var S = UI.S, c = RZ.COUNTRIES[S.countryId], P = S.player;
     var lad = RZ.ladderFor(c.id), rung = lad[P.rungIdx];
@@ -470,6 +752,31 @@
       plainBar('International', P.standing.intl, 'b') +
       '</div></div></div>';
 
+    // Where you stand inside the machine right now: the window a mandate buys,
+    // the year a failed revolt costs, and the man who has not forgotten.
+    var status = [];
+    if (RZ.revolt) {
+      var now = RZ.revolt.monthIndex(S);
+      if (RZ.revolt.mandateActive(S)) {
+        status.push(['#4bab84', 'Mandate', (S.flags.mandateUntil - now) + ' months left · party and leadership hold at half decay']);
+      }
+      if (RZ.revolt.pngActive(S)) {
+        status.push(['#d4453f', 'Persona non grata', (S.flags.pngUntil - now) + ' months left · your name is a liability in the corridors']);
+      }
+      if (S.flags.exiled) {
+        status.push(['#d8a53f', 'Deployed', 'Reassigned to ' + esc(c.regionById[P.regionId].name) + ' after a failed challenge']);
+      }
+      var nem = RZ.revolt.nemesisOf(S);
+      if (nem) status.push(['#d4453f', 'Nemesis: ' + esc(nem.name), 'Spends his own turns on you, and will until one of you is gone']);
+    }
+    if (status.length) {
+      h += '<div class="block"><div class="block-h">Where you stand</div><div class="card"><div class="rows">' +
+        status.map(function (x) {
+          return '<div class="row"><span class="row-dot" style="background:' + x[0] + '"></span>' +
+            '<span class="row-n">' + x[1] + '<small>' + x[2] + '</small></span></div>';
+        }).join('') + '</div></div></div>';
+    }
+
     // Everything you said out loud in a meeting, still outstanding.
     var proms = P.promises || [];
     if (proms.length) {
@@ -481,6 +788,21 @@
             (months >= 10 ? '#d4453f' : months >= 5 ? '#d8a53f' : '#4bab84') + '"></span>' +
             '<span class="row-n">' + esc(pr.text) + '<small>' + RZ.monthShort(pr.month) + ' ' + pr.year + '</small></span>' +
             '<span class="row-v">' + months + 'mo</span></div>';
+        }).join('') + '</div></div></div>';
+    }
+
+    // Money taken during a campaign, and what is still owed on it.
+    var pats = (S.capture && S.capture.patrons || []).filter(function (x) { return x.owed > 0.5; });
+    if (pats.length) {
+      h += '<div class="block"><div class="block-h">Who owns a piece of you<span class="sub">' +
+        pats.length + '</span></div><div class="card"><div class="rows">' +
+        pats.slice().sort(function (a, b) { return b.owed - a.owed; }).map(function (x) {
+          var hot = x.owed > 8 ? '#d4453f' : x.owed > 4 ? '#d8a53f' : '#4bab84';
+          return '<div class="row"><span class="row-dot" style="background:' + hot + '"></span>' +
+            '<span class="row-n">' + esc(x.name) + '<small>' +
+              (x.granted ? x.granted + ' favour' + (x.granted === 1 ? '' : 's') + ' done' : 'nothing asked yet') +
+              (x.refused ? ' · ' + x.refused + ' refused' : '') + '</small></span>' +
+            '<span class="row-v">' + '◆'.repeat(Math.min(5, Math.ceil(x.owed / 3))) + '</span></div>';
         }).join('') + '</div></div></div>';
     }
 
@@ -539,6 +861,318 @@
       '<button class="btn btn-gold btn-block" data-close>Continue</button>';
     var inner = modal(html);
     inner.querySelector('[data-close]').addEventListener('click', function () { closeModal(); if (onClose) onClose(); });
+  }
+
+  /* ---------------- the origin scene ---------------- */
+  // Character creation as an afternoon rather than a menu. Rendered with the
+  // conversation styles, because that is what it is.
+  function showOrigin(startAs, draft, onDone) {
+    var c = RZ.COUNTRIES[draft.countryId];
+    var o = RZ.ORIGINS[startAs === 'candidate' ? 'candidate' : 'activist'];
+    var kingmaker = RZ.makeName(c);
+    var priceLine = RZ.money(RZ.engine.WAGE_BASE[c.id] * 0.5, c.cur.sym);
+    var inner = modal('');
+    var chosen = null;
+
+    paint();
+
+    function paint() {
+      var h = '<div class="modal-kicker">' + esc(o.kicker) + '</div>' +
+        '<h2 class="modal-h">' + esc(o.title(c)) + '</h2>' +
+        '<div class="talk">' +
+          para(o.opening(c, draft.name, kingmaker)) +
+          (chosen ? '' : para(o.question(c))) +
+        '</div>';
+
+      if (!chosen) {
+        h += '<div class="choices">' + o.answers.map(function (a, i) {
+          return '<button class="choice" data-i="' + i + '">' +
+            '<div class="choice-t">' + esc(a.t) + '</div>' +
+            '<div class="choice-d">' + esc(a.d) + '</div></button>';
+        }).join('') + '</div>';
+      } else {
+        var tr = RZ.TRAITS[chosen.trait];
+        h += '<div class="talk">' + para(chosen.reply(c, c.cur.sym, priceLine), 'me') + '</div>' +
+          '<div class="origin-trait">' +
+            '<div class="origin-trait-n">' + tr.ico + ' ' + esc(tr.name) + '</div>' +
+            '<div class="origin-trait-d">' + esc(tr.note) + '</div>' +
+          '</div>' +
+          // The answer decides who else is starting this year. You are told
+          // now, so that the first feed entry about them is not a surprise.
+          counterNote(chosen.trait) +
+          '<button class="btn btn-gold btn-block" data-go>This is where it starts</button>' +
+          '<button class="btn btn-ghost btn-block" style="margin-top:8px" data-back>Answer differently</button>';
+      }
+
+      inner.innerHTML = h;
+      inner.querySelectorAll('[data-i]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          chosen = o.answers[parseInt(b.dataset.i, 10)];
+          paint();
+          inner.scrollTop = inner.scrollHeight;
+        });
+      });
+      var back = inner.querySelector('[data-back]');
+      if (back) back.addEventListener('click', function () { chosen = null; paint(); });
+      var go = inner.querySelector('[data-go]');
+      if (go) go.addEventListener('click', function () { closeModal(); onDone(chosen.id); });
+    }
+
+    // The scenes are written as prose with blank lines between paragraphs.
+    function para(text, who) {
+      return String(text).split(/\n\n+/).map(function (p) {
+        return '<div class="talk-l ' + (who === 'me' ? 'me closing' : 'them') + '">' +
+          '<div class="talk-tx">' + esc(p) + '</div></div>';
+      }).join('');
+    }
+  }
+
+  /* ---------------- the ward blitz ---------------- */
+  // Which afternoon, in which place. The list is sorted worst-first, because
+  // the ward you are losing is the one worth the argument.
+  // What the answer just made somebody else. There is one of each of the jobs
+  // at the top and there are two of you starting today.
+  function counterNote(trait) {
+    if (!RZ.contender) return '';
+    var other = RZ.TRAITS[RZ.contender.COUNTER[trait]];
+    if (!other) return '';
+    var climbs = RZ.contender.STYLES[other.id] ? RZ.contender.STYLES[other.id].climbs : '';
+    return '<p class="note" style="margin:12px 0 0">And somewhere else in the country, in a ' +
+      'different ' + esc(RZ.COUNTRIES[UI.draft.countryId].terms.region) + ', somebody the same age as you is ' +
+      'starting today as a <strong>' + other.ico + ' ' + esc(other.name) + '</strong> — they climb ' +
+      esc(climbs) + ', which is the one thing you have just decided you cannot do. ' +
+      'You will hear the name within the month.</p>';
+  }
+
+  function showBlitz(onDone, mode) {
+    var S = UI.S;
+    var api = RZ.engine.mkApi(S);
+    var wards = S.sprint.wards.slice().sort(function (a, b) { return a.support - b.support; });
+    var surge = mode === 'surge';
+    var cost = api.wage(surge ? 4 + api.tier() * 0.5 : 1.2 + api.tier() * 0.35);
+
+    var h = '<div class="modal-kicker">Week ' + S.sprint.week + ' of ' + RZ.sprint.WEEKS + '</div>' +
+      '<h2 class="modal-h">' + (surge ? 'Which ward gets the war chest?' : 'Where are you spending the week?') + '</h2>' +
+      '<p class="modal-b">' + (surge
+        ? 'Everything at one ward, and it stays held for the rest of the campaign. About ' +
+          esc(RZ.money(cost, RZ.COUNTRIES[S.countryId].cur.sym)) + ' and a good deal of political capital.'
+        : 'Doors, taxi ranks, a hall if you can get one. About ' +
+          esc(RZ.money(cost, RZ.COUNTRIES[S.countryId].cur.sym)) + ' a ward, and you cannot be in two places at once.') +
+      '</p>' +
+      '<div class="choices">' + wards.map(function (w) {
+        var cold = S.turn - w.lastVisit;
+        return '<button class="choice" data-w="' + esc(w.id) + '">' +
+          '<div class="choice-t">' + esc(w.name) + ' <span style="float:right;opacity:.8">' + Math.round(w.support) + '%</span></div>' +
+          '<div class="choice-d">' + esc(w.note) + '</div>' +
+          '<div class="choice-d" style="opacity:.75;margin-top:4px">' +
+            Math.round(w.turnout) + '% turnout · ' + w.voters.toLocaleString() + ' voters' +
+            (w.visits ? ' · you have been ' + w.visits + ' time' + (w.visits === 1 ? '' : 's') : ' · never visited') +
+            (w.visits && cold <= 2 && !surge ? ' · still warm, less to gain' : '') +
+            (w.held ? ' · held' : '') + '</div>' +
+          (w.swing >= 1.25 ? '<span class="choice-tag">swings hard</span>' : '') +
+          '</button>';
+      }).join('') + '</div>' +
+      '<button class="btn btn-ghost btn-block" style="margin-top:10px" data-cancel>Not this week</button>';
+
+    var inner = modal(h);
+    inner.querySelectorAll('[data-w]').forEach(function (b) {
+      b.addEventListener('click', function () { closeModal(); onDone(b.dataset.w); });
+    });
+    inner.querySelector('[data-cancel]').addEventListener('click', function () { closeModal(); onDone(null); });
+  }
+
+  /* ---------------- constitutional amendment ---------------- */
+  // The arithmetic is shown before the decision, because a president who tries
+  // this and misses should have been able to count first.
+  function showAmend(onDone) {
+    var S = UI.S, c = RZ.COUNTRIES[S.countryId];
+    var api = RZ.engine.mkApi(S);
+    var sup = RZ.gov.assemblySupport(S);
+    var list = RZ.gov.amendmentsFor(api);
+    var pickId = list[0] && list[0].id;
+    var spend = 0;
+    var inner = modal('');
+
+    paint();
+
+    function paint() {
+      var gap = Math.max(0, sup.needed - sup.gov);
+      var h = '<div class="modal-kicker">The ' + esc(c.house.name) + '</div>' +
+        '<h2 class="modal-h">Amend the constitution</h2>' +
+        '<p class="modal-b">An amendment needs <strong>' + sup.needed + ' of ' + sup.total + '</strong> — two-thirds. ' +
+        'The government benches carry <strong>' + sup.gov + '</strong>' +
+        (gap ? ', which leaves you <strong>' + gap + '</strong> short before anybody on your own side abstains.'
+             : ', which is enough on paper. Your own side is the risk.') + '</p>' +
+        '<div class="choices" style="margin-bottom:16px">' + list.map(function (am) {
+          return '<button class="choice' + (am.id === pickId ? ' is-on' : '') + '" data-am="' + esc(am.id) + '">' +
+            '<div class="choice-t">' + esc(am.name) + '</div>' +
+            '<div class="choice-d">' + esc(am.blurb) + '</div></button>';
+        }).join('') + '</div>' +
+        '<div class="block-h">The whipping operation<span class="sub">' +
+          (spend ? RZ.money(api.wage(spend), c.cur.sym) : 'nothing yet') + '</span></div>' +
+        '<input id="amend-spend" type="range" min="0" max="40" step="2" value="' + spend + '" ' +
+          'style="width:100%;accent-color:#d9a441">' +
+        '<p class="note" style="margin:6px 0 16px">Constituency offices, provincial conferences, and a great many ' +
+        'flights. It buys crossbenchers. It is also the thing that gets written about afterwards.</p>' +
+        '<button class="btn btn-gold btn-block" data-go>Put it to the House</button>' +
+        '<button class="btn btn-ghost btn-block" style="margin-top:8px" data-cancel>Not yet</button>';
+      inner.innerHTML = h;
+
+      inner.querySelectorAll('[data-am]').forEach(function (b) {
+        b.addEventListener('click', function () { pickId = b.dataset.am; paint(); });
+      });
+      var sl = inner.querySelector('#amend-spend');
+      sl.addEventListener('input', function () { spend = parseInt(sl.value, 10); paint(); });
+      inner.querySelector('[data-cancel]').addEventListener('click', function () { closeModal(); });
+      inner.querySelector('[data-go]').addEventListener('click', function () {
+        var res = RZ.gov.attemptAmendment(api, pickId, spend);
+        closeModal();
+        onDone(res, api);
+      });
+    }
+  }
+
+  /* ---------------- the order paper ---------------- */
+  function showDraft(onDone) {
+    var S = UI.S, c = RZ.COUNTRIES[S.countryId];
+    var total = RZ.bill.houseTotal(S);
+    var needed = Math.floor(total / 2) + 1;
+    var h = '<div class="modal-kicker">The ' + esc(c.house.name) + '</div>' +
+      '<h2 class="modal-h">What are you putting your name to?</h2>' +
+      '<p class="modal-b">A private member gets one of these every few years and is remembered for it either way. ' +
+      'You will need <strong>' + needed + ' of ' + total + '</strong>, and four weeks to find them. ' +
+      'From the moment it is tabled the diary goes week by week.</p>' +
+      '<div class="choices">' + RZ.bill.BILLS.map(function (b) {
+        return '<button class="choice" data-b="' + esc(b.id) + '">' +
+          '<div class="choice-t">' + esc(b.name) + '</div>' +
+          '<div class="choice-d">' + esc(b.blurb) + '</div>' +
+          '<div class="choice-d" style="opacity:.75;margin-top:4px">' + esc(leanLine(b)) + '</div>' +
+          blocLine(b) +
+          '</button>';
+      }).join('') + '</div>' +
+      '<button class="btn btn-ghost btn-block" style="margin-top:10px" data-cancel>Not this session</button>';
+    var inner = modal(h);
+    inner.querySelectorAll('[data-b]').forEach(function (btn) {
+      btn.addEventListener('click', function () { closeModal(); onDone(btn.dataset.b); });
+    });
+    inner.querySelector('[data-cancel]').addEventListener('click', function () { closeModal(); onDone(null); });
+  }
+
+  // Who is out in the country, as opposed to who is in the House. A bill can
+  // be easy to pass and expensive to have passed.
+  function blocLine(bill) {
+    if (!RZ.blocs || (!bill.wins && !bill.costs)) return '';
+    var nm = function (id) { var b = RZ.blocs.byId[id]; return b ? b.ico + ' ' + b.name.toLowerCase() : id; };
+    var parts = [];
+    if (bill.wins && bill.wins.length) parts.push('Wins ' + bill.wins.map(nm).join(' and '));
+    if (bill.costs && bill.costs.length) parts.push('loses ' + bill.costs.map(nm).join(' and '));
+    return '<div class="choice-d" style="margin-top:4px;color:#c9a86a">' + esc(parts.join(', ')) + '.</div>';
+  }
+
+  // Who is going to hate it, said in one line, before it is too late to choose
+  // a different fight.
+  function leanLine(b) {
+    var names = { loyal: 'your own benches', faction: 'the other faction', opp: 'the opposition', small: 'the small parties' };
+    var friends = [], enemies = [];
+    Object.keys(b.lean).forEach(function (k) {
+      if (b.lean[k] >= 15) friends.push(names[k]);
+      else if (b.lean[k] <= -15) enemies.push(names[k]);
+    });
+    var out = [];
+    if (friends.length) out.push('With you: ' + friends.join(', '));
+    if (enemies.length) out.push('Against: ' + enemies.join(', '));
+    return out.join('. ') || 'Nobody has a settled view of it yet.';
+  }
+
+  // Which room, and what you are going to use in it. The lever is the whole
+  // decision — the same bloc costs capital, an evening, or a reputation.
+  function showBloc(onDone) {
+    var S = UI.S, c = RZ.COUNTRIES[S.countryId];
+    var api = RZ.engine.mkApi(S);
+    var pick = null;
+    var inner = modal('');
+    paint();
+
+    function paint() {
+      var t = RZ.bill.count(S);
+      var h = '<div class="modal-kicker">Week ' + Math.min(S.bill.week, RZ.bill.WEEKS) +
+          ' of ' + RZ.bill.WEEKS + ' \u00b7 ' + t.yes + ' of ' + t.needed + '</div>' +
+        '<h2 class="modal-h">' + (pick ? 'How are you going to do it?' : 'Which room are you spending the week in?') + '</h2>';
+      if (!pick) {
+        h += '<p class="modal-b">You cannot work all four. Whoever you leave alone drifts back.</p>' +
+          '<div class="choices">' + S.bill.blocs.map(function (x) {
+            return '<button class="choice" data-x="' + esc(x.id) + '">' +
+              '<div class="choice-t">' + esc(x.name) +
+                '<span style="float:right;opacity:.8">' + x.seats + '</span></div>' +
+              '<div class="choice-d">' + esc(x.note) + '</div>' +
+              '<div class="choice-d" style="opacity:.75;margin-top:4px">' +
+                (x.pledged ? 'Pledged already \u2014 nothing more to win here'
+                           : (x.lean > 25 ? 'Leaning your way' : x.lean > -20 ? 'Genuinely undecided' : 'Hostile')) +
+                (x.worked ? ' \u00b7 worked ' + x.worked + ' time' + (x.worked === 1 ? '' : 's') +
+                            ', and the third conversation is worth less than the first' : '') +
+              '</div>' +
+              (x.pledged ? '<span class="choice-tag">pledged</span>' : '') +
+              '</button>';
+          }).join('') + '</div>' +
+          '<button class="btn btn-ghost btn-block" style="margin-top:10px" data-cancel>Not this week</button>';
+      } else {
+        var b = S.bill.blocs.filter(function (x) { return x.id === pick; })[0];
+        var lev = [
+          { how: 'capital', t: 'Trade positions and projects',
+            d: 'Committee places, a deputy chair, a road in somebody\u2019s district. Costs political capital ' +
+               'and you have ' + Math.round(S.player.capital) + '.', ok: S.player.capital >= 8 },
+          { how: 'charm', t: 'Four evenings and an argument',
+            d: 'No officials, no minutes. It works on the people it works on, and it costs you sleep.', ok: true },
+          { how: 'extort', t: 'Remind them what you know',
+            d: api.hasLeverage()
+              ? 'You are holding something. Using it here spends it on a bill instead of on a career.'
+              : 'You are not holding anything on anybody.',
+            ok: api.hasLeverage(), risky: true }
+        ];
+        h += '<p class="modal-b">' + esc(b.name) + ' \u2014 ' + b.seats + ' members. ' + esc(b.note) + '</p>' +
+          '<div class="choices">' + lev.map(function (l) {
+            return '<button class="choice"' + (l.ok ? ' data-l="' + l.how + '"' : ' disabled style="opacity:.45"') + '>' +
+              '<div class="choice-t">' + esc(l.t) + (l.risky ? ' <span style="color:#e08a86">\u25c6</span>' : '') + '</div>' +
+              '<div class="choice-d">' + esc(l.d) + '</div></button>';
+          }).join('') + '</div>' +
+          '<button class="btn btn-ghost btn-block" style="margin-top:10px" data-back>Somebody else</button>';
+      }
+      inner.innerHTML = h;
+      inner.querySelectorAll('[data-x]').forEach(function (btn) {
+        btn.addEventListener('click', function () { pick = btn.dataset.x; paint(); });
+      });
+      inner.querySelectorAll('[data-l]').forEach(function (btn) {
+        btn.addEventListener('click', function () { closeModal(); onDone(pick, btn.dataset.l); });
+      });
+      var back = inner.querySelector('[data-back]');
+      if (back) back.addEventListener('click', function () { pick = null; paint(); });
+      var cx = inner.querySelector('[data-cancel]');
+      if (cx) cx.addEventListener('click', function () { closeModal(); onDone(null); });
+    }
+  }
+
+  // The other way to win a room. It always works and it always costs the bill
+  // something, which is stated in the number before the button is pressed.
+  function showConcede(onDone) {
+    var S = UI.S;
+    var next = Math.max(0.35, 1 - (S.bill.concessions + 1) * 0.22);
+    var now = Math.max(0.35, 1 - S.bill.concessions * 0.22);
+    var h = '<div class="modal-kicker">Amendments in committee</div>' +
+      '<h2 class="modal-h">What are you taking out, and for whom?</h2>' +
+      '<p class="modal-b">A clause goes and a room comes with you. The bill that passes will do ' +
+      '<strong>' + Math.round(next * 100) + '%</strong> of what it was drafted to do, down from ' +
+      Math.round(now * 100) + '%. Nobody outside this building will ever know which clause it was.</p>' +
+      '<div class="choices">' + S.bill.blocs.map(function (x) {
+        return '<button class="choice"' + (x.pledged ? ' disabled style="opacity:.45"' : ' data-x="' + esc(x.id) + '"') + '>' +
+          '<div class="choice-t">' + esc(x.name) + '<span style="float:right;opacity:.8">' + x.seats + '</span></div>' +
+          '<div class="choice-d">' + (x.pledged ? 'Already with you. Save the clause.' : esc(x.note)) + '</div></button>';
+      }).join('') + '</div>' +
+      '<button class="btn btn-ghost btn-block" style="margin-top:10px" data-cancel>The bill stands as drafted</button>';
+    var inner = modal(h);
+    inner.querySelectorAll('[data-x]').forEach(function (btn) {
+      btn.addEventListener('click', function () { closeModal(); onDone(btn.dataset.x); });
+    });
+    inner.querySelector('[data-cancel]').addEventListener('click', function () { closeModal(); onDone(null); });
   }
 
   /* ---------------- conversation ---------------- */
@@ -770,6 +1404,8 @@
     UI: UI, show: show, toast: toast, modal: modal, closeModal: closeModal,
     renderCountries: renderCountries, renderCreate: renderCreate, renderGame: renderGame, renderHud: renderHud,
     showEvent: showEvent, showOutcome: showOutcome, showDialogue: showDialogue, showElection: showElection,
+    showAmend: showAmend, showBlitz: showBlitz, showOrigin: showOrigin,
+    showDraft: showDraft, showBloc: showBloc, showConcede: showConcede,
     showRigOffer: showRigOffer, showBudget: showBudget, showEnd: showEnd, showAbout: showAbout,
     paperCard: paperCard
   };

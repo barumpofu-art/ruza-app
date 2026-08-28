@@ -22,7 +22,8 @@
         RZ.ui.renderGame(); RZ.ui.show('game');
         // Quitting with a decision on the table leaves it in the save; put it
         // back on screen rather than stranding it there forever.
-        if (S.pendingEvent) resumePendingEvent();
+        if (S.pendingScene) resumePendingScene();
+        else if (S.pendingEvent) resumePendingEvent();
       });
     });
     document.querySelectorAll('[data-act="show-about"]').forEach(function (b) {
@@ -68,19 +69,47 @@
     var d = UI.draft;
     var c = RZ.COUNTRIES[d.countryId];
     var name = (d.name || '').trim() || RZ.makeName(c);
-    UI.S = RZ.engine.newGame({
-      countryId: d.countryId, name: name, gender: d.gender || 'f',
-      regionId: d.regionId, bgId: d.bgId, partyId: d.partyId, age: 34
+    d.name = name;
+
+    // You play the afternoon that got you into this before the first month
+    // starts. The answer is the character.
+    RZ.ui.showOrigin(d.startAs || 'activist', d, function (originId) {
+      UI.S = RZ.engine.newGame({
+        countryId: d.countryId, name: name, gender: d.gender || 'f',
+        regionId: d.regionId, bgId: d.bgId, partyId: d.partyId,
+        age: d.startAs === 'candidate' ? 41 : 34,
+        startAs: d.startAs || 'activist',
+        origin: originId
+      });
+      UI.pane = 'desk';
+      RZ.ui.renderGame();
+      RZ.ui.show('game');
     });
-    UI.pane = 'desk';
-    RZ.ui.renderGame();
-    RZ.ui.show('game');
   }
 
   /* ---------------- actions ---------------- */
+  function c() { return RZ.COUNTRIES[UI.S.countryId]; }
+
   function act(id) {
     var S = UI.S;
     if (S.actionsLeft <= 0) { RZ.ui.toast('No actions left this month', 'n'); return; }
+
+    if (id === 'amend') {
+      RZ.ui.showAmend(function (res, api) {
+        if (res.fail) { RZ.ui.toast(res.title || 'Not possible', 'n'); return; }
+        S.actionsLeft--;
+        S.actionsThisMonth = (S.actionsThisMonth || 0) + 1;
+        var entry = {
+          kind: res.passed ? 'big' : 'bad', alert: !res.passed,
+          src: 'The ' + c().house.name, title: res.title, body: res.body,
+          deltas: api.deltas.slice(), tone: res.tone
+        };
+        RZ.engine.pushFeed(S, entry);
+        RZ.engine.save(S);
+        RZ.ui.showOutcome(entry, afterAction);
+      });
+      return;
+    }
 
     if (id === 'budget') {
       RZ.ui.showBudget(function (b) {
@@ -97,6 +126,133 @@
 
     var out = RZ.engine.doAction(S, id);
     if (!out) return;
+
+    // Tabling a bill, working a bloc and dropping a clause all need a choice
+    // made in a modal before there is anything to resolve.
+    if (out.special === 'draft') {
+      RZ.ui.showDraft(function (billId) {
+        if (!billId) return;
+        var api = RZ.engine.mkApi(S);
+        var b = RZ.bill.table(S, api, billId);
+        if (!b) return;
+        S.actionsLeft--;
+        S.actionsThisMonth = (S.actionsThisMonth || 0) + 1;
+        var t = RZ.bill.count(S);
+        var entry = {
+          kind: 'big', src: 'The order paper', title: b.name + ' is tabled',
+          body: b.blurb + ' Second reading in four weeks. The whips make it <strong>' + t.yes +
+                ' of ' + t.needed + '</strong> this morning' +
+                (t.short
+                  ? ', and the ' + t.short + ' missing are all in rooms you have not been in yet.'
+                  : ' — a margin of the kind that does not survive a fortnight of being left alone.'),
+          deltas: api.deltas.slice(), tone: 'good'
+        };
+        RZ.engine.pushFeed(S, entry);
+        RZ.engine.save(S);
+        RZ.ui.showOutcome(entry, afterAction);
+      });
+      return;
+    }
+
+    if (out.special === 'bloc') {
+      RZ.ui.showBloc(function (blocId, how) {
+        if (!blocId || !how) return;
+        var api = RZ.engine.mkApi(S);
+        var r = RZ.bill.workBloc(S, api, blocId, how);
+        if (!r) { RZ.ui.toast('Not possible', 'n'); return; }
+        S.actionsLeft--;
+        S.actionsThisMonth = (S.actionsThisMonth || 0) + 1;
+        var t = RZ.bill.count(S);
+        var entry = {
+          kind: r.pledged ? 'good' : (r.moved > 8 ? 'flat' : 'bad'),
+          src: r.bloc.name,
+          title: r.pledged
+            ? r.bloc.name + ' will vote for it'
+            : (r.moved > 8 ? 'Movement, and not enough of it' : 'A week for very little'),
+          body: 'A week of ' + r.note + '. ' +
+            (r.pledged
+              ? 'All ' + r.bloc.seats + ' of them, pledged in a room with no minutes taken. ' +
+                (how === 'extort' ? 'Nobody in it looked at anybody else.' : 'Which holds until somebody offers them more.')
+              : 'They have moved ' + Math.round(r.moved) + ' points and they are still not yours. ') +
+            ' The count is ' + t.yes + ' of ' + t.needed + '.',
+          deltas: api.deltas.slice(), tone: r.pledged ? 'good' : 'flat'
+        };
+        RZ.engine.pushFeed(S, entry);
+        RZ.engine.save(S);
+        RZ.ui.showOutcome(entry, afterAction);
+      });
+      return;
+    }
+
+    if (out.special === 'concede') {
+      RZ.ui.showConcede(function (blocId) {
+        if (!blocId) return;
+        var api = RZ.engine.mkApi(S);
+        var r = RZ.bill.concede(S, api, blocId);
+        if (!r) return;
+        S.actionsLeft--;
+        S.actionsThisMonth = (S.actionsThisMonth || 0) + 1;
+        var t = RZ.bill.count(S);
+        var entry = {
+          kind: 'flat', src: 'Committee stage',
+          title: 'A clause came out for ' + r.bloc.name,
+          body: (r.bloc.pledged
+            ? r.bloc.name + ' will vote for what is left of it. '
+            : r.bloc.name + ' have moved a long way and still have not committed. ') +
+            'The drafters were in the room and said nothing, which is how you know it mattered. ' +
+            'The count is ' + t.yes + ' of ' + t.needed + '.',
+          deltas: api.deltas.slice(), tone: 'flat'
+        };
+        RZ.engine.pushFeed(S, entry);
+        RZ.engine.save(S);
+        RZ.ui.showOutcome(entry, afterAction);
+      });
+      return;
+    }
+
+    // Blitzing and surging both need a target before they can resolve.
+    if (out.special === 'blitz' || out.special === 'surge') {
+      var isSurge = out.special === 'surge';
+      RZ.ui.showBlitz(function (wardId) {
+        if (!wardId) return;
+        var api = RZ.engine.mkApi(S);
+        var r = isSurge ? RZ.sprint.surge(S, wardId, api) : RZ.sprint.blitz(S, wardId, api);
+        if (!r) return;
+        if (isSurge) {
+          S.actionsLeft--;
+          S.actionsThisMonth = (S.actionsThisMonth || 0) + 1;
+          var sEntry = {
+            kind: 'good', src: r.ward.name,
+            title: 'Everything went into ' + r.ward.name,
+            body: 'Halls, sound, printing, transport and eleven people on the ground full time for the rest of the ' +
+                  'campaign. It is more than you can afford and it will hold — nobody is taking this ward back ' +
+                  'in the weeks that are left.',
+            deltas: api.deltas.slice(), tone: 'good'
+          };
+          RZ.engine.pushFeed(S, sEntry);
+          RZ.engine.save(S);
+          RZ.ui.showOutcome(sEntry, afterAction);
+          return;
+        }
+        S.actionsLeft--;
+        S.actionsThisMonth = (S.actionsThisMonth || 0) + 1;
+        var entry = {
+          kind: r.ok ? 'good' : 'flat', src: r.ward.name,
+          title: r.ok ? 'A good week in ' + r.ward.name : 'A hard week in ' + r.ward.name,
+          body: (r.ok
+            ? 'Four days of doors, two taxi ranks and a hall you had to argue for. They know your name here now, ' +
+              'and more importantly they know your face.'
+            : 'Long days and thin crowds. You were argued with at the rank and had no good answer about the water. ' +
+              'It still moved, a little.') +
+            (r.broke ? ' You are spending money the campaign does not have, and it shows in what you could not print.' : ''),
+          deltas: api.deltas.slice(), tone: r.ok ? 'good' : 'flat'
+        };
+        RZ.engine.pushFeed(S, entry);
+        RZ.engine.save(S);
+        RZ.ui.showOutcome(entry, function () { RZ.ui.renderGame(); });
+      });
+      return;
+    }
     if (out.fail) {
       RZ.ui.toast(out.res ? out.res.title : 'Not possible', 'n');
       return;
@@ -111,14 +267,37 @@
       RZ.ui.showDialogue(out.dialogue, function (convo) {
         RZ.engine.finishDialogue(S, convo);
         RZ.engine.save(S);
-        RZ.ui.renderGame();
+        afterAction();
       });
       return;
     }
 
     RZ.engine.save(S);
-    RZ.ui.showOutcome(out.entry, function () { RZ.ui.renderGame(); });
+    RZ.ui.showOutcome(out.entry, afterAction);
     RZ.ui.renderHud();
+  }
+
+  // An action can put a decision on the table — a failed revolt summons you to
+  // the regional office there and then. Present it as soon as the outcome
+  // sheet closes rather than leaving it for the end of the month.
+  function afterAction() {
+    if (UI.S.pendingScene) { resumePendingScene(); return; }
+    if (UI.S.pendingEvent) { resumePendingEvent(); return; }
+    RZ.ui.renderGame();
+  }
+
+  // Somebody has asked to see you. It is not optional and it is not a card.
+  function resumePendingScene() {
+    var S = UI.S;
+    var convo = RZ.dialogue.beginById(S, S.pendingScene);
+    S.pendingScene = null;
+    if (!convo) { RZ.ui.renderGame(); return; }
+    RZ.engine.save(S);
+    RZ.ui.showDialogue(convo, function (c) {
+      RZ.engine.finishDialogue(S, c);
+      RZ.engine.save(S);
+      afterAction();
+    });
   }
 
   /* ---------------- contest ---------------- */
@@ -183,6 +362,11 @@
       RZ.ui.toast('Appointed: ' + out.promo.rung.title, 'p');
     }
 
+    // A collapse costs you the coming month, so say so rather than leaving the
+    // player to notice they have no actions.
+    if (out.collapsed) RZ.ui.toast('You are signed off — next month is gone', 'n');
+    if (out.purge && out.purge.purged) RZ.ui.toast('Purged from the slate', 'n');
+
     if (out.conference) {
       RZ.engine.pushFeed(S, { kind: 'big', src: c.terms.conference,
         title: 'The ' + c.terms.conference + ' opens in ' + c.capital,
@@ -191,8 +375,35 @@
       RZ.ui.toast('Conference year — leadership is contestable', 'p');
     }
 
+    // Four weeks are up and the House has divided. This is the loudest thing
+    // that happens outside an election, so it gets the sheet rather than a toast.
+    if (out.billResult) {
+      var br = out.billResult;
+      var bEntry = {
+        kind: br.passed ? 'big' : 'bad', alert: !br.passed,
+        src: 'The ' + c.house.name, title: br.title, body: br.body,
+        deltas: br.deltas || [], tone: br.tone
+      };
+      RZ.engine.pushFeed(S, bEntry);
+      RZ.engine.save(S);
+      RZ.ui.showOutcome(bEntry, function () {
+        if (S.over) { RZ.ui.showEnd(); return; }
+        if (out.election) { runElectionFlow(); return; }
+        afterAction();
+      });
+      return;
+    }
+    if (out.billLapsed) {
+      RZ.ui.toast(out.billLapsed.name + ' fell with the House', 'n');
+    }
+
+    if (out.sprintStarted) {
+      RZ.ui.toast('Eight weeks to the ballot — turns are now weekly', 'p');
+    }
+
     if (out.election) { runElectionFlow(); return; }
 
+    if (S.pendingScene) { resumePendingScene(); return; }
     if (S.pendingEvent) { resumePendingEvent(); return; }
     RZ.ui.renderGame();
   }
