@@ -658,3 +658,23 @@ strong.good{ color:var(--green); } strong.mid{ color:var(--gold); } strong.bad{ 
   .hold-dots i{ animation:none; opacity:.6; }
   .choices, .choices.veiled{ transition:none; opacity:1; transform:none; pointer-events:auto; }
 }
+
+/* the list — who keeps the register, and whether you are on it */
+.list-who{ display:flex; flex-direction:column; gap:2px; }
+.list-nm{ font-family:var(--serif); font-size:1.02rem; font-weight:600; }
+.list-role{ font-size:.75rem; color:var(--text-faint); }
+
+/* election night — the count coming in */
+.count-meter{
+  height:8px; border-radius:5px; background:#1c2732; overflow:hidden;
+  border:1px solid var(--line-soft);
+}
+.count-meter span{
+  display:block; height:100%; border-radius:5px;
+  background:linear-gradient(90deg,var(--gold-deep),var(--gold));
+  transition:width .7s cubic-bezier(.2,.8,.3,1);
+}
+.count-fill{ transition:width .7s cubic-bezier(.2,.8,.3,1); }
+@media (prefers-reduced-motion: reduce){
+  .count-meter span, .count-fill{ transition:none; }
+}

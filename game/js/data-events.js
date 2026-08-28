@@ -7,6 +7,19 @@
 
   function E(o) { return o; }
 
+  // Why by-elections are dangerous, and why they are dangerous specifically to
+  // the side that is in government. Turnout collapses to something like a
+  // third, and the third who still come out on a wet Tuesday in March are the
+  // ones with a grievance — so a seat that is comfortable at a general election
+  // is a coin toss at a by-election, and a governing party loses seats it holds
+  // by nine thousand.
+  function byProtest(a) {
+    var gov = a.inGov() ? 1 : 0.3;
+    var anger = Math.max(0, 45 - a.S.nation.govApproval) * 0.12 +
+                Math.max(0, a.S.nation.society.unrest - 30) * 0.10;
+    return (RZ.range(4, 12) + anger) * gov;
+  }
+
   var EVENTS = [
 
     /* ================= economy & country ================= */
@@ -446,7 +459,10 @@
 
     E({
       id: 'commission', w: 7, kicker: 'The commission',
-      when: function (a) { return a.P.dirt.some(function (d) { return d.exposed; }) && a.C.inst.judiciary > 40; },
+      // Only files that are still open. A campaign return the electoral
+      // commission has already closed is not something a second inquiry gets to
+      // summon you about — one set of bank statements, one letter.
+      when: function (a) { return a.openFiles().length > 0 && a.C.inst.judiciary > 40; },
       title: 'You have been summoned',
       body: 'A commission of inquiry wants you under oath, on television, for two days. Your lawyers say the evidence ' +
             'is circumstantial. Your lawyers also say that is not the point.',
@@ -1189,6 +1205,371 @@
           hostile: 'The tea goes cold on the desk. She hands in her notice in the spring.'
         }[temp];
       }
+    }),
+
+    /* ================= the trenches ================= */
+    // The first time this career asks to be paid in something other than money.
+    // It arrives only in the band where it is genuinely tempting: close enough
+    // to the list to want it, far enough to be years off earning it.
+    E({
+      id: 'trench-list', w: 40, kicker: 'The list',
+      once: true,
+      when: function (a) { return !!(RZ.trenches && RZ.trenches.wantsOffer(a.S)); },
+      title: function (a) {
+        return RZ.trenches.status(a.S).name + ' explains how the list is actually drawn';
+      },
+      body: function (a) {
+        var st = RZ.trenches.status(a.S);
+        return 'You have been at every meeting for two years, carried every chair, filled every bus, ' +
+          'and your name is still not on it. ' + a.esc(st.name) + ' finally tells you why, in a corridor, ' +
+          'without being asked. <em>"The list is not a reward. It is a favour, and a favour is lent against ' +
+          'something. You have nothing to lend."</em>';
+      },
+      choices: [
+        {
+          t: 'Pledge the ward at the next conference',
+          d: 'Your people vote where you tell them. That is the whole of it.',
+          tag: 'cost',
+          run: function (a) {
+            var st = RZ.trenches.status(a.S);
+            RZ.trenches.earn(a.S, a.rng(22, 34), 'You pledged the ward before you had it');
+            RZ.trenches.mark(a.S, 'pledged');
+            a.owePatron(st.full, a.rng(0.8, 1.4));
+            a.add('grassroots', -a.rng(0, 1.5));
+            return {
+              title: 'Your name goes on',
+              body: 'It took one sentence and no paperwork. ' + a.esc(st.name) + ' wrote it in at the bottom ' +
+                'with the same pen they use for everything else. Nobody shook hands — a handshake would have ' +
+                'made it a thing that happened.',
+              tone: 'flat'
+            };
+          }
+        },
+        {
+          t: 'Sign the form they put in front of you',
+          d: 'You did not read all of it. There was not time, and they knew it.',
+          tag: 'risk',
+          run: function (a) {
+            var st = RZ.trenches.status(a.S);
+            RZ.trenches.earn(a.S, a.rng(26, 40), 'You signed it without reading it');
+            RZ.trenches.mark(a.S, 'signed');
+            a.add('stats.integrity', -a.rng(3, 7));
+            a.dirt('trench-return',
+              'a membership return in your own handwriting, carrying two hundred names you have never met',
+              a.rng(1.2, 2.2));
+            return {
+              title: 'Two hundred members you have never met',
+              body: 'The ' + a.t.branch + ' grew by two hundred people overnight and you certified the return. ' +
+                'Perhaps half of them are real. You are on the list, and there is now a document in a filing ' +
+                'cabinet in ' + a.esc(a.homeName()) + ' with your signature along the bottom of it.',
+              tone: 'bad'
+            };
+          }
+        },
+        {
+          t: 'Nothing. Do it the long way.',
+          d: 'Years longer, and nobody can ever hold it over you.',
+          run: function (a) {
+            var st = RZ.trenches.status(a.S);
+            RZ.trenches.mark(a.S, null);
+            RZ.trenches.earn(a.S, -a.rng(2, 6), 'You were offered the list and would not take it');
+            a.add('stats.integrity', a.rng(2, 5));
+            return {
+              title: 'You said no in a corridor',
+              body: a.esc(st.name) + ' shrugged, which was the only answer that was ever going to come, and went ' +
+                'back inside. It was never mentioned again. The list came out in the new year and you were not on ' +
+                'it, and everybody who mattered understood exactly why.',
+              tone: 'flat'
+            };
+          }
+        }
+      ]
+    }),
+
+    /* ================= the household ================= */
+    // Not corruption, and not charity. This is simply what the money is for,
+    // and it is the reason the money is never enough.
+    E({
+      id: 'kin-ask', w: 22, kicker: 'Home',
+      when: function (a) { return !!(RZ.family && RZ.family.wantsAsk(a.S)); },
+      prep: function (a) { RZ.family.pickAsk(a.S); },
+      title: function (a) {
+        var ask = RZ.family.readAsk(a.S);
+        return a.esc(ask.name) + ' has come to the office';
+      },
+      body: function (a) {
+        var ask = RZ.family.readAsk(a.S);
+        return 'Your ' + ask.kin.tie + ' waited two hours in reception rather than telephone, because ' +
+          'telephoning would have made it easy to say no. It is ' + ask.need.what + '. ' +
+          (ask.kin.given > 0
+            ? 'You have paid for things before and both of you know exactly how many.'
+            : 'It is the first time they have asked you for anything.');
+      },
+      choices: [
+        {
+          t: 'Pay it',
+          d: 'It is what the money is for.',
+          tag: 'cost',
+          run: function (a) {
+            var ask = RZ.family.readAsk(a.S);
+            var amt = a.wage(a.rng(ask.need.cost[0], ask.need.cost[1]));
+            RZ.family.pay(a.S, a, ask, amt);
+            return {
+              title: 'You paid it',
+              body: 'You wrote it out without making them ask twice, which is the only part of this they ' +
+                'will remember. It is ' + RZ.money(amt, a.C.cur.sym) + ' you did not have earmarked for ' +
+                'anything, and ' +
+                'there will be another one before the year is out.',
+              tone: 'flat'
+            };
+          }
+        },
+        {
+          t: 'Pay half, and say why',
+          d: 'Honest about what the job actually pays. Nobody believes it.',
+          run: function (a) {
+            var ask = RZ.family.readAsk(a.S);
+            var amt = a.wage(a.rng(ask.need.cost[0], ask.need.cost[1]) * 0.5);
+            RZ.family.pay(a.S, a, ask, amt);
+            a.add('grassroots', -a.rng(0, 0.8));
+            return {
+              title: 'Half of it, and an explanation',
+              body: 'You showed them the actual figure on the actual payslip. They looked at it, and then ' +
+                'at the car outside, and took the half. By the weekend it is understood at home that you ' +
+                'have become careful with money, which is not a compliment.',
+              tone: 'flat'
+            };
+          }
+        },
+        {
+          t: 'No',
+          d: 'And it will be repeated at every gathering for a decade.',
+          run: function (a) {
+            var ask = RZ.family.readAsk(a.S);
+            RZ.family.refuse(a.S, a, ask);
+            return {
+              title: 'You said no',
+              body: 'They did not argue. They stood up, thanked you for your time in a way that was not ' +
+                'thanks, and got the four o’clock bus. It will be at every funeral and every wedding ' +
+                'from now on, in the form of a silence when your name comes up.',
+              tone: 'bad'
+            };
+          }
+        }
+      ]
+    }),
+
+    // The one that actually ends careers. You did not give him the contract.
+    // You did not have to.
+    E({
+      id: 'kin-tender', w: 26, kicker: 'The gazette',
+      once: true,
+      when: function (a) { return !!(RZ.family && RZ.family.wantsTender(a.S)); },
+      title: function (a) {
+        return 'Your ' + RZ.family.tenderKin(a.S).tie + '’s company is in the gazette';
+      },
+      body: function (a) {
+        var k = RZ.family.tenderKin(a.S);
+        return 'A company incorporated fourteen months ago, with ' + a.esc(k.full) + ' as sole director, has ' +
+          'been awarded a supply contract by a department two doors from yours. You did not sign it. You did ' +
+          'not know about it. Somebody in procurement read the surname and did the arithmetic, and that is ' +
+          'exactly what it will look like in print.';
+      },
+      choices: [
+        {
+          t: 'Let it stand. It was won properly.',
+          d: 'It may even be true. It will not read that way.',
+          tag: 'risk',
+          run: function (a) {
+            var k = RZ.family.tenderKin(a.S);
+            RZ.family.settleTender(a.S, 'stood');
+            a.dirt('kin-tender', 'a supply contract held by a company your ' + k.tie + ' owns',
+                   a.rng(1.6, 3.0));
+            a.add('money', a.wage(a.rng(1, 3)));
+            a.add('business', a.rng(1, 3));
+            if (k.person) k.person.rel = RZ.clamp(k.person.rel + a.rng(10, 18), -100, 100);
+            return {
+              title: 'It stands',
+              body: 'Nothing happens for nine months. Then a researcher somewhere runs the directorships ' +
+                'against the awards register, the way researchers eventually do, and the surname is the ' +
+                'first thing anybody sees.',
+              tone: 'flat'
+            };
+          }
+        },
+        {
+          t: 'Have it cancelled, publicly',
+          d: 'Costs you at home, and at home is where the votes are.',
+          run: function (a) {
+            var k = RZ.family.tenderKin(a.S);
+            RZ.family.settleTender(a.S, 'cancelled');
+            a.add('stats.integrity', a.rng(4, 9));
+            a.add('media', a.rng(2, 5));
+            a.add('grassroots', -a.rng(1, 3));
+            a.legacyMark('foughtCorruption');
+            if (k.person) {
+              RZ.cast.ding(a.S, k.person, a.rng(25, 45), -75);
+              RZ.cast.remember(a.S, k.person, 'You cancelled the contract in public', 'bad');
+            }
+            return {
+              title: 'You cancelled it in a press statement',
+              body: 'The statement used the words "perception of a conflict" and named the company. It was ' +
+                'the correct thing to do and it took eleven minutes. ' + a.esc(k.name) + ' has not spoken ' +
+                'to you since, and neither has most of ' + a.esc(a.homeName()) + ', where the contract was ' +
+                'forty jobs.',
+              tone: 'good'
+            };
+          }
+        },
+        {
+          t: 'Say you knew nothing, and keep not knowing',
+          d: 'True this morning. Not true this afternoon.',
+          tag: 'risk',
+          run: function (a) {
+            var k = RZ.family.tenderKin(a.S);
+            RZ.family.settleTender(a.S, 'denied');
+            a.dirt('kin-denial', 'a denial about your ' + k.tie + '’s contract that stopped being true ' +
+                   'the moment you made it', a.rng(2.0, 3.4));
+            a.add('stats.cunning', a.rng(1, 3));
+            a.add('stats.integrity', -a.rng(2, 5));
+            return {
+              title: 'You knew nothing about it',
+              body: 'Which was entirely true when the journalist asked, and stopped being true about four ' +
+                'hours later when you decided not to look into it. That distinction is invisible now and ' +
+                'will be the entire story if it ever comes out.',
+              tone: 'flat'
+            };
+          }
+        }
+      ]
+    }),
+
+    /* ================= the by-election ================= */
+    // The seat you were going to have to wait five years for falls vacant in
+    // March, because somebody died. The whole question is who pays for the
+    // eight weeks, and every answer to that is a different rest of your career.
+    E({
+      id: 'byelection', w: 20, kicker: 'A vacancy',
+      when: function (a) {
+        if (a.S.campaign.season || a.S.sprint || a.S.tempo === 'week') return false;
+        if (a.S.flags.byelectionTurn && a.S.turn - a.S.flags.byelectionTurn < 48) return false;
+        var next = RZ.engine.nextRung(a.S);
+        if (!next || next.how !== 'public') return false;
+        // You have to be a plausible candidate. A by-election is a short
+        // campaign and a short campaign cannot fix an unknown.
+        return RZ.engine.meetsRequirements(a.S, next).ok;
+      },
+      prep: function (a) {
+        a.S.flags.byelectionTurn = a.S.turn;
+        a.S.flags.byelectionWhy = RZ.pick([
+          'died in the small hours at seventy-one, in office, as he had always said he would',
+          'resigned on a Thursday, citing his health, which nobody in the branch believes',
+          'was expelled for something the party has declined to describe',
+          'took a posting abroad that was invented for him the week before'
+        ]);
+      },
+      title: function (a) {
+        return 'The ' + RZ.engine.nextRung(a.S).title + ' seat is vacant';
+      },
+      body: function (a) {
+        return 'The sitting member ' + a.S.flags.byelectionWhy + '. The writ is issued: eight weeks, ' +
+          'one seat, in ' + a.esc(a.homeName()) + '. You are on the shortlist, which is not the same as ' +
+          'being the candidate, and the difference between those two things is money.';
+      },
+      choices: [
+        {
+          t: 'Fight it on your own money',
+          d: 'Everything you have. You will owe nobody anything.',
+          tag: 'cost',
+          when: function (a) { return a.P.money > a.wage(6); },
+          run: function (a) {
+            var cost = a.wage(a.rng(6, 12));
+            a.add('money', -cost);
+            a.add('health', -a.rng(5, 12));
+            var v = a.homeViability();
+            // Your own campaign, run on your own grassroots, with nobody else's
+            // machine behind it and nobody else's hand on it afterwards.
+            var mine = v.mine * (1 + (a.P.standing.grassroots + a.P.fame * 0.4) / 165) - byProtest(a) * 1.25;
+            var theirs = v.best + byProtest(a) * 0.5;
+            mine += RZ.noise(11); theirs += RZ.noise(11);
+            if (mine > theirs) {
+              a.S.flags.seatOwed = false;
+              RZ.engine.promote(a.S, 'You won the by-election, and you paid for it yourself.');
+              a.add('grassroots', a.rng(3, 7));
+              a.add('stats.grit', a.rng(1, 3));
+              return {
+                title: 'You took the seat with your own money',
+                body: 'Eleven hundred votes in it and a bank account with nothing in it. The regional office ' +
+                  'sent a congratulatory statement forty minutes after the declaration, having sent nothing ' +
+                  'at all in the eight weeks before it. Nobody owns you.',
+                tone: 'good'
+              };
+            }
+            a.add('fame', a.rng(1, 3));
+            a.add('grassroots', -a.rng(0, 2));
+            return {
+              title: 'You lost it, and you lost it broke',
+              body: 'Four hundred votes short, with the party watching from a distance it had chosen carefully. ' +
+                'You will be back for the general, and you will be back poorer.',
+              tone: 'bad'
+            };
+          }
+        },
+        {
+          t: 'Let the region fund it',
+          d: 'They will win it for you. They will also tell you so, for years.',
+          run: function (a) {
+            var v = a.homeViability();
+            // The machine is genuinely better at this than you are, and it is
+            // better at exactly the thing a by-election turns on: getting its
+            // own people to the hall on a wet Tuesday in March. That is the
+            // trap — it is not a bad deal, it is an expensive one.
+            var mine = v.mine * (1 + (a.P.standing.grassroots * 0.5 + a.P.standing.party * 1.1) / 300) +
+                       3 - byProtest(a) * 0.75;
+            var theirs = v.best + byProtest(a) * 0.4;
+            mine += RZ.noise(8); theirs += RZ.noise(8);
+            a.add('health', -a.rng(3, 8));
+            a.S.flags.seatOwed = true;
+            a.S.flags.seatOwedYear = a.S.date.year;
+            a.owePatron(a.S.parties[a.P.partyId].leaderName, a.rng(0.9, 1.5));
+            if (RZ.revolt) RZ.revolt.whip(a.S, 24, 'they bought your seat');
+            a.add('party', a.rng(3, 7));
+            if (mine > theirs) {
+              RZ.engine.promote(a.S, 'The region delivered the by-election for you.');
+              return {
+                title: 'The machine delivered it',
+                body: 'Four buses, a hall, a sound system and two hundred t-shirts, none of which you paid for ' +
+                  'and all of which arrived on time. You won by nine thousand. At the count the regional ' +
+                  'secretary shook your hand and said "we will talk about the conference", and did not smile.',
+                tone: 'good'
+              };
+            }
+            return {
+              title: 'They spent it, and it was still not enough',
+              body: 'The buses came, the hall was full, and the ward still went the other way by six hundred. ' +
+                'The money was spent on your behalf whether or not it worked, which means it is still owed.',
+              tone: 'bad'
+            };
+          }
+        },
+        {
+          t: 'Sit it out',
+          d: 'Somebody else takes the seat, and takes it for a decade.',
+          run: function (a) {
+            a.add('party', -a.rng(1, 4));
+            a.add('grassroots', -a.rng(1, 3));
+            // Somebody real takes it, and they are now above you.
+            var taker = RZ.field.addRival(a.S, RZ.range(40, 62));
+            return {
+              title: 'You did not put your name forward',
+              body: (taker && taker.name ? taker.name : 'Somebody younger') + ' did, with the region behind ' +
+                'them, and will hold that seat for as long as they want it. The next vacancy in ' +
+                a.esc(a.homeName()) + ' is a decade away and you will be that much older when it comes.',
+              tone: 'bad'
+            };
+          }
+        }
+      ]
     })
   ];
 

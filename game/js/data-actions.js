@@ -21,6 +21,76 @@
 
   var ACTIONS = [
 
+    /* ---------------- the trenches ---------------- */
+    // The two actions the ladder is actually made of at the bottom, and which
+    // nothing above tier three ever offers you again. Neither of them is
+    // interesting, and that is what they are for: this is what the years before
+    // anybody knows your name are made of.
+    A({
+      id: 'chairs', ico: '🪑', ap: 1, tier: [0, 1],
+      name: 'Carry the chairs',
+      desc: 'Set up the hall, stack it afterwards, lock up. Nobody thanks you. Somebody notices.',
+      run: function (a) {
+        var st = RZ.trenches.status(a.S);
+        a.S.trenches.chairs++;
+        var seen = a.chance(0.55 + Math.min(0.25, a.S.trenches.chairs * 0.02));
+        RZ.trenches.earn(a.S, seen ? a.rng(2.5, 5) : a.rng(0.5, 1.5),
+          seen ? null : null);
+        a.add('grassroots', a.rng(0.4, 1.4));
+        a.add('health', -a.rng(0.5, 1.6));
+        a.add('stats.grit', a.rng(0.2, 0.8));
+        return {
+          title: seen ? P(['Last to leave, again', 'The keys came back to you',
+                           st.name + ' saw who stayed behind'])
+                      : P(['Ninety chairs, one hall', 'You stacked them alone',
+                           'Nobody was counting']),
+          body: seen
+            ? P(['You were still stacking when the office emptied, and ' + st.name + ' had to wait for you ' +
+                 'to finish before locking up. That is four minutes of somebody’s attention that no speech buys.',
+                 'The hall was yours to close. Somebody who signs things watched you do it properly.',
+                 'It is not a strategy. It is simply that the people who decide these things remember who was ' +
+                 'there at eleven at night and who was not.'])
+            : P(['Ninety chairs out, ninety chairs back, and the room was empty by the time you finished.',
+                 'The meeting ran late and everybody left before the stacking. As usual.',
+                 'You did it because it needed doing. Nobody was there to see that you did.']),
+          tone: seen ? 'good' : 'flat'
+        };
+      }
+    }),
+
+    A({
+      id: 'hustle', ico: '🚌', ap: 1, tier: [0, 3],
+      name: 'Run the league’s errands',
+      desc: 'Fill the buses, print the shirts, chase the numbers. Out of your own pocket.',
+      run: function (a) {
+        var st = RZ.trenches.status(a.S);
+        var spend = a.wage(a.rng(0.3, 0.9));
+        var ok = a.roll('grit', 44);
+        a.S.trenches.hustles++;
+        RZ.trenches.earn(a.S, ok ? a.rng(5, 9) : a.rng(1.5, 3.5), null);
+        a.add('money', -spend);
+        a.add('grassroots', ok ? a.rng(1.5, 3.2) : a.rng(0.3, 1.2));
+        a.add('health', -a.rng(1, 2.5));
+        a.addRegion(a.P.regionId, ok ? a.rng(1, 2.5) : a.rng(0, 1));
+        return {
+          title: ok ? P(['Four buses, and all four arrived', 'The shirts were there by six',
+                         'The numbers came in and they were yours'])
+                    : P(['Two buses short', 'The shirts came in the wrong colour',
+                         'You paid for a hall nobody filled']),
+          body: ok
+            ? P(['You found the buses, argued the price down, and had them at the stadium before the ' +
+                 'delegation woke up. ' + st.name + ' knows exactly who did that.',
+                 'Two hundred shirts, your money, delivered at six in the morning. The league chairman ' +
+                 'took the credit in his speech, which is how it works and how it will keep working.',
+                 'You spent a week doing what nobody else would do and it is now assumed you will do it again.'])
+            : P(['You put down a deposit on four buses and two of them went somewhere else for more money.',
+                 'The shirts arrived in the wrong colour and there was no time to send them back. You paid anyway.',
+                 'You booked the hall, paid for it, and forty people came. It seats four hundred.']),
+          tone: ok ? 'good' : 'bad'
+        };
+      }
+    }),
+
     /* ---------------- ground game ---------------- */
     A({
       id: 'walkabout', ico: '👣', ap: 1, tier: [0, 13],
@@ -775,10 +845,19 @@
         a.add('health', a.rng(8, 15));
         a.add('fame', -a.rng(0, 1));
         a.add('grassroots', -a.rng(0, 1));
+        // Rest is not only the body. It is the only thing that buys back the
+        // patience of the person who has been carrying this on their own.
+        var mended = RZ.family ? RZ.family.mend(a.S, a.rng(5, 11)) : null;
+        var sp = RZ.family && RZ.family.summary(a.S);
         return { title: P(['A week without a motorcade', 'You slept eight hours, twice', 'Nobody called it a holiday']),
-          body: P(['The cardiologist has been trying to reach you since March. You finally went.',
-                   'Your daughter did not recognise the sound of your car. She does now.',
-                   'Two rivals used the quiet week to move against you. It was still worth it.']),
+          body: (sp && sp.spouse && !sp.left
+            ? P(['The cardiologist has been trying to reach you since March. You finally went, and ' +
+                 sp.spouse + ' drove you.',
+                 'Your daughter did not recognise the sound of your car. She does now.',
+                 sp.spouse + ' had stopped setting a place at the table. This week there was one.'])
+            : P(['The cardiologist has been trying to reach you since March. You finally went.',
+                 'Your daughter did not recognise the sound of your car. She does now.',
+                 'Two rivals used the quiet week to move against you. It was still worth it.'])),
           tone: 'good' };
       }
     }),

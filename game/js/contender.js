@@ -262,15 +262,15 @@
     ct.ascended = true;
     ct.relation = 'hostile';
     var c = RZ.COUNTRIES[S.countryId];
-    S.flags.contenderPresident = true;
-    S.nation.presidentName = ct.name;
-    S.nation.presidentParty = ct.partyId;
-    S.nation.termNumber = 1;
-    S.player.isPresident = false;
-    if (S.nation.govParties.indexOf(ct.partyId) < 0) S.nation.govParties = [ct.partyId];
+    var lad = RZ.ladderFor(S.countryId);
 
     // They become the incumbent for every mechanic that already knows what an
-    // incumbent is, rather than a second thing the code has to remember.
+    // incumbent is, rather than a second thing the code has to remember. This
+    // happens *before* the country is told, because addRival re-syncs the
+    // leadership on its way out — and that sync writes the head of state's name
+    // from whoever leads the governing party. Set the nation first and it is
+    // quietly overwritten two lines later with somebody else's name, which is
+    // exactly what used to happen whenever the contender was in your own party.
     var npc = RZ.field.addRival(S, 92);
     npc.name = ct.name;
     npc.regionId = ct.regionId;
@@ -281,6 +281,24 @@
     npc.incumbent = true;
     ct.id = npc.id;
     S.flags.nemesisId = npc.id;
+
+    S.flags.contenderPresident = true;
+    S.nation.presidentParty = ct.partyId;
+    S.nation.termNumber = 1;
+    S.player.isPresident = false;
+    if (S.nation.govParties.indexOf(ct.partyId) < 0) S.nation.govParties = [ct.partyId];
+
+    // In your own party the office and the leadership are the same person, so
+    // the field has to agree with the country rather than contradict it.
+    if (ct.sameParty) {
+      var li = RZ.field.leaderIdx(S);
+      npc.rungIdx = li;
+      npc.role = lad[li].title;
+      S.player.isLeader = false;
+      RZ.field.syncLeadership(S);
+    }
+    // Last, and after every sync, so nothing can put the old name back.
+    S.nation.presidentName = ct.name;
 
     RZ.engine.pushFeed(S, {
       kind: 'big', alert: true, src: c.capital,

@@ -14,6 +14,10 @@
   var C100 = RZ.c100, clamp = RZ.clamp, P = RZ.pick;
 
   var WEEKS = 8;
+  // What counts as petty cash at the end of a campaign, in wage units. Below
+  // this it is receipts, a float and the last of the taxi fares, and nobody
+  // anywhere thinks about it. Above it, somebody kept something.
+  var PETTY = 2.5;
 
   /* =======================================================================
      STARTING AND ENDING
@@ -84,15 +88,51 @@
     sp.finalTally = t;
     sp.dirtyShare = dirtyShare(S, sp);
     S.flags.lastSprint = sp;
+
+    // What is left in the chest on the morning after. It does not evaporate —
+    // it never does in life either — so it goes somewhere, and where it goes is
+    // a fact about you rather than an accounting entry.
+    //
+    // The threshold is in wage units, never an absolute figure: the wage bases
+    // in this game run from 450 to 340,000, so any number written as money
+    // would be a rounding error in one country and a fortune in another.
+    sp.leftover = Math.max(0, Math.round(sp.war.cash));
+    sp.petty = Math.round(RZ.engine.WAGE_BASE[S.countryId] * PETTY);
+    if (sp.leftover > 0) {
+      S.player.money += sp.leftover;
+      sp.pocketed = sp.leftover > sp.petty;
+      if (sp.pocketed) {
+        // Above petty cash it is a decision, and the commission's arithmetic
+        // will find it: an unspent balance is the easiest line in any return.
+        S.flags.pocketedChest = {
+          amount: sp.leftover, year: S.date.year,
+          share: Math.min(1, sp.leftover / Math.max(1, sp.war.raised))
+        };
+        RZ.engine.pushFeed(S, {
+          kind: 'flat', src: 'The chest',
+          title: 'The account was not closed',
+          body: 'There was ' + RZ.money(sp.leftover, RZ.COUNTRIES[S.countryId].cur.sym) + ' still in it when the ' +
+            'ballot closed, and nobody sent it back, because there was nobody to send it back to. ' +
+            'It is in your account now. Every campaign in this country ends this way and the return has ' +
+            'a line for it that nobody has ever filled in truthfully.',
+          tone: 'flat'
+        });
+      }
+    }
+    sp.war.cash = 0;
     // Money that will not survive being looked at is a deferred cost, not a
     // free one. The commission gets to the returns a few months after the
     // ballot, which is exactly when you have stopped thinking about it.
-    if (sp.war.dirty > 0 && sp.dirtyShare > 0.28) {
+    // One letter, covering everything about this campaign's money: where it came
+    // from and what was left of it. Two separate inquiries into the same chest
+    // is two letters about one set of bank statements.
+    if ((sp.war.dirty > 0 && sp.dirtyShare > 0.28) || sp.pocketed) {
       S.flags.auditDue = {
         month: S.date.year * 12 + S.date.month + RZ.irange(2, 5),
         dirty: Math.round(sp.war.dirty),
         raised: Math.round(sp.war.raised),
-        share: sp.dirtyShare
+        share: sp.dirtyShare,
+        pocketed: sp.pocketed ? sp.leftover : 0
       };
     }
     return sp;
@@ -494,13 +534,24 @@
     if (S.date.year * 12 + S.date.month < a.month) return null;
     S.flags.auditDue = null;
     var api = RZ.engine.mkApi(S);
+    // One letter, and it covers the whole chest — where the money came from and
+    // what was left of it. The player should never be asked twice about one set
+    // of bank statements.
+    var sym = RZ.COUNTRIES[S.countryId].cur.sym;
+    var lines = [];
+    if (a.share > 0.28 && a.dirty > 0) {
+      lines.push('Roughly ' + Math.round(a.share * 100) + '% of what that campaign spent came from places the ' +
+        'return has no line for — a printer settled directly, suppliers paid by somebody who was never a donor.');
+    }
+    if (a.pocketed) {
+      lines.push('And the account did not close at zero. There was ' + RZ.money(a.pocketed, sym) +
+        ' left in it, and the bank statement says where that went.');
+    }
     return {
-      id: 'audit', kicker: 'The commission', audit: true, share: a.share,
+      id: 'audit', kicker: 'The commission', audit: true, share: a.share, pocketed: a.pocketed || 0,
       title: 'They have asked for the campaign returns',
-      body: 'A letter, on paper, giving you twenty-one days. Roughly ' + Math.round(a.share * 100) + '% of what ' +
-            'that campaign spent came from places the return has no line for — a printer settled directly, ' +
-            'suppliers paid by somebody who was never a donor. It was legal-adjacent at the time. ' +
-            'It is a schedule of questions now.',
+      body: 'A letter, on paper, giving you twenty-one days. ' + lines.join(' ') +
+            ' It was all legal-adjacent at the time. It is a schedule of questions now.',
       choices: [
         { i: 0, t: 'File it honestly and take what comes', d: 'The whole thing, with the awkward lines in it.', ok: true },
         { i: 1, t: 'File a return that balances', d: 'It will balance. It will also be false.', tag: 'risk', ok: true },
@@ -518,16 +569,24 @@
   }
 
   function auditOutcome(S, a, ev, idx) {
+    var sym = RZ.COUNTRIES[S.countryId].cur.sym;
     if (idx === 0) {
       a.add('media', -RZ.range(3, 9));
       a.add('stats.integrity', RZ.range(3, 6));
       a.add('party', -RZ.range(1, 5));
       a.dirt('returns', 'A campaign return that disclosed donations nobody else disclosed', 2);
+      // Filing honestly means the balance goes back, and it is real money.
+      var gave = 0;
+      if (ev.pocketed) { gave = ev.pocketed; a.add('money', -gave); S.flags.pocketedChest = null; }
+      // The file is closed. Nobody is entitled to summon you about this money
+      // again — which is the whole reason to have filed the awkward version.
+      a.settleDirt('returns');
       return {
         title: 'You filed the awkward version', tone: 'flat',
-        body: 'Every line of it, including the four that should never have been possible. One newspaper ran it ' +
-              'for two days. The commission has closed the file and written to say so, which is a letter worth ' +
-              'more than the coverage cost you.'
+        body: 'Every line of it, including the four that should never have been possible' +
+              (gave ? ', and ' + RZ.money(gave, sym) + ' returned to the account it should never have left' : '') +
+              '. One newspaper ran it for two days. The commission has closed the file and written to say so, ' +
+              'which is a letter worth more than the coverage cost you.'
       };
     }
     if (idx === 1) {
@@ -554,6 +613,11 @@
     a.add('money', -a.wage(RZ.range(4, 8)));
     a.add('media', -RZ.range(1, 4));
     a.add('stats.cunning', RZ.range(0.5, 1.5));
+    // Settled is settled: a compliance matter is not a finding, and it closes
+    // the same file the honest version would have closed.
+    a.dirt('returns', 'A compliance matter on a campaign return, settled without a finding', 1);
+    a.settleDirt('returns');
+    S.flags.pocketedChest = null;
     return {
       title: 'An administrative penalty, paid the same week', tone: 'flat',
       body: 'Agreed before the questions were finished being asked. It is on the register as a compliance matter ' +

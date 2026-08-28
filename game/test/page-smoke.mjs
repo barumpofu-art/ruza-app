@@ -280,6 +280,61 @@ const played = await evaluate(`(function(){
 })()`);
 console.log('played:', JSON.stringify(played));
 
+// Election day is four screens and an animated count, none of which the Node
+// harnesses ever render. Drive the whole night through the DOM.
+const night = await evaluate(`(function(){
+  RZ.ui.setCount(0);                 // no waiting; the stagger is tested elsewhere
+  var S = RZ.ui.UI.S;
+  S.player.rungIdx = 8;              // somebody a general election is about
+  var out = { phases: [], errors: [] };
+  try {
+    var done = false;
+    RZ.ui.showElectionDay(function () { done = true; });
+    out.phases.push(document.querySelector('#modal-inner .modal-h').textContent);
+    out.groundChoices = document.querySelectorAll('#modal-inner .choice').length;
+    document.querySelectorAll('#modal-inner .choice')[1].click();
+
+    out.phases.push(document.querySelector('#modal-inner .modal-h').textContent);
+    out.pollRows = document.querySelectorAll('#modal-inner .eres-row').length;
+    out.countedYet = !!(S.eday && S.eday.result);
+    document.querySelector('#modal-inner [data-go]').click();
+
+    out.phases.push(document.querySelector('#modal-inner .modal-h').textContent);
+    out.shiftChoices = document.querySelectorAll('#modal-inner .choice').length;
+    document.querySelectorAll('#modal-inner .choice')[0].click();
+
+    // The rig offer sits between the afternoon and the count, where it always did.
+    var rig = document.querySelector('#modal-inner [data-r]');
+    if (rig) { out.rigOffered = true; rig.click(); }
+
+    out.phases.push(document.querySelector('#modal-inner .modal-h').textContent);
+    out.counted = !!(S.eday && S.eday.result);
+    // With the stagger off the night resolves at once and offers the full result.
+    var fin = document.querySelector('#modal-inner [data-final]');
+    out.finalOffered = !!fin;
+    if (fin) fin.click();
+    out.resultSheet = !!document.querySelector('#modal-inner .eres-row');
+    var close = document.querySelector('#modal-inner [data-close]');
+    if (close) close.click();
+    out.done = done;
+    out.bad = /undefined|NaN|\\[object Object\\]/.test(document.body.textContent);
+  } catch (e) { out.errors.push(String(e && e.stack || e)); }
+  RZ.ui.setCount(900);
+  return out;
+})()`);
+console.log('election night:', JSON.stringify(night));
+if (night.errors.length) throw new Error('election day threw: ' + night.errors[0]);
+if (night.phases.length !== 4) throw new Error('election day did not run four phases');
+if (!night.groundChoices) throw new Error('the ground game offered nothing');
+if (!night.pollRows) throw new Error('the exit poll rendered no parties');
+if (night.countedYet) throw new Error('the count ran before the player had intervened');
+if (!night.shiftChoices) throw new Error('the afternoon offered no intervention');
+if (!night.counted) throw new Error('the count never ran');
+if (!night.finalOffered) throw new Error('the night never reached a declaration');
+if (!night.resultSheet) throw new Error('the full result sheet did not render');
+if (!night.done) throw new Error('election day never handed control back');
+if (night.bad) throw new Error('election day renders undefined/NaN');
+
 // The save has to survive a real reload through main.js's continue path.
 await send('Page.reload', { ignoreCache: false });
 await new Promise((r) => setTimeout(r, 1200));
