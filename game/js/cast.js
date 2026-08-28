@@ -115,7 +115,7 @@
         temper: RZ.pick(TEMPERS),
         // Nobody starts neutral about anybody, but nobody starts decided either.
         rel: Math.round(RZ.range(-12, 12)),
-        met: 0, firstMet: null, lastSeen: null,
+        met: 0, firstMet: null, lastSeen: null, bornTurn: S.turn,
         memory: [], alive: true
       };
     }
@@ -158,6 +158,44 @@
       if (p === convo.speaker) p.rel = clamp(p.rel + (SWING[convo.temp] || 0), -100, 100);
     });
     return convo.speaker && convo.speaker.key ? convo.speaker : null;
+  }
+
+  /* =======================================================================
+     WHAT TIME DOES TO THEM
+     ======================================================================= */
+  // Nobody stays furious forever about somebody they never see, and nobody
+  // stays grateful either. A relationship that is not being fed drifts back
+  // toward the middle.
+  //
+  // This is not decoration. Everything that moves `rel` — a meeting, a side
+  // taken, an appointment not kept — is a push in one direction, and a push
+  // with nothing pulling the other way runs to the floor and stays there. The
+  // half-life here is about three years, which is slow enough that a career's
+  // worth of neglect still shows and fast enough that it finds a level.
+  var IDLE = 6;                  // months before it starts to fade at all
+  function drift(S, span) {
+    init(S);
+    var sp = span === undefined ? 1 : span;
+    Object.keys(S.cast).forEach(function (k) {
+      var p = S.cast[k];
+      if (!p || p.rel === 0) return;
+      var idle = S.turn - (p.lastSeen === null ? (p.bornTurn || 0) : p.lastSeen);
+      if (idle < IDLE) return;
+      p.rel = clamp(p.rel + (0 - p.rel) * 0.02 * sp, -100, 100);
+      if (Math.abs(p.rel) < 0.4) p.rel = 0;
+    });
+  }
+
+  // Being let down has a floor, and it is not -100. Somebody you have never
+  // met and never turned up for ends up cold, not homicidal; only things you
+  // actually did in front of them take it further than that.
+  function ding(S, p, amount, floor) {
+    if (!p) return null;
+    init(S);
+    if (!S.cast[p.key]) S.cast[p.key] = p;
+    if (p.rel <= floor) return p;
+    p.rel = clamp(Math.max(floor, p.rel - amount), -100, 100);
+    return p;
   }
 
   // You were asked to choose between two people in the same room and you did.
@@ -271,6 +309,7 @@
     ANON: ANON, TEMPERS: TEMPERS, SWING: SWING,
     init: init, who: who, freshName: freshName, shortOf: shortOf, get: get, byRole: byRole, all: all, keyFor: keyFor,
     afterMeeting: afterMeeting, remember: remember, recalls: recalls, sideWith: sideWith,
+    drift: drift, ding: ding, IDLE: IDLE,
     standing: standing, greeting: greeting, summary: summary
   };
 })();

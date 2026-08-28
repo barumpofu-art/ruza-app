@@ -22,7 +22,7 @@ const FILES = [
   'core.js', 'data-countries.js', 'data-ladder.js', 'data-actions.js',
   'data-events.js', 'data-dialogue.js', 'data-origins.js', 'people.js', 'field.js', 'elections.js',
   'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js',
-  'constituency.js', 'statecraft.js', 'legislation.js', 'contender.js', 'blocs.js', 'cast.js'
+  'constituency.js', 'statecraft.js', 'legislation.js', 'contender.js', 'blocs.js', 'cast.js', 'docket.js'
 ];
 
 function loadGame() {
@@ -122,6 +122,26 @@ function checkState(where, S) {
   if (P.isLeader && st.leaderName !== P.name) fail(where, 'you lead the party but it is named for somebody else');
   if (!S.nation.presidentName) fail(where, 'the country has no head of state named');
 
+  // ---- the diary ----
+  const dk = S.docket;
+  if (dk) {
+    if (dk.entries.length > 3) fail(where, `${dk.entries.length} appointments in one month`);
+    const seen = new Set();
+    for (const en of dk.entries) {
+      if (!en.actionId) fail(where, 'a diary entry has nothing in it');
+      if (seen.has(en.actionId)) fail(where, `the diary books ${en.actionId} twice`);
+      seen.add(en.actionId);
+      if (!en.at) fail(where, `"${en.name}" has no time against it`);
+      if (!en.why) fail(where, `"${en.name}" is in the diary for no reason`);
+      if (en.kept && en.declined) fail(where, `"${en.name}" was both kept and declined`);
+      if (en.who && !en.who.name) fail(where, `"${en.name}" names a person with no name`);
+      if (/undefined|NaN/.test(String(en.name) + String(en.why))) {
+        fail(where, `a diary entry renders undefined: ${en.name} — ${en.why}`);
+      }
+    }
+    if (S.tempo === 'week' && dk.entries.length) fail(where, 'a diary was kept through a weekly sprint');
+  }
+
   // A save has to survive the round trip or a career dies on the train.
   const raw = JSON.stringify(S);
   if (raw.includes('undefined')) fail(where, 'the save serialises an undefined');
@@ -157,6 +177,15 @@ const BUYS = {
 function climbPick(S, avail) {
   const P = S.player;
   const have = new Set(avail.map((a) => a.id));
+
+  // The diary is the first thing on the desk, so a climbing player sees it.
+  if (RZ.docket) {
+    const waiting = RZ.docket.open(S).filter((e) => have.has(e.actionId));
+    if (waiting.length && RZ.chance(0.55)) {
+      const e = RZ.pick(waiting);
+      return avail.filter((a) => a.id === e.actionId)[0];
+    }
+  }
   const pickFrom = (ids) => {
     const hits = avail.filter((a) => ids.indexOf(a.id) >= 0);
     return hits.length ? RZ.pick(hits) : null;
@@ -201,11 +230,24 @@ function playCareer(countryId, seed, strategy) {
   checkState(`${where} @start`, S);
 
   const stats = { turns: 0, actions: 0, meetings: 0, events: 0, eventRooms: 0, contests: 0, wins: 0,
-                  elections: 0, appointments: 0, beatenBy: 0, budgets: 0 };
+                  elections: 0, appointments: 0, beatenBy: 0, budgets: 0,
+                  booked: 0, keptAppt: 0, declined: 0 };
 
   for (let turn = 0; turn < 600 && !S.over; turn++) {
     stats.turns++;
     const at = `${where} y${S.date.year}m${S.date.month}`;
+
+    // ---- the diary ----
+    // A career that never cancels anything only ever exercises half of it.
+    if (RZ.docket) {
+      const waiting = RZ.docket.open(S);
+      stats.booked += waiting.length;
+      if (waiting.length > 1 && RZ.chance(0.3)) {
+        const drop = RZ.pick(waiting);
+        RZ.docket.decline(S, drop.actionId);
+        stats.declined++;
+      }
+    }
 
     // ---- spend the month ----
     let guard = 0;
@@ -290,6 +332,8 @@ function playCareer(countryId, seed, strategy) {
     }
 
     // ---- the month turns ----
+    if (RZ.docket) stats.keptAppt += RZ.docket.summary(S).kept;
+
     const out = RZ.engine.endTurn(S);
     checkState(`${at} after endTurn`, S);
     if (S.over) break;
@@ -436,7 +480,8 @@ const ids = Object.keys(RZ.COUNTRIES);
 console.log(`playing ${CAREERS} careers in each of ${ids.length} countries, as ${STRATEGIES.join(' and ')}\n`);
 
 const totals = { turns: 0, actions: 0, meetings: 0, events: 0, eventRooms: 0, contests: 0, wins: 0,
-                 elections: 0, appointments: 0, beatenBy: 0, budgets: 0 };
+                 elections: 0, appointments: 0, beatenBy: 0, budgets: 0,
+                 booked: 0, keptAppt: 0, declined: 0 };
 const endings = {};
 const ceilings = {};
 
@@ -464,6 +509,8 @@ for (const strategy of STRATEGIES) {
 console.log(`\n  ${totals.turns} months played, ${totals.actions} actions, ${totals.meetings} meetings,`);
 console.log(`  ${totals.events} events (${totals.eventRooms} of them rooms), ${totals.contests} contests (${totals.wins} won, ${totals.beatenBy} lost to a named rival),`);
 console.log(`  ${totals.elections} general elections, ${totals.appointments} appointments, ${totals.budgets} budgets.`);
+console.log(`  diary: ${totals.booked} appointments booked, ${totals.keptAppt} kept, ${totals.declined} cancelled outright,` +
+  ` ${Math.max(0, totals.booked - totals.keptAppt - totals.declined)} simply not attended.`);
 if (shares.length) {
   const sorted = shares.slice().sort((a, b) => a - b);
   const at = (q) => sorted[Math.floor(sorted.length * q)].toFixed(0);

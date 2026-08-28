@@ -90,6 +90,20 @@
   /* ---------------- actions ---------------- */
   function c() { return RZ.COUNTRIES[UI.S.countryId]; }
 
+  // Sending word that you are not coming. Cheaper than simply not arriving,
+  // which is what happens if the month runs out with the slot still open — a
+  // person who is told can use the morning for something else. It costs no
+  // action, because not going somewhere never does.
+  function decline(id) {
+    var S = UI.S;
+    if (!RZ.docket) return;
+    var e = RZ.docket.decline(S, id);
+    if (!e) return;
+    RZ.engine.save(S);
+    RZ.ui.renderGame();
+    RZ.ui.toast(e.who ? e.who.name + ' was told' : 'Cancelled', 'n');
+  }
+
   function act(id) {
     var S = UI.S;
     if (S.actionsLeft <= 0) { RZ.ui.toast('No actions left this month', 'n'); return; }
@@ -511,6 +525,7 @@
     return false;
   };
 
-  RZ.main = { init: init, begin: begin, act: act, contest: contest, endTurn: endTurn, abandon: abandon };
+  RZ.main = { init: init, begin: begin, act: act, decline: decline, contest: contest,
+              endTurn: endTurn, abandon: abandon };
   document.addEventListener('DOMContentLoaded', init);
 })();
