@@ -154,6 +154,34 @@ const diary = await evaluate(`(function(){
   out.left = S.actionsLeft;
   return out;
 })()`);
+
+// An appointment you kept must not take its action off the desk. The diary card
+// becomes an unclickable "kept" line, so if the grid also hides it the action is
+// gone for the rest of the month with no explanation — which is exactly what the
+// emulator run walked into when it went looking for `walkabout` afterwards.
+const afterKeeping = await evaluate(`(function(){
+  RZ.ui.UI.pane = 'desk';
+  var S = RZ.ui.UI.S;
+  S.actionsLeft = 3;
+  RZ.ui.renderGame();
+  var host = document.getElementById('pane-desk');
+  var out = { kept: [], reachable: [], stale: [] };
+  (S.docket ? S.docket.entries : []).forEach(function (e) {
+    if (!e.kept) return;
+    out.kept.push(e.actionId);
+    // Still offered by the engine? Then it must still be clickable on the desk.
+    var offered = RZ.engine.availableActions(S).some(function (a) { return a.id === e.actionId; });
+    var el = host.querySelector('.act[data-action="' + e.actionId + '"]');
+    if (offered && el) out.reachable.push(e.actionId);
+    if (offered && !el) out.stale.push(e.actionId);
+  });
+  return out;
+})()`);
+console.log('after keeping:', JSON.stringify(afterKeeping));
+if (afterKeeping.stale.length) {
+  throw new Error('keeping an appointment removed its action from the desk: ' + afterKeeping.stale.join(', '));
+}
+
 console.log('diary:', JSON.stringify(diary));
 if (diary.entries < 1) throw new Error('the month opened with nothing in the diary');
 if (!diary.board) throw new Error('the diary board never rendered');
