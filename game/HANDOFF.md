@@ -335,22 +335,50 @@ contests, so many more careers reached tiers 2–3 — and at tiers 2–3 the pu
 essentially everybody it was asked about. The mechanic had been fine for releases only
 because nobody was ever getting far enough to be asked.
 
-### Standing finding: Eswatini's top office is now far too easy
+### Eswatini's top office, and what it was actually made of
 
-Fixing the purge opened the ladder — careers reaching the top office went from 5 in 1,000
-to 67 in 1,000 — but almost all of that gain landed in one country. **SZ went from ~6% to
-58% of careers reaching the top office; every other country is between 0% and 4%.**
+SZ was reaching the top office in 58% of careers against 0–4% everywhere else. The
+diagnosis written here first — "the monarchy's appointment route has no election in the
+way" — was wrong, and instrumenting `promote()` to record *why* it fired said so in one
+run: every single one arrived via **"X recommended you personally, which surprised
+everybody"**, which is `revolt.blackmail`.
 
-The cause is not in the fix. SZ is the monarchy: `hos` is `how: 'appoint'`, so the route
-is "reach the rung below it, wait for `S.flags.postVacant`, clear a score check" — with no
-general election and no party leadership contest in the way. It was always the softest
-path in the game, and the wrongly-applied tier-2/3 purge was the only thing culling the
-queue of people walking up it. Removing the purge did not create the hole; it stopped
-hiding it.
+`blackmail` refused only when `rung.how === 'auto'`. That is true of the nine countries
+that elect their head of state and false of the one that appoints them — so in SZ a
+single file on a colleague bought the Prime Ministership outright. The guard was
+expressing "you cannot blackmail your way into the top job" and testing the mechanism
+instead of the office. It tests `rung.id === 'hos'` now, in both `revolt.blackmail` and
+the action's own `when`.
 
-Worth deciding deliberately, and *not* by re-breaking the purge: the King's appointment
-needs a real gate of its own — a competing candidate with a claim, a requirement to have
-held a specific portfolio, or a vacancy that is rarer than it currently is.
+Closing that exposed the second half: **the intended path had never worked.** For `hos`
+the bar was `46 + 13*2.6 + 26 + pressure*12` ≈ 115 against a maximum achievable score of
+116, so the appointed route was unreachable in practice and the exploit was the only way
+through. Three changes make it a real route:
+
+- a vacancy is a **window** (`S.flags.vacancyCloses`), not a state that waits for you;
+  when it closes, `closeVacancy()` seats somebody else and it is years before the next;
+- **one decision per vacancy** (`S.flags.vacancyConsidered`), not one every quarter —
+  eight rolls at 20% is an 80% chance nobody chose to take;
+- the bar drops to `+2` and the spread widens to ±26 for that office only, because with
+  ±16 the standing bands are further apart than the noise and the office is a step
+  rather than a slope.
+
+Measured on a Deputy PM during an open vacancy: **92 standing → 46%, 75 → 14%, 60 → 0%,
+34 → 0%.** Demanding, reachable, and decided by standing.
+
+### Standing finding: the top office is rare everywhere, and one mechanic is behind it
+
+With SZ's exploit closed, careers reaching the top office across 1,000 Monte Carlo runs
+sit at **3 in 1,000 (0.3%)** — statistically where it was before any of this work (5 in
+1,000). The 67 in 1,000 briefly reported at 1.7.2 was almost entirely the SZ hole, not a
+real gain; the genuine gain from the purge fix is in the *mid* ladder, where career-sim's
+climb ceilings now spread out to t10 and t11 instead of clustering at t3–t4.
+
+The knock-on is a new Monte Carlo warning: **no constitutional amendment is ever attempted
+in either cohort**, because amendments are president-only and nobody is president. That is
+a real coverage hole in a whole module (`governance.amendmentsFor` / `attemptAmendment`)
+and it is worth deciding whether the elected presidencies should be more reachable, or
+whether the amendment mechanic should open earlier than the top office.
 
 ### A shape to watch for: the one-way ratchet
 
