@@ -3,7 +3,7 @@
 State of the build, the conventions it is written to, and what is next. Written so a
 fresh session can pick the work up without re-reading the whole tree.
 
-Last updated at commit `356204b` (the merge with main).
+Last updated for 1.3.0 (multi-speaker rooms).
 
 ---
 
@@ -43,12 +43,18 @@ price.
 | `js/field.js` | Everybody else on the ladder: party figures with careers of their own |
 | `js/contender.js` | *One* named rival who starts the same year — see the note below |
 | `js/blocs.js` | Six demographic blocs cutting across the regions |
-| `js/cast.js` | The persistent cast: the same people, meeting after meeting |
+| `js/cast.js` | The persistent cast: the same people, meeting after meeting, and who is called what on screen |
 | `js/ui.js` | All rendering. One module, no framework |
 | `js/main.js` | Bootstrap and flow control |
 
 The conversation engine also hands each scene `a.them` (the person opposite),
-`a.remember(what, tone)`, `a.recalls(tone)` and `a.rel()`.
+`a.who(key)` (anybody else in the room), `a.remember(what, tone)`, `a.recalls(tone)`
+and `a.rel()`.
+
+**Names on screen go through `RZ.cast.shortOf(S, person)`**, never `name.split(' ')[0]`.
+A room prints first names, so a minister who happens to share the player's first name
+makes "Backs Thandi" ambiguous; `shortOf` falls back to the full name when a first name
+is spoken for. Identity is compared by `key`, never by name.
 
 ## Two systems of rivals, on purpose
 
@@ -132,7 +138,7 @@ node game/test/monte-carlo.mjs        # what do the rules do at scale?
   topic reachable through an action or a summon. If a scene needs state to exist, build
   it in `prepare()` rather than making the scene defensive about a state the game never
   produces.
-- **mechanics** builds the exact state each system needs. 477 checks in 20 sections.
+- **mechanics** builds the exact state each system needs. 505 checks in 21 sections.
   This is where anything gated on high office gets tested, because no automated policy
   reaches the presidency reliably.
 - **monte-carlo** runs 1,000 seeded careers in two cohorts — `random` (a coin, the honest
@@ -183,8 +189,16 @@ engine rather than a dashboard with prose on it. Build order, highest leverage f
    something said in front of somebody; `RZ.cast.greeting()` opens a later meeting by
    quoting it back. Seven answers are seeded so far — *more scenes should call
    `a.remember()`*, which is the cheapest remaining writing task in the game.
-3. **Multi-speaker rooms.** `convo.speaker` is singular today. An `argument` beat type
-   where two NPCs trade lines and your answer sides with one of them.
+3. ~~**Multi-speaker rooms.**~~ **Done.** A scene declares `others: { key: fn }` alongside
+   its `speaker`; a beat can carry `argument: [{ by, at, t }]` that the NPCs say to each
+   other before anybody turns to you; an answer can carry `side: 'key'`, which warms the
+   person backed and cools the other parties to *that* argument (not the chair). Four
+   authored rooms so far — `cabinet-budget`, `war-room`, `whip-corridor`,
+   `security-table`. `dialogue-sim` enforces the structure: everybody referred to must be
+   in the room, and an argument with no answer that takes a side is a failure.
+
+   **Adding one:** authored is the house style for pivotal rooms. Assembled-from-faction
+   arguments are possible on the same engine and nothing has been built that way yet.
 4. **The Docket.** Replace the action grid with a scheduled day of named appointments
    plus a free slot.
 5. **The dramatic pause.** Player choice nodes open on a beat of silence.

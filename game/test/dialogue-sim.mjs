@@ -80,13 +80,34 @@ for (const sc of RZ.DIALOGUE) {
   }
   // A meeting is a conversation, not a single question with a lid on it.
   if (!Array.isArray(sc.beats) || sc.beats.length < 2) fail(sc.id, 'fewer than two questions');
+  // Everybody a scene refers to has to actually be standing in the room.
+  const cast = new Set(['_', ...Object.keys(sc.others || {})]);
+  if (sc.others) {
+    if (Object.keys(sc.others).length < 2) fail(sc.id, 'a room with `others` needs at least two of them to argue');
+    for (const [k, fn] of Object.entries(sc.others)) {
+      if (typeof fn !== 'function') fail(sc.id, `other "${k}" is not a function`);
+    }
+  }
   for (const [i, b] of (sc.beats || []).entries()) {
     if (!b.q) fail(sc.id, `beat ${i} has no question`);
     if (!Array.isArray(b.answers) || b.answers.length < 3) fail(sc.id, `beat ${i} offers fewer than three answers`);
+    if (b.by && !cast.has(b.by)) fail(sc.id, `beat ${i} is asked by "${b.by}", who is not in the room`);
+    for (const [k, l] of (b.argument || []).entries()) {
+      if (!l.by) fail(sc.id, `beat ${i} argument line ${k} says nothing about who is speaking`);
+      if (!cast.has(l.by)) fail(sc.id, `beat ${i} argument line ${k} is spoken by "${l.by}", who is not in the room`);
+      if (l.at && !cast.has(l.at)) fail(sc.id, `beat ${i} argument line ${k} is aimed at "${l.at}", who is not in the room`);
+      if (!l.t) fail(sc.id, `beat ${i} argument line ${k} has no text`);
+    }
+    // An argument nobody can take a side in is two people talking near you.
+    if ((b.argument || []).length && !(b.answers || []).some((a) => a.side)) {
+      fail(sc.id, `beat ${i} stages an argument but no answer takes a side in it`);
+    }
     for (const [j, ans] of (b.answers || []).entries()) {
       if (!ans.t) fail(sc.id, `beat ${i} answer ${j} has no text`);
       if (!ans.reply) fail(sc.id, `beat ${i} answer ${j} has no reply`);
       if (typeof ans.mood !== 'number') fail(sc.id, `beat ${i} answer ${j} has no mood`);
+      if (ans.side && !cast.has(ans.side)) fail(sc.id, `beat ${i} answer ${j} sides with "${ans.side}", who is not in the room`);
+      if (ans.replyBy && !cast.has(ans.replyBy)) fail(sc.id, `beat ${i} answer ${j} is answered by "${ans.replyBy}", who is not in the room`);
     }
   }
   if (sc.only) for (const cid of sc.only) {
@@ -97,6 +118,9 @@ for (const sc of RZ.DIALOGUE) {
 /* ---- events that are rooms are held to the same shape ---- */
 const eventRooms = RZ.EVENTS.filter((e) => e.beats);
 console.log(`${eventRooms.length} of ${RZ.EVENTS.length} events are rooms rather than cards`);
+const argued = RZ.DIALOGUE.filter((sc) => sc.others);
+const sides = argued.reduce((n, sc) => n + sc.beats.reduce((m, b) => m + (b.answers || []).filter((a) => a.side).length, 0), 0);
+console.log(`${argued.length} rooms hold more than one person, offering ${sides} ways to take a side`);
 for (const ev of eventRooms) {
   if (ev.choices) fail(ev.id, 'an event has both beats and choices; it can only be one');
   if (typeof ev.speaker !== 'function') fail(ev.id, 'an event room has no speaker');

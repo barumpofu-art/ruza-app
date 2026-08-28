@@ -45,6 +45,51 @@
   ];
 
   function keyFor(role, org) { return (role || '') + '|' + (org || ''); }
+  function first(n) { return String(n || '').split(' ')[0]; }
+
+  // Almost everywhere in the game a person is referred to by their first name
+  // alone — "Backs Mandla", "THANDI to MANDLA". So a cast member who shares a
+  // first name with the player, or with somebody already in the cast, is not a
+  // flavour problem, it is an ambiguous sentence. Try again a few times, and
+  // fall back to the full name rather than looping forever.
+  function freshName(S, c) {
+    var taken = takenFirstNames(S);
+    var full = {};
+    Object.keys(S.cast || {}).forEach(function (k) { full[S.cast[k].name] = true; });
+    full[S.player && S.player.name] = true;
+    var n = RZ.makeName(c);
+    for (var i = 0; i < 20 && (taken[first(n)] || full[n]); i++) n = RZ.makeName(c);
+    // A small pool can run out of first names; it must never run out of whole
+    // ones, or two people become the same person.
+    for (var j = 0; j < 40 && full[n]; j++) n = RZ.makeName(c);
+    return n;
+  }
+  function takenFirstNames(S) {
+    var taken = {};
+    taken[first(S.player && S.player.name)] = true;
+    Object.keys(S.cast || {}).forEach(function (k) { taken[first(S.cast[k].name)] = true; });
+    return taken;
+  }
+
+  // What to call them on screen. A first name almost always, because that is
+  // how these rooms actually sound — but a country with a small pool of names
+  // will eventually hand you two Siphos, and "Backs Sipho" has to mean one
+  // person. Where the first name is already spoken for, the whole name is used.
+  // Identity is the key, never the name: two people can be handed the same
+  // name, and comparing by name means each of them filters the other out and
+  // both decide they are unambiguous.
+  function shortOf(S, p) {
+    if (!p) return '';
+    var f = first(p.name);
+    if (first(S.player && S.player.name) === f) return p.name;
+    var others = Object.keys(S.cast || {})
+      .filter(function (k) { return k !== p.key; })
+      .map(function (k) { return S.cast[k]; });
+    for (var i = 0; i < others.length; i++) {
+      if (first(others[i].name) === f) return p.name;
+    }
+    return f;
+  }
 
   function init(S) {
     if (!S.cast) S.cast = {};
@@ -58,15 +103,15 @@
   // replaced, so no scene had to be rewritten: pass a role and an organisation,
   // get back somebody. The difference is that now it is the *same* somebody.
   function who(S, c, role, org) {
-    if (ANON[role]) {
-      return { name: RZ.makeName(c), role: role, org: org, anon: true };
-    }
     init(S);
+    if (ANON[role]) {
+      return { name: freshName(S, c), role: role, org: org, anon: true };
+    }
     var key = keyFor(role, org);
     var p = S.cast[key];
     if (!p) {
       p = S.cast[key] = {
-        key: key, name: RZ.makeName(c), role: role, org: org,
+        key: key, name: freshName(S, c), role: role, org: org,
         temper: RZ.pick(TEMPERS),
         // Nobody starts neutral about anybody, but nobody starts decided either.
         rel: Math.round(RZ.range(-12, 12)),
@@ -93,15 +138,47 @@
   var SWING = { warm: 9, fair: 2, cool: -5, hostile: -14 };
 
   function afterMeeting(S, convo) {
-    var p = convo.speaker;
-    if (!p || p.anon || !p.key) return null;
     init(S);
-    if (!S.cast[p.key]) S.cast[p.key] = p;
-    p.met++;
-    if (p.firstMet === null) p.firstMet = S.date.year;
-    p.lastSeen = S.turn;
-    p.rel = clamp(p.rel + (SWING[convo.temp] || 0), -100, 100);
-    return p;
+    // Everybody who was in the room has now been met, not only whoever was
+    // doing the asking: sitting through two ministers arguing and coming down
+    // on one of them is how you come to know both of them.
+    var seen = convo.people
+      ? Object.keys(convo.people).map(function (k) { return convo.people[k]; })
+      : [convo.speaker];
+    var counted = [];
+    seen.forEach(function (p) {
+      if (!p || p.anon || !p.key || counted.indexOf(p) >= 0) return;
+      counted.push(p);
+      if (!S.cast[p.key]) S.cast[p.key] = p;
+      p.met++;
+      if (p.firstMet === null) p.firstMet = S.date.year;
+      p.lastSeen = S.turn;
+      // The temperature of the room is the primary's to read. The others have
+      // already been moved by whichever way you went in front of them.
+      if (p === convo.speaker) p.rel = clamp(p.rel + (SWING[convo.temp] || 0), -100, 100);
+    });
+    return convo.speaker && convo.speaker.key ? convo.speaker : null;
+  }
+
+  // You were asked to choose between two people in the same room and you did.
+  // The one you backed gains more than the ones you did not lose, because
+  // being chosen is louder than not being chosen — but nobody in that room
+  // forgets which way you went.
+  function sideWith(S, backed, against, weight) {
+    var w = weight === undefined ? 1 : weight;
+    init(S);
+    if (backed && !backed.anon && backed.key) {
+      if (!S.cast[backed.key]) S.cast[backed.key] = backed;
+      backed.rel = clamp(backed.rel + 11 * w, -100, 100);
+      backed.sidedWith = (backed.sidedWith || 0) + 1;
+    }
+    (against || []).forEach(function (p) {
+      if (!p || p.anon || !p.key || p === backed) return;
+      if (!S.cast[p.key]) S.cast[p.key] = p;
+      p.rel = clamp(p.rel - 7 * w, -100, 100);
+      p.sidedAgainst = (p.sidedAgainst || 0) + 1;
+    });
+    return backed;
   }
 
   // Something specific, said in front of them, that they are entitled to bring
@@ -192,8 +269,8 @@
 
   RZ.cast = {
     ANON: ANON, TEMPERS: TEMPERS, SWING: SWING,
-    init: init, who: who, get: get, byRole: byRole, all: all, keyFor: keyFor,
-    afterMeeting: afterMeeting, remember: remember, recalls: recalls,
+    init: init, who: who, freshName: freshName, shortOf: shortOf, get: get, byRole: byRole, all: all, keyFor: keyFor,
+    afterMeeting: afterMeeting, remember: remember, recalls: recalls, sideWith: sideWith,
     standing: standing, greeting: greeting, summary: summary
   };
 })();

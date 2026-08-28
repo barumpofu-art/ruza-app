@@ -3227,6 +3227,407 @@
         }
       ]
     },
+    /* ==================== ROOMS WITH TWO SIDES IN THEM ====================
+       Everything above is somebody asking you something. These are two people
+       who have already decided, arguing with each other in front of you,
+       where the only way out of the room is to back one of them. Nobody is
+       wrong. That is the point.
+       ==================================================================== */
+
+    // The cabinet budget room. The oldest argument in government, and the one
+    // Suzerain gets right: the money is finite and both of them are correct.
+    {
+      id: 'cabinet-budget', topic: 'policy', weight: 16,
+      when: function (a) { return a.tier() >= 6; },
+      speaker: function (a) { return who(a, 'Secretary to the Cabinet', ''); },
+      others: {
+        purse: function (a) { return who(a, 'Minister of Finance', 'the Treasury'); },
+        ward: function (a) { return who(a, 'Minister of Health', ''); }
+      },
+      where: 'The cabinet room, and the agenda has one item on it',
+      settleOn: 'leader',
+      opening: function (a) {
+        return 'Two folders, one figure, and the Secretary has stopped pretending this will be settled ' +
+          'politely. "Minister," he says to the room in general, "you have both read it. Say it to each ' +
+          'other rather than to me."';
+      },
+      beats: [
+        {
+          argument: [
+            { by: 'purse', at: 'ward',
+              t: 'Debt service is ' + '31 per cent of revenue and rising. Every clinic you open is borrowed ' +
+                 'at eleven per cent from people who will decide next year whether we eat. I am not ' +
+                 'against clinics. I am against a downgrade.' },
+            { by: 'ward', at: 'purse',
+              t: 'Do not do the arithmetic at me. I have four district hospitals running on generators ' +
+                 'and a maternal mortality figure I cannot say out loud in this building. Your downgrade ' +
+                 'is a number. Mine is a ward with two midwives in it.' },
+            { by: 'purse', at: 'ward',
+              t: 'And in three years there will be no budget for midwives at all, because the whole ' +
+                 'vote will be interest. I am trying to protect the thing you want to spend.' }
+          ],
+          q: function (a) {
+            return '"That is the argument," the Secretary says, and turns to you. "It does not resolve ' +
+              'itself and it is not going to. Whose line goes in the estimates?"';
+          },
+          answers: [
+            { t: 'Health. Build the clinics and let the rating agencies write what they like', mood: 1,
+              side: 'ward',
+              run: function (a) {
+                a.nation('health', RZ.range(5, 11)); a.nation('debt', RZ.range(3, 7));
+                a.add('intl', -a.rng(4, 9)); a.add('grassroots', a.rng(3, 8));
+                a.blocs({ rural: RZ.range(6, 12), labour: RZ.range(4, 9), middle: -RZ.range(3, 8) });
+                a.remember('You chose the clinics over the credit rating', 'good');
+              },
+              reply: 'She does not thank you, which is how you know it mattered. She is already writing ' +
+                     'down which four districts, in the order she has been carrying in her head for a year.' },
+            { t: 'Treasury. A country that cannot borrow cannot build anything', mood: 1,
+              side: 'purse',
+              run: function (a) {
+                a.nation('debt', -RZ.range(3, 8)); a.nation('health', -RZ.range(2, 6));
+                a.add('intl', a.rng(4, 10)); a.add('business', a.rng(3, 8));
+                a.blocs({ middle: RZ.range(6, 12), traders: RZ.range(2, 6), labour: -RZ.range(5, 11), rural: -RZ.range(3, 8) });
+                a.remember('You chose the credit rating over the clinics', 'bad');
+              },
+              reply: '"Thank you." He says it to the table rather than to you. Across from him she closes ' +
+                     'her folder without a word, and that silence will be quoted back at you.' },
+            { t: 'Neither. Halve both and find the difference in the security vote', mood: -1,
+              tag: 'risk',
+              run: function (a) {
+                a.nation('health', a.rng(1, 4)); a.add('security', -a.rng(8, 16));
+                a.add('leader', -a.rng(2, 6)); a.add('stats.cunning', a.rng(1, 3));
+                a.remember('You took it out of the security vote instead', 'flat');
+              },
+              reply: 'Both of them look up at once, and for the first time this morning they are on the ' +
+                     'same side. "You have just made an enemy neither of us would choose," he says.' }
+          ]
+        },
+        {
+          argument: [
+            { by: 'ward', at: 'purse',
+              t: 'One more thing, since we are being honest in front of a witness. Your department has ' +
+                 'been briefing that my ministry cannot spend what it is given.' },
+            { by: 'purse',
+              t: 'Your ministry returned eleven per cent of its capital budget unspent last year. That ' +
+                 'is not a briefing. That is a published figure.' }
+          ],
+          q: '"So which is it," the Secretary says, without looking up. "Is the ministry underfunded, or ' +
+             'is it unable? Because the minute goes out at four and it can only say one."',
+          answers: [
+            { t: 'Underfunded. The capacity problem is what underfunding looks like after five years', mood: 2,
+              side: 'ward',
+              run: function (a) { a.add('grassroots', a.rng(2, 6)); a.add('business', -a.rng(1, 4)); a.blocs({ labour: RZ.range(4, 9), middle: -RZ.range(1, 5) }); },
+              reply: '"After five years." She repeats it slowly, so that the minute-taker gets it exactly.' },
+            { t: 'Unable. And the money follows the ministries that can spend it', mood: 2,
+              side: 'purse',
+              run: function (a) { a.add('intl', a.rng(2, 6)); a.add('grassroots', -a.rng(2, 6)); a.nation('corruption', -RZ.range(0.5, 2)); },
+              reply: 'He nods once. She writes something down that is not about the budget, and it will ' +
+                     'be about you.' },
+            { t: 'Put both in the minute and let the President decide which is true', mood: -2,
+              run: function (a) { a.add('leader', -a.rng(3, 8)); a.add('stats.integrity', -a.rng(1, 3)); },
+              reply: 'The Secretary puts his pen down. "Minister. He sent you so that he would not have ' +
+                     'to be in this room. Sending it back up is not a decision, it is a diary entry."' }
+          ]
+        }
+      ]
+    },
+
+    // The war room, eight weeks out. The person who knows how to win and the
+    // person who knows what it costs, and they cannot both be obeyed.
+    {
+      id: 'war-room', topic: 'campaign', weight: 15,
+      speaker: function (a) { return who(a, 'your agent', ''); },
+      others: {
+        pro: function (a) { return who(a, 'your campaign manager', ''); },
+        wallet: function (a) { return who(a, 'a construction magnate', ''); }
+      },
+      where: 'A back room with the curtains shut and a map on the wall',
+      settleOn: 'party',
+      opening: function (a) {
+        return 'Your agent has put three chairs out and taken the fourth himself. "Before either of you ' +
+          'starts," he says, "the candidate is in the room, so say it in front of them."';
+      },
+      beats: [
+        {
+          argument: [
+            { by: 'pro', at: 'wallet',
+              t: 'We are four wards short and eleven days from the printing deadline. I need transport ' +
+                 'and I need it paid for on Thursday, and I do not care what colour the money is.' },
+            { by: 'wallet',
+              t: 'Then say the second half of that sentence properly, because I am the colour. I will ' +
+                 'fund the buses. I will do it through the foundation so nothing appears on a return.' },
+            { by: 'pro', at: 'wallet',
+              t: 'And in four years when somebody goes looking, it is not you who explains it. It is the ' +
+                 'person whose name was on the ballot.' }
+          ],
+          q: function (a) {
+            return '"Thursday," your agent says. "Buses or no buses. It is your name, so it is your ' +
+              'sentence."';
+          },
+          answers: [
+            { t: 'Take the money. Lose cleanly and you have still lost', mood: 2,
+              side: 'wallet', tag: 'risk',
+              run: function (a) {
+                a.add('money', a.wage(a.rng(8, 20)));
+                a.campaignEffort(a.rng(8, 15));
+                a.dirt('busmoney', 'Campaign transport paid for by a contractor, through a foundation', 5);
+                a.add('stats.integrity', -a.rng(3, 7));
+                a.remember('You took the buses and knew exactly what they were', 'bad');
+              },
+              reply: 'He does not shake your hand on it. "Good," he says, standing. "I dislike people who ' +
+                     'need to be asked twice, and I dislike people who pretend afterwards."' },
+            { t: 'No. We go into those wards on foot and we go in clean', mood: 2,
+              side: 'pro',
+              run: function (a) {
+                a.add('stats.integrity', a.rng(3, 6)); a.add('health', -a.rng(4, 9));
+                a.campaignEffort(a.rng(2, 6)); a.add('business', -a.rng(3, 8));
+                a.remember('You turned the money down in front of the man offering it', 'good');
+              },
+              reply: 'Your manager exhales for the first time since sitting down. "Then I need every ' +
+                     'evening you have, including the ones you promised your family."' },
+            { t: 'Take it, and put it through the party rather than through me', mood: 0,
+              side: 'wallet',
+              when: function (a) { return a.P.standing.party >= 30; },
+              run: function (a) {
+                a.add('money', a.wage(a.rng(4, 11))); a.campaignEffort(a.rng(4, 9));
+                a.owePatron(null, RZ.irange(4, 9)); a.add('party', -a.rng(1, 5));
+                a.remember('You put his money through the party so it would not be yours', 'flat');
+              },
+              reply: '"Through the party." The magnate smiles at your agent rather than at you. "Then the ' +
+                     'party owes me and you owe the party, which is a longer road to the same room."' }
+          ]
+        },
+        {
+          argument: [
+            { by: 'wallet',
+              t: 'And the ward committee in the north. They will want something for the hall.' },
+            { by: 'pro',
+              t: 'They will want a borehole, and they will say so at the meeting, in front of forty people ' +
+                 'with telephones.' }
+          ],
+          q: '"So do we promise the borehole," your agent asks, "knowing what a promise costs when it is ' +
+             'not kept? Or do we go up there and say no to their faces eleven days out?"',
+          answers: [
+            { t: 'Promise it. And then actually build it', mood: 3, tag: 'cost',
+              side: 'pro',
+              run: function (a) {
+                a.promise('borehole', 'A borehole for the northern ward, promised in front of forty people', { due: 14 });
+                a.add('grassroots', a.rng(4, 9)); a.blocs({ rural: RZ.range(5, 11) });
+              },
+              reply: '"Then I will hold you to it harder than they will," your manager says, "because I ' +
+                     'am the one who has to go back up there either way."' },
+            { t: 'Promise it and worry about it in December', mood: 1, tag: 'risk',
+              side: 'wallet',
+              run: function (a) {
+                a.promise('borehole', 'A borehole promised eleven days out and not costed', { due: 6 });
+                a.add('grassroots', a.rng(5, 11)); a.add('stats.integrity', -a.rng(2, 5));
+              },
+              reply: 'The magnate approves, which is the clearest possible signal that it was the wrong ' +
+                     'answer, and everybody in the room registers it at the same moment.' },
+            { t: 'Go up and tell them no, and ask for their vote anyway', mood: 0,
+              run: function (a) {
+                a.add('stats.integrity', a.rng(3, 7)); a.add('grassroots', -a.rng(2, 6));
+                a.wardTrust(RZ.range(3, 8)); a.add('health', -a.rng(2, 5));
+              },
+              reply: 'Nobody in the room thinks it will work. Your agent writes down the date and the ' +
+                     'time, and says: "If it does, I will never doubt you again."' }
+          ]
+        }
+      ]
+    },
+
+    // The corridor, when your bill is short. The man who counts and the woman
+    // who has sixty-nine votes, and they despise each other's method.
+    {
+      id: 'whip-corridor', topic: 'whip', weight: 15,
+      when: function (a) { return a.tier() >= 4; },
+      speaker: function (a) { return who(a, 'the Chief Whip', ''); },
+      others: {
+        machine: function (a) { return who(a, 'Chief Whip', 'the parliamentary caucus'); },
+        faction: function (a) { return who(a, 'convenor', 'the other faction in caucus'); }
+      },
+      where: 'A corridor off the members’ lobby, with two people who followed you into it',
+      settleOn: 'party',
+      opening: function (a) {
+        return 'They arrived from opposite ends and neither of them is going to be the one who leaves ' +
+          'first. "Do not make him tell you the number," the convenor says. "Make him tell you where he ' +
+          'got it."';
+      },
+      beats: [
+        {
+          argument: [
+            { by: 'machine', at: 'faction',
+              t: 'The number is the number. I have it name by name and I have had it since Tuesday. What ' +
+                 'you have is a mailing list and a grievance.' },
+            { by: 'faction', at: 'machine',
+              t: 'You have a list of people who tell you what you want at four o’clock and vote the other ' +
+                 'way at six. I have sixty-nine who will do what they said, because I am the only person ' +
+                 'in this building who ever asked them anything.' },
+            { by: 'machine',
+              t: 'Sixty-nine who want two committee chairs and a provincial conference postponed. Say the ' +
+                 'price out loud in front of them, since we are being candid.' }
+          ],
+          q: '"Whose count do you run on?" the Whip says, finally looking at you. "Because you cannot ' +
+             'work both rooms and you have nine days."',
+          answers: [
+            { t: 'Yours. The machine has never lost me a vote it promised', mood: 2,
+              side: 'machine',
+              run: function (a) {
+                a.add('party', a.rng(4, 9)); a.add('leader', a.rng(1, 5));
+                a.add('grassroots', -a.rng(1, 4));
+                a.remember('You ran on his count and said so in front of her', 'good');
+              },
+              reply: '"Sensible." He does not look at her at all, which is worse than if he had.' },
+            { t: 'Hers. Sixty-nine people who mean it beat a hundred who do not', mood: 2,
+              side: 'faction',
+              run: function (a) {
+                a.add('party', -a.rng(2, 6)); a.add('grassroots', a.rng(3, 7));
+                a.add('stats.cunning', a.rng(1, 3));
+                a.remember('You took her sixty-nine over his list', 'good');
+              },
+              reply: 'She is already walking, and she is already dialling. Behind you the Whip says, to ' +
+                     'nobody: "Then it is her bill now, and you will find that out in about a year."' },
+            { t: 'Both. I will pay both prices and let the two of you argue about it afterwards', mood: -2,
+              tag: 'cost',
+              when: function (a) { return a.P.capital >= 14; },
+              run: function (a) {
+                a.add('capital', -a.rng(14, 24)); a.add('party', a.rng(2, 5));
+                a.add('leader', -a.rng(2, 5)); a.add('stats.cunning', a.rng(1, 4));
+              },
+              reply: '"Both." They say it at the same time and in the same tone, and it is the only ' +
+                     'moment of agreement this corridor will ever see.' }
+          ]
+        },
+        {
+          argument: [
+            { by: 'faction',
+              t: 'And when it passes, whose win is it? Because he will be in the photograph and I will be ' +
+                 'in the minutes.' },
+            { by: 'machine',
+              t: 'It is the party’s win. It is always the party’s win. That is what a party is for.' }
+          ],
+          q: '"Say whose," she says. "Here, where he can hear it, rather than to a journalist on Sunday."',
+          answers: [
+            { t: 'The party’s. Both of your names, neither of them first', mood: 1,
+              run: function (a) { a.add('party', a.rng(3, 7)); a.add('fame', -a.rng(1, 4)); },
+              reply: 'Neither of them is satisfied, which the Whip notes approvingly. "That," he says, ' +
+                     '"is the first genuinely leaderly thing you have done."' },
+            { t: 'Hers. She did the part nobody wanted to do', mood: 2,
+              side: 'faction',
+              run: function (a) { a.add('fame', -a.rng(2, 5)); a.add('grassroots', a.rng(2, 6)); a.add('stats.integrity', a.rng(1, 4)); },
+              reply: 'She stops walking. It is the first time all session that somebody has said it, and ' +
+                     'she does not have anything prepared for it.' },
+            { t: 'Mine. I tabled it and I will carry whatever it does', mood: -1,
+              side: null,
+              run: function (a) { a.add('fame', a.rng(3, 8)); a.add('party', -a.rng(2, 6)); a.add('leader', -a.rng(0, 3)); },
+              reply: '"Then carry it," the Whip says. "All of it. Including the part in four years where ' +
+                     'somebody reads out what it cost."' }
+          ]
+        }
+      ]
+    },
+
+    // The two men who can end you, disagreeing about how. Only at the top.
+    {
+      id: 'security-table', topic: 'securocrats', weight: 14,
+      when: function (a) { return a.tier() >= 11; },
+      speaker: function (a) { return who(a, 'the President’s chief of staff', ''); },
+      others: {
+        soldier: function (a) { return who(a, 'the Commander of the Defence Force', ''); },
+        spy: function (a) { return who(a, 'the Director-General', 'the intelligence service'); }
+      },
+      where: 'A room with no windows and no minutes being taken',
+      settleOn: 'security',
+      opening: function (a) {
+        return 'Neither of them stood when you came in and neither of them will apologise for it. ' +
+          '"There is a disagreement," your chief of staff says, "and it has got to the point where it ' +
+          'needs a decision rather than another meeting."';
+      },
+      beats: [
+        {
+          argument: [
+            { by: 'soldier', at: 'spy',
+              t: 'His people have been running an operation in the townships for six weeks and did not ' +
+                 'tell mine. When it goes wrong — and it will go wrong — it is soldiers who will be ' +
+                 'photographed standing over it.' },
+            { by: 'spy',
+              t: 'It has not gone wrong because you were not told. That is not a coincidence, it is the ' +
+                 'method.' },
+            { by: 'soldier',
+              t: 'The method got a boy killed in June and you wrote it up as a road accident. I read the ' +
+                 'file because somebody in your building has a conscience.' }
+          ],
+          q: '"So," your chief of staff says. "Does the operation continue, and does the Commander get ' +
+             'read in? You cannot say yes to both halves and mean them."',
+          answers: [
+            { t: 'It continues, and it stays compartmented. He does not get read in', mood: 1,
+              side: 'spy', tag: 'risk',
+              run: function (a) {
+                a.add('security', -a.rng(4, 10)); a.nation('unrest', RZ.range(1, 5));
+                a.dirt('blackops', 'An operation you authorised that the Defence Force was kept out of', 6);
+                a.add('stats.cunning', a.rng(2, 5));
+                a.remember('You kept the Commander out of your own operation', 'bad');
+              },
+              reply: 'The Director-General says nothing at all, which is his version of gratitude. The ' +
+                     'Commander stands, straightens his cuffs, and leaves before he is dismissed.' },
+            { t: 'It stops today. Everything goes through the Commander', mood: 1,
+              side: 'soldier',
+              run: function (a) {
+                a.add('security', a.rng(5, 12)); a.nation('unrest', -RZ.range(1, 4));
+                a.add('intl', a.rng(2, 6)); a.add('stats.integrity', a.rng(2, 5));
+                a.remember('You shut his operation down in front of him', 'bad');
+              },
+              reply: '"Understood." The Director-General closes his folder very carefully. "You will want ' +
+                     'to remember that you said it in a room with no minutes."' },
+            { t: 'It continues and he is read in, and I will hold both of you to that', mood: 0,
+              run: function (a) {
+                a.add('security', a.rng(1, 5)); a.add('health', -a.rng(3, 7));
+                a.add('leader', a.rng(1, 4)); a.add('stats.cunning', a.rng(1, 3));
+              },
+              reply: 'Your chief of staff writes nothing down, because there is nothing to write down, ' +
+                     'and that is precisely the arrangement you have just made.' }
+          ]
+        },
+        {
+          argument: [
+            { by: 'spy',
+              t: 'While we are here. There is a file on a member of your own cabinet. It is real and it ' +
+                 'is not political.' },
+            { by: 'soldier',
+              t: 'Everything in that building is political. That is what the building is.' }
+          ],
+          q: '"Do you want to see it," your chief of staff asks, "or do you want it not to exist? Those ' +
+             'are genuinely the two options and the second one is available."',
+          answers: [
+            { t: 'Show me. I would rather know and be responsible for knowing', mood: 2,
+              side: 'spy',
+              run: function (a) {
+                a.dirt('cabfile', 'A file on a member of your own cabinet, and you asked to see it', 3);
+                a.add('stats.cunning', a.rng(2, 5)); a.add('leader', -a.rng(1, 4));
+              },
+              reply: 'It is thinner than you expected and worse than you expected, and by the time you ' +
+                     'have finished it you have already decided something you will not admit to.' },
+            { t: 'Destroy it. I will not govern out of a filing cabinet', mood: 2,
+              side: 'soldier',
+              run: function (a) {
+                a.add('stats.integrity', a.rng(3, 7)); a.add('security', -a.rng(2, 6));
+                a.nation('corruption', -RZ.range(0.5, 2));
+              },
+              reply: 'The Commander approves and does not hide it. The Director-General says "Of course," ' +
+                     'and every person in the room knows that a copy exists.' },
+            { t: 'Keep it. Do not show me, and do not lose it', mood: -1, tag: 'risk',
+              run: function (a) {
+                a.add('stats.integrity', -a.rng(3, 7)); a.add('stats.cunning', a.rng(2, 5));
+                a.add('security', a.rng(2, 6));
+                a.remember('You had him keep the file and did not read it', 'bad');
+              },
+              reply: '"Kept." He writes one word on the folder. "That is the arrangement most of your ' +
+                     'predecessors chose, and you should know that all of them thought they were the ' +
+                     'exception."' }
+          ]
+        }
+      ]
+    }
   ];
 
   RZ.DIALOGUE = SCENES;
