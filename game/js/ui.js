@@ -1185,10 +1185,19 @@
 
     function paint() {
       var sp = convo.speaker;
+      var others = otherPeople(convo);
       var html = '<div class="modal-kicker">' + esc(convo.where || 'A meeting') + '</div>' +
         '<h2 class="modal-h">' + esc(sp.name) + '</h2>' +
         '<div class="talk-role">' + esc(sp.role) +
           (sp.org ? ' <span class="talk-org">' + esc(sp.org) + '</span>' : '') + '</div>' +
+        // Who else is in the room, before anybody has said anything. A room
+        // you are mediating should look like one on the way in.
+        (others.length
+          ? '<div class="talk-room">' + others.map(function (p, i) {
+              return '<span class="talk-who s' + ((i % 3) + 1) + '">' + esc(p.name) +
+                '<small>' + esc(p.role) + '</small></span>';
+            }).join('') + '</div>'
+          : '') +
         '<div class="talk">' + convo.transcript.map(line).join('') + '</div>';
 
       if (convo.done) {
@@ -1199,8 +1208,11 @@
           '<button class="btn btn-gold btn-block" data-close>Leave the room</button>';
       } else {
         html += '<div class="choices">' + RZ.dialogue.options(convo).map(function (o) {
-          return '<button class="choice" data-i="' + o.i + '"' + (o.ok ? '' : ' disabled') + '>' +
+          var sided = o.side && convo.people && convo.people[o.side];
+          return '<button class="choice' + (sided ? ' sided s' + slotOf(convo, o.side) : '') +
+            '" data-i="' + o.i + '"' + (o.ok ? '' : ' disabled') + '>' +
             '<div class="choice-t">' + esc(o.t) + '</div>' +
+            (sided ? '<div class="choice-d">Backs ' + esc(shortOf(sided)) + '</div>' : '') +
             (o.tag ? '<span class="choice-tag ' + (o.tag === 'risk' ? 'risk' : 'cost') + '">' + esc(o.tag) + '</span>' : '') +
             '</button>';
         }).join('') + '</div>';
@@ -1227,10 +1239,38 @@
       if (focus && focus.scrollIntoView) focus.scrollIntoView({ block: 'nearest' });
     }
 
+    // Everybody in the room except whoever's room it is, in a stable order so
+    // a person keeps the same colour for the whole meeting.
+    // What this person is called on screen: their first name, unless somebody
+    // else in the career answers to it too.
+    function shortOf(p) {
+      if (!p) return '';
+      return (RZ.cast && UI.S ? RZ.cast.shortOf(UI.S, p) : p.name.split(' ')[0]);
+    }
+
+    function otherPeople(convo) {
+      if (!convo.people) return [];
+      return Object.keys(convo.people)
+        .filter(function (k) { return k !== '_' && convo.people[k] !== convo.speaker; })
+        .map(function (k) { return convo.people[k]; });
+    }
+    function slotOf(convo, key) {
+      if (!key || key === '_' || !convo.people) return 0;
+      var keys = Object.keys(convo.people).filter(function (k) { return k !== '_'; });
+      var i = keys.indexOf(key);
+      return i < 0 ? 0 : (i % 3) + 1;
+    }
+
     function line(l) {
+      var speaking = (l.by && convo.people && convo.people[l.by]) || convo.speaker;
+      var slot = l.who === 'me' ? 0 : slotOf(convo, l.by);
       return '<div class="talk-l ' + (l.who === 'me' ? 'me' : 'them') +
-        (l.closing ? ' closing' : '') + '">' +
-        '<div class="talk-nm">' + (l.who === 'me' ? 'You' : esc(convo.speaker.name.split(' ')[0])) + '</div>' +
+        (slot ? ' s' + slot : '') + (l.closing ? ' closing' : '') + '">' +
+        '<div class="talk-nm">' +
+          (l.who === 'me' ? 'You' : esc(shortOf(speaking))) +
+          (l.at && convo.people[l.at] ? ' <span class="talk-at">to ' +
+            esc(shortOf(convo.people[l.at])) + '</span>' : '') +
+        '</div>' +
         '<div class="talk-tx">' + esc(l.text) + '</div></div>';
     }
   }

@@ -46,9 +46,16 @@
     S.seenScenes[scene.id] = S.turn;
 
     var speaker = scene.speaker(api);
+    // A room can hold more than one person. `others` names them, and every
+    // line in the scene says who is speaking, so two of them can argue with
+    // each other in front of you and you have to come down on a side.
+    var people = { _: speaker };
+    if (scene.others) {
+      Object.keys(scene.others).forEach(function (k) { people[k] = scene.others[k](api); });
+    }
     var convo = {
       sceneId: scene.id, scene: scene, api: api, speaker: speaker,
-      act: act || null, eventId: scene.eventId || null,
+      people: people, act: act || null, eventId: scene.eventId || null,
       where: text(scene.where, api, null),
       beat: 0, mood: 0, done: false, transcript: []
     };
@@ -58,6 +65,9 @@
     api.remember = function (what, tone) { return RZ.cast && RZ.cast.remember(S, speaker, what, tone); };
     api.recalls = function (tone) { return RZ.cast && RZ.cast.recalls(S, speaker, tone); };
     api.rel = function () { return speaker && speaker.rel !== undefined ? speaker.rel : 0; };
+    // In a room with several people in it, the answers need to be able to
+    // reach the one who is not doing the asking.
+    api.who = function (k) { return people[k] || speaker; };
 
     if (resume && resume.beat > 0 && resume.beat < scene.beats.length) {
       convo.beat = resume.beat;
@@ -94,7 +104,19 @@
   function pushQuestion(convo) {
     var beat = convo.scene.beats[convo.beat];
     if (!beat) return;
-    convo.transcript.push({ who: 'them', text: text(beat.q, convo.api, convo) });
+    // They have this out between themselves first. You are in the room and
+    // nobody is talking to you yet, which is the whole effect being aimed at.
+    (beat.argument || []).forEach(function (l) {
+      convo.transcript.push({
+        who: 'them', by: l.by,
+        text: text(l.t, convo.api, convo),
+        at: l.at || null
+      });
+    });
+    convo.transcript.push({
+      who: 'them', by: beat.by || null,
+      text: text(beat.q, convo.api, convo)
+    });
   }
 
   function text(v, api, convo) {
@@ -109,6 +131,9 @@
     return beat.answers.map(function (ans, i) {
       return {
         i: i, t: text(ans.t, convo.api, convo), tag: ans.tag,
+        // Which of the people in the room this answer comes down for, so the
+        // screen can say whose side you are taking before you take it.
+        side: ans.side || null,
         ok: !ans.when || ans.when(convo.api)
       };
     });
@@ -123,7 +148,29 @@
     convo.transcript.push({ who: 'me', text: text(ans.t, convo.api, convo) });
     convo.mood += (ans.mood || 0);
     if (ans.run) ans.run(convo.api, convo);
-    convo.transcript.push({ who: 'them', text: text(ans.reply, convo.api, convo) });
+
+    // Coming down on one side of an argument is not free: the person you
+    // backed remembers it, and so does the one you did not.
+    if (ans.side && convo.people && RZ.cast) {
+      var backed = convo.people[ans.side];
+      // Only the people who were actually arguing are cooled by losing. The
+      // parties to an argument are exactly the ones some answer in this beat
+      // comes down for — a chair who put the question is not one of them, and
+      // should not pay for a decision they asked you to make.
+      var parties = {};
+      (beat.answers || []).forEach(function (x) { if (x.side) parties[x.side] = true; });
+      var others = Object.keys(parties)
+        .filter(function (k) { return k !== ans.side && convo.people[k] && convo.people[k] !== backed; })
+        .map(function (k) { return convo.people[k]; });
+      RZ.cast.sideWith(convo.api.S, backed, others, ans.sideWeight);
+    }
+
+    // The reply comes from whoever the answer was aimed at, or from whoever
+    // asked, or from the person whose room it is.
+    convo.transcript.push({
+      who: 'them', by: ans.replyBy || ans.side || beat.by || null,
+      text: text(ans.reply, convo.api, convo)
+    });
 
     convo.beat++;
     if (convo.beat < convo.scene.beats.length) {

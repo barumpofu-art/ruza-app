@@ -419,6 +419,28 @@ body{
 .chest-d{ font-size:.72rem; color:var(--text-faint); margin-top:5px; line-height:1.45; }
 .chest-own{ color:#e0b06f; }
 .chest-warn{ color:#d99a97; }
+/* a room with more than one person in it */
+.talk-room{ display:flex; flex-wrap:wrap; gap:8px; margin:10px 0 0; }
+.talk-who{ font-size:.72rem; font-weight:600; padding:5px 9px; border-radius:var(--radius-sm);
+  background:#1b2530; border:1px solid var(--line-soft); border-left-width:3px; }
+.talk-who small{ display:block; font-weight:400; color:var(--text-faint); font-size:.66rem; margin-top:1px; }
+.talk-who.s1{ border-left-color:#6f9fd4; }
+.talk-who.s2{ border-left-color:#d8a53f; }
+.talk-who.s3{ border-left-color:#4bab84; }
+/* each voice keeps its own colour for the whole meeting, so an argument
+   reads as two people rather than as one long paragraph */
+.talk-l.them.s1 .talk-nm{ color:#8fb8e4; }
+.talk-l.them.s2 .talk-nm{ color:#e2bb63; }
+.talk-l.them.s3 .talk-nm{ color:#6cc79c; }
+.talk-l.them.s1{ border-left:2px solid #3f5f80; padding-left:9px; }
+.talk-l.them.s2{ border-left:2px solid #7a6330; padding-left:9px; }
+.talk-l.them.s3{ border-left:2px solid #2f6b52; padding-left:9px; }
+.talk-at{ font-weight:400; opacity:.65; font-size:.9em; }
+.choice.sided{ border-left-width:3px; }
+.choice.sided.s1{ border-left-color:#6f9fd4; }
+.choice.sided.s2{ border-left-color:#d8a53f; }
+.choice.sided.s3{ border-left-color:#4bab84; }
+
 /* the electorate: six of them, and they want different things */
 .bloc-row{ padding:9px 0; border-bottom:1px solid var(--line-soft); }
 .bloc-row:last-child{ border-bottom:none; }

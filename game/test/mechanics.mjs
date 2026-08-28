@@ -2642,6 +2642,208 @@ section('20. The persistent cast');
   }
 }
 
+
+/* ================= 21. rooms with two sides in them ================= */
+section('21. Multi-speaker rooms');
+{
+  const rooms = RZ.DIALOGUE.filter((sc) => sc.others);
+  const roomById = (id) => RZ.DIALOGUE.filter((sc) => sc.id === id)[0];
+
+  ok('there are rooms with more than one person in them', rooms.length >= 4, String(rooms.length));
+
+  // Most of a career is spent at the bottom of the ladder, so most of these
+  // have to be openable from there. A room only a president can walk into is
+  // content almost nobody sees.
+  {
+    const S = career('ZA', 1999, 0);
+    const api = RZ.engine.mkApi(S);
+    const open = rooms.filter((sc) => !sc.when || sc.when(api));
+    ok('most of them open to somebody with no office at all',
+      open.length >= Math.ceil(rooms.length / 2),
+      open.map((sc) => sc.id).join(', ') + ' of ' + rooms.length);
+
+    // And each of those is reachable through an action available down there.
+    open.forEach((sc) => {
+      const act = RZ.actionById[sc.topic] || RZ.gov.actionById(sc.topic);
+      if (!act) throw new Error(sc.id + ' has no action behind it');
+      const t = act.tier || [0, 13];
+      if (t[0] > 1) throw new Error(sc.id + ' opens at tier 0 but its action needs tier ' + t[0]);
+    });
+    ok('and the action that opens each of them is available down there too', true);
+
+    // The high ones are gated because the fiction requires it, not by accident.
+    const gated = rooms.filter((sc) => sc.when && !sc.when(api));
+    gated.forEach((sc) => {
+      const S2 = career('ZA', 1998, 12);
+      if (!sc.when(RZ.engine.mkApi(S2))) throw new Error(sc.id + ' is closed even at the top of the ladder');
+    });
+    ok('and every gated room does open once you are senior enough', true);
+  }
+
+  // Everybody in the room is resolved, named, and persistent.
+  {
+    const S = career('ZA', 2000, 12);
+    const sc = roomById('cabinet-budget');
+    const cv = RZ.dialogue.begin(S, sc, null);
+    ok('the room holds everybody the scene declared',
+      Object.keys(cv.people).length === Object.keys(sc.others).length + 1,
+      Object.keys(cv.people).join(', '));
+    ok('and each of them is a named person',
+      Object.values(cv.people).every((p) => p && p.name && p.role));
+    ok('they are different people', cv.people.purse.name !== cv.people.ward.name);
+    ok('and the primary is still the speaker', cv.speaker === cv.people._);
+
+    // Same room later in the career: the same two ministers.
+    const again = RZ.dialogue.begin(S, sc, null);
+    ok('and they are the same people next time',
+      again.people.purse.name === cv.people.purse.name &&
+      again.people.ward.name === cv.people.ward.name);
+  }
+
+  // The argument reaches the transcript before the question does, attributed.
+  {
+    const S = career('ZA', 2001, 12);
+    const cv = RZ.dialogue.begin(S, roomById('cabinet-budget'), null);
+    const argued = cv.transcript.filter((l) => l.by);
+    ok('they argue with each other before anybody asks you anything', argued.length >= 3,
+      String(argued.length));
+    ok('every argued line says who is speaking', argued.every((l) => cv.people[l.by]));
+    ok('and some of it is aimed at somebody in particular',
+      cv.transcript.some((l) => l.at && cv.people[l.at]));
+    ok('the question comes after the argument',
+      cv.transcript.indexOf(cv.transcript.filter((l) => l.by)[0]) <
+      cv.transcript.length - 1);
+  }
+
+  // Taking a side moves both of them, in opposite directions.
+  {
+    const S = career('ZA', 2002, 12);
+    const cv = RZ.dialogue.begin(S, roomById('cabinet-budget'), null);
+    const purse = cv.people.purse, ward = cv.people.ward;
+    const p0 = purse.rel, w0 = ward.rel;
+    const sideIdx = RZ.dialogue.options(cv).findIndex((o) => o.side === 'ward');
+    ok('the screen is told which answer backs whom', sideIdx >= 0);
+    RZ.dialogue.choose(cv, sideIdx);
+    ok('the one you backed thinks better of you', ward.rel > w0,
+      Math.round(w0) + ' -> ' + Math.round(ward.rel));
+    ok('and the one you did not, worse', purse.rel < p0,
+      Math.round(p0) + ' -> ' + Math.round(purse.rel));
+    ok('being chosen counts for more than not being chosen',
+      (ward.rel - w0) > (p0 - purse.rel));
+    ok('and both of them remember which way it went',
+      ward.sidedWith === 1 && purse.sidedAgainst === 1);
+    // The person who put the question to you was not a party to it.
+    ok('the chair does not pay for a decision they asked you to make',
+      !cv.people._.sidedAgainst && !cv.people._.sidedWith);
+  }
+
+  // The reply comes from the person the answer was aimed at.
+  {
+    const S = career('ZA', 2003, 12);
+    const cv = RZ.dialogue.begin(S, roomById('cabinet-budget'), null);
+    const i = RZ.dialogue.options(cv).findIndex((o) => o.side === 'purse');
+    const before = cv.transcript.length;
+    RZ.dialogue.choose(cv, i);
+    const reply = cv.transcript.slice(before).filter((l) => l.who === 'them')[0];
+    ok('whoever you backed is the one who answers', reply && reply.by === 'purse',
+      reply ? String(reply.by) : 'no reply');
+  }
+
+  // An answer with no side leaves everybody where they were.
+  {
+    const S = career('ZA', 2004, 12);
+    const cv = RZ.dialogue.begin(S, roomById('cabinet-budget'), null);
+    const rels = Object.keys(cv.people).map((k) => cv.people[k].rel);
+    const i = RZ.dialogue.options(cv).findIndex((o) => !o.side);
+    if (i >= 0) {
+      RZ.dialogue.choose(cv, i);
+      ok('refusing to choose does not move anybody',
+        Object.keys(cv.people).map((k) => cv.people[k].rel).join() === rels.join());
+    } else {
+      ok('every answer in this beat takes a side', true);
+    }
+  }
+
+  // sideWith on its own, including the things it must not touch.
+  {
+    const S = career('ZA', 2005, 6);
+    const c = RZ.COUNTRIES.ZA;
+    const a1 = RZ.cast.who(S, c, 'the bishop', '');
+    const a2 = RZ.cast.who(S, c, 'the Chief Whip', '');
+    const stranger = RZ.cast.who(S, c, 'a caller, live on air', '');
+    a1.rel = 0; a2.rel = 0;
+    RZ.cast.sideWith(S, a1, [a2, stranger]);
+    ok('backing somebody warms them', a1.rel > 0);
+    ok('and cools the other', a2.rel < 0);
+    ok('a stranger cannot be sided against', stranger.rel === undefined || !stranger.key);
+    // Bounded, however many times you do it.
+    for (let i = 0; i < 60; i++) RZ.cast.sideWith(S, a1, [a2]);
+    ok('and it is bounded both ways', a1.rel <= 100 && a2.rel >= -100,
+      Math.round(a1.rel) + ' / ' + Math.round(a2.rel));
+  }
+
+  // Every room, every side, in every country, played to the end.
+  {
+    let played = 0, sided = 0;
+    Object.keys(RZ.COUNTRIES).forEach((cid, ci) => {
+      rooms.forEach((sc, si) => {
+        const S = career(cid, 2100 + ci * 10 + si, 12);
+        const cv = RZ.dialogue.begin(S, sc, null);
+        let g = 0;
+        while (!cv.done && g++ < 12) {
+          const opts = RZ.dialogue.options(cv).filter((o) => o.ok);
+          if (!opts.length) throw new Error(sc.id + ' offered nothing in ' + cid);
+          const pick = opts[(ci + si + g) % opts.length];
+          if (pick.side) sided++;
+          RZ.dialogue.choose(cv, pick.i);
+        }
+        if (!cv.done) throw new Error(sc.id + ' never closed in ' + cid);
+        const e = RZ.engine.finishDialogue(S, cv);
+        if (!e || !e.title || e.body === undefined) throw new Error(sc.id + ' produced no entry in ' + cid);
+        played++;
+      });
+    });
+    ok('every room plays to the end in all ten countries',
+      played === rooms.length * Object.keys(RZ.COUNTRIES).length, String(played));
+    ok('and sides were actually taken along the way', sided > 0, String(sided));
+  }
+
+  // The old single-speaker scenes are untouched by any of this.
+  {
+    const S = career('ZA', 2200, 6);
+    const plain = RZ.DIALOGUE.filter((sc) => !sc.others && sc.topic === 'union')[0];
+    const cv = RZ.dialogue.begin(S, plain, RZ.actionById.union);
+    ok('a one-person room still has exactly one person in it',
+      Object.keys(cv.people).length === 1 && cv.people._ === cv.speaker);
+    ok('and none of its lines claim a speaker it does not have',
+      cv.transcript.every((l) => !l.by || cv.people[l.by]));
+  }
+
+  // And the whole thing survives a save.
+  {
+    const S = career('ZA', 2300, 12);
+    const cv = RZ.dialogue.begin(S, roomById('security-table'), null);
+    const i = RZ.dialogue.options(cv).findIndex((o) => o.side);
+    RZ.dialogue.choose(cv, i);
+    // Play it out: nobody counts as met until the meeting has actually ended.
+    let g = 0;
+    while (!cv.done && g++ < 12) {
+      const opts = RZ.dialogue.options(cv).filter((o) => o.ok);
+      if (!opts.length) break;
+      RZ.dialogue.choose(cv, opts[0].i);
+    }
+    RZ.engine.finishDialogue(S, cv);
+    const names = Object.keys(cv.people).map((k) => cv.people[k].name).sort();
+    RZ.engine.save(S);
+    const back = RZ.engine.load();
+    const known = RZ.cast.summary(back).map((p) => p.name);
+    ok('everybody in the room is somebody you now know',
+      names.every((n) => known.includes(n)), names.join(', '));
+    ok('and the sides taken survive the save',
+      RZ.cast.all(back).some((p) => p.sidedWith > 0 || p.sidedAgainst > 0));
+  }
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`);
 if (failures) { console.error(`${failures} failed`); process.exit(1); }
 console.log('every new mechanic fires and does what it says');
