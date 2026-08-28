@@ -220,9 +220,16 @@
 
     h += docketBoard(S);
 
+    // Only appointments that are *still open* are held back from the grid. A
+    // kept one has become a "kept" line in the diary with nothing to click, so
+    // counting it as booked took the action off the desk entirely for the rest
+    // of the month — you went to one funeral and could not go to another, and
+    // the action simply vanished with no explanation.
     var booked = {};
-    if (RZ.docket) RZ.docket.entries(S).forEach(function (e) { if (!e.declined) booked[e.actionId] = true; });
-    var hasDiary = Object.keys(booked).length > 0;
+    if (RZ.docket) RZ.docket.entries(S).forEach(function (e) {
+      if (!e.declined && !e.kept) booked[e.actionId] = true;
+    });
+    var hasDiary = RZ.docket ? RZ.docket.entries(S).some(function (e) { return !e.declined; }) : false;
 
     h += '<div class="block"><div class="block-h">' + (hasDiary ? 'The rest of the month' : 'This month') +
          '<span class="sub">' + S.actionsLeft + ' of ' + S.actionsPerTurn + ' left</span></div>';

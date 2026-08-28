@@ -325,6 +325,19 @@
 
     var rung = RZ.engine.nextRung(S);
     if (!rung) return { fail: true, title: 'There is nothing above you to trade for' };
+    // The head of state's office is not in any colleague's gift, whatever the
+    // mechanism that fills it. Testing `how === 'auto'` expressed that
+    // correctly in the nine countries where the top job is won at an election
+    // and got it exactly backwards in the one where it is appointed: in SZ the
+    // Prime Ministership is `appoint`, so a single file on a colleague bought
+    // it outright, and that one action was the whole reason SZ reached the top
+    // office in every career the simulator ran.
+    if (rung.id === 'hos') {
+      return { fail: true, title: 'That one is not in his gift',
+               body: 'He has files of his own and no say at all in who holds that office. Whatever you are ' +
+                     'holding over him buys a portfolio, a deployment, or a seat on a board. It does not ' +
+                     'buy the top of the building.' };
+    }
     if (rung.how === 'auto') return { fail: true, title: 'That one is decided by the country, not by him' };
 
     api.add('stats.integrity', -RZ.range(6, 12));

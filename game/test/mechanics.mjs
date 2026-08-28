@@ -4129,6 +4129,137 @@ section('28. Election day, in four phases');
   }
 }
 
+/* ================= 29. the appointed top office ================= */
+section('29. The office that is somebody’s to give');
+{
+  const lad = RZ.ladderFor('SZ');
+  const topIdx = lad.length - 1;
+
+  const deputy = (seed, standing) => {
+    const S = career('SZ', seed, lad.length - 2);
+    S.player.officeSince = { year: S.date.year - 4, month: S.date.month };
+    S.parties[S.player.partyId].gov = true;
+    S.nation.govParties = [S.player.partyId];
+    S.player.standing.leader = standing;
+    S.player.standing.party = standing;
+    S.player.fame = standing;
+    return S;
+  };
+  const openVacancy = (S, months = 8) => {
+    S.flags.postVacant = true;
+    S.flags.vacancyCloses = S.turn + months;
+    S.flags.vacancyConsidered = false;
+    return S;
+  };
+
+  // A file on a colleague buys a portfolio. It does not buy the top of the
+  // building — and the old test for that asked the wrong question.
+  {
+    ok('the top rung of every country is the same office',
+      Object.keys(RZ.COUNTRIES).every((cid) => {
+        const l = RZ.ladderFor(cid);
+        return l[l.length - 1].id === 'hos';
+      }));
+
+    // The guard used to be `how !== 'auto'`, which is true of the nine
+    // countries that elect their head of state and false of the one that
+    // appoints them. So exactly one country could be blackmailed into.
+    const appointed = Object.keys(RZ.COUNTRIES).filter((cid) => {
+      const l = RZ.ladderFor(cid);
+      return l[l.length - 1].how === 'appoint';
+    });
+    ok('and in at least one country it is filled by appointment',
+      appointed.length > 0, appointed.join(', '));
+
+    appointed.concat(['ZA']).forEach((cid) => {
+      const l = RZ.ladderFor(cid);
+      const S = career(cid, 9100, l.length - 2);
+      S.parties[S.player.partyId].gov = true;
+      // hand them a file on somebody who matters
+      const t = RZ.field.addRival(S, 80);
+      t.partyId = S.player.partyId;
+      t.dirt = [{ id: 'x', label: 'something', severity: 3, used: false }];
+      const api = RZ.engine.mkApi(S);
+      const before = S.player.rungIdx;
+      const res = RZ.revolt.blackmail(S, api);
+      ok(`a file cannot buy the top office in ${cid}`,
+        !!res.fail && S.player.rungIdx === before, res.title || 'promoted!');
+    });
+
+    // And the action is not even offered when the top job is what is next.
+    const S = career('SZ', 9101, lad.length - 2);
+    S.parties[S.player.partyId].gov = true;
+    const t2 = RZ.field.addRival(S, 80);
+    t2.partyId = S.player.partyId;
+    t2.dirt = [{ id: 'y', label: 'something', severity: 3, used: false }];
+    ok('and the desk does not offer the trade at all',
+      !RZ.actionById.blackmail.when(RZ.engine.mkApi(S)));
+  }
+
+  // A vacancy is a window. It closes, and somebody else is in it.
+  {
+    const S = openVacancy(deputy(9200, 20), 3);
+    const feed0 = S.feed.length;
+    S.turn += 6;
+    const out = {};
+    RZ.engine.endTurn(S);
+    ok('a vacancy nobody suitable filled goes to somebody else',
+      S.flags.postVacant === false, 'still open');
+    ok('and the country has their name on it', !!S.nation.presidentName);
+    ok('and it is in the record', S.feed.length > feed0);
+  }
+
+  // One decision per vacancy, not one every quarter for as long as it is open.
+  {
+    const S = openVacancy(deputy(9300, 20), 24);
+    let considered = 0;
+    for (let q = 0; q < 8; q++) {
+      const before = S.flags.vacancyConsidered;
+      RZ.engine.considerAppointment(S);
+      if (!before && S.flags.vacancyConsidered) considered++;
+    }
+    ok('the King makes one decision per vacancy, not eight', considered === 1,
+      `${considered} decisions`);
+  }
+
+  // And you are not made head of government the season after you got the
+  // deputy's job.
+  {
+    const S = openVacancy(deputy(9400, 95));
+    S.player.officeSince = { year: S.date.year, month: S.date.month };
+    ok('nobody is appointed the quarter after their last promotion',
+      RZ.engine.considerAppointment(S) === null);
+    ok('and the decision has not been spent either', !S.flags.vacancyConsidered);
+  }
+
+  // The route has to actually work. Before this it did not: the bar sat at
+  // about 115 against a maximum achievable score of 116, so every career that
+  // reached the office got there by trading a file instead.
+  {
+    const rate = (standing, n = 200) => {
+      let got = 0;
+      for (let i = 0; i < n; i++) {
+        const S = openVacancy(deputy(9500 + i, standing));
+        const r = RZ.engine.considerAppointment(S);
+        if (r && r.promoted) got++;
+      }
+      return got / n;
+    };
+    const excellent = rate(92), good = rate(75), fair = rate(60), weak = rate(34);
+    ok('a deputy at the top of their game can be appointed',
+      excellent > 0.2, `${(excellent * 100).toFixed(0)}%`);
+    ok('and it is never a formality', excellent < 0.8, `${(excellent * 100).toFixed(0)}%`);
+    ok('a good one sometimes is', good > 0.02 && good < excellent,
+      `${(good * 100).toFixed(0)}% vs ${(excellent * 100).toFixed(0)}%`);
+    ok('a middling one essentially never', fair < good + 0.02,
+      `${(fair * 100).toFixed(0)}%`);
+    ok('and a weak one never', weak < 0.02, `${(weak * 100).toFixed(0)}%`);
+    ok('standing is what decides it, monotonically',
+      excellent >= good && good >= fair && fair >= weak,
+      [excellent, good, fair, weak].map((v) => (v * 100).toFixed(0) + '%').join(' > '));
+  }
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`);
 if (failures) { console.error(`${failures} failed`); process.exit(1); }
 console.log('every new mechanic fires and does what it says');

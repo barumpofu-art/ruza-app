@@ -754,7 +754,10 @@
       },
       when: function (a) {
         var nr = RZ.engine.nextRung(a.S);
-        return RZ.revolt && !!RZ.revolt.blackmailTarget(a.S) && !!nr && nr.how !== 'auto' &&
+        // Same test as revolt.blackmail itself: never the top office, whatever
+        // mechanism fills it, and never one the country decides at a ballot.
+        return RZ.revolt && !!RZ.revolt.blackmailTarget(a.S) && !!nr &&
+               nr.id !== 'hos' && nr.how !== 'auto' &&
                a.S.tempo !== 'week';
       },
       run: function (a) { return RZ.revolt.blackmail(a.S, a); }

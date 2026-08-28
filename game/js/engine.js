@@ -800,11 +800,25 @@
       if (S.flags.nextVacancy === undefined) S.flags.nextVacancy = S.turn + RZ.irange(48, 120);
       if (S.turn >= S.flags.nextVacancy) {
         S.flags.postVacant = true;
+        // A vacancy is a window, not a state. The King decides within months
+        // and then it is decided: leaving the post open indefinitely while an
+        // appointment is considered every quarter is not a decision at all, it
+        // is a waiting game with a certain end — which is exactly what it had
+        // become, and why this was the easiest top office in the game by a
+        // factor of ten.
+        S.flags.vacancyCloses = S.turn + RZ.irange(5, 11);
+        S.flags.vacancyConsidered = false;
         S.flags.nextVacancy = S.turn + RZ.irange(84, 168);
         pushFeed(S, { kind: 'big', src: 'Lobamba',
           title: 'The office of ' + c.terms.hos + ' is vacant',
           body: 'The incumbent has been thanked for their service and relieved of it in the same sentence. ' +
-                'Names are circulating. None of them are circulating publicly.', tone: 'good' });
+                'Names are circulating. None of them are circulating publicly, and the ones circulating ' +
+                'privately will be settled before the season is out.', tone: 'good' });
+      }
+      // And it closes whether or not you were the one chosen from it.
+      if (S.flags.postVacant && S.flags.vacancyCloses !== undefined &&
+          S.turn > S.flags.vacancyCloses) {
+        out.vacancyClosed = closeVacancy(S);
       }
     }
 
@@ -1281,6 +1295,41 @@
     S.actionsPerTurn = r.ap || 3;
   }
 
+  // Nobody was chosen from the shortlist in time, so the King chose somebody
+  // else. The post is filled and it does not come round again for years.
+  function closeVacancy(S) {
+    var c = RZ.COUNTRIES[S.countryId];
+    var lad = RZ.ladderFor(c.id);
+    S.flags.postVacant = false;
+    S.flags.vacancyCloses = undefined;
+    var idx = lad.length - 1;
+    var con = RZ.field.contender(S, idx) || RZ.field.contender(S, idx - 1);
+    var name;
+    if (con && con.fig) {
+      var f = con.fig;
+      f.rungIdx = idx; f.role = lad[idx].title; f.since = S.date.year; f.side = 'rival';
+      f.power = RZ.clamp(f.power + RZ.range(4, 10), 5, 100);
+      name = f.name;
+      RZ.field.syncLeadership(S);
+    } else {
+      name = RZ.makeName(c);
+    }
+    S.nation.presidentName = name;
+    pushFeed(S, { kind: 'bad', src: 'Lobamba',
+      title: RZ.esc(name) + ' has been appointed ' + c.terms.hos,
+      body: 'It was announced without a shortlist ever having been published, which is how it has always ' +
+            'been done. You were considered for as long as anybody is considered, which is to say until ' +
+            'somebody with a longer claim was in the room. The post is not open again for years.',
+      tone: 'bad' });
+    return { name: name };
+  }
+
+  function monthsInOffice(S) {
+    var o = S.player.officeSince;
+    if (!o) return 999;
+    return (S.date.year * 12 + S.date.month) - (o.year * 12 + o.month);
+  }
+
   function considerAppointment(S) {
     var rung = nextRung(S);
     if (!rung || rung.how !== 'appoint') return null;
@@ -1289,13 +1338,53 @@
     var req = meetsRequirements(S, rung);
     if (!S.parties[P.partyId].gov && rung.tier >= 5) return null; // must be in government
     if (rung.id === 'hos' && !S.flags.postVacant) return null;    // the office must be open
+    // And not the quarter after you got the deputy's job. Nobody is made head
+    // of government by a King who has known them in the post for one season.
+    if (rung.id === 'hos' && monthsInOffice(S) < 14) return null;
+    // One decision per vacancy. Re-evaluating every quarter for as long as the
+    // post stays open is the same sampling fault as before in miniature: eight
+    // rolls at twenty per cent is not a twenty per cent chance, it is an eighty
+    // per cent one, and the player never chose to take the extra rolls.
+    if (rung.id === 'hos') {
+      if (S.flags.vacancyConsidered) return null;
+      S.flags.vacancyConsidered = true;
+    }
 
     var con = RZ.field.contender(S, idx);
     var scandal = Math.min(34, RZ.sum(P.dirt.filter(function (d) { return d.exposed; }), function (d) { return d.severity * 3.5; }));
+    // A reshuffle is a calculation; the top office is a person's decision, made
+    // once, about who was in the room and who was owed. A wider spread there is
+    // not sloppiness — with the same +/-16 the standing bands are further apart
+    // than the noise, so the office becomes a step rather than a slope and a
+    // player two points short is not short at all, they are excluded.
+    var spread = rung.id === 'hos' ? 26 : 16;
     var score = req.ok
-      ? P.standing.leader * 0.5 + P.standing.party * 0.28 + P.fame * 0.22 - scandal + RZ.range(-16, 16)
+      ? P.standing.leader * 0.5 + P.standing.party * 0.28 + P.fame * 0.22 - scandal +
+        RZ.range(-spread, spread)
       : -999;
-    var need = 46 + rung.tier * 2.6 + (rung.id === 'hos' ? 26 : 0) + RZ.field.pressure(S, idx) * 12;
+    // The surcharge on the top office used to be +26, which put the bar at about
+    // 115 against a maximum possible score of 116: the appointed head-of-state
+    // path was unreachable in practice, and every SZ career that reached it got
+    // there by trading a file instead. With that route closed the intended one
+    // has to actually work, so the surcharge is what a long-serving deputy with
+    // real standing can clear — and the comparison below is what makes it a
+    // contest rather than a formality.
+    var need = 46 + rung.tier * 2.6 + (rung.id === 'hos' ? 2 : 0) + RZ.field.pressure(S, idx) * 12;
+
+    // For the top job specifically, clearing the bar is necessary and not
+    // sufficient: the King is choosing between people, and somebody in that
+    // room has been waiting longer than you. Without this the appointment is a
+    // threshold retried every quarter for as long as the post stays open, and
+    // anything retried two hundred times is a certainty rather than a decision.
+    if (rung.id === 'hos' && con && con.fig) {
+      var theirs = RZ.field.strength(con.fig) + RZ.range(-14, 14) +
+                   Math.min(14, Math.max(0, S.date.year - (con.fig.since || S.date.year)) * 1.6);
+      if (score < theirs) {
+        // Passed over this quarter. The window is still open, and it is still
+        // closing: endTurn will hand it to them when it runs out.
+        return null;
+      }
+    }
 
     if (score >= need) {
       if (rung.id === 'hos') S.flags.postVacant = false;
