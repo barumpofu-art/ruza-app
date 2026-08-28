@@ -71,9 +71,7 @@
   function incumbent(S) {
     // The person actually in the way: the strongest rival in your own party,
     // preferring one in your own region.
-    var mine = (S.player.rivals || []).filter(function (r) {
-      return r.alive !== false && r.partyId === S.player.partyId;
-    });
+    var mine = RZ.field.ours(S);
     if (!mine.length) return null;
     // Unless somebody has been explicitly put in the way — the other one, once
     // they have taken the office you were climbing towards.
@@ -151,7 +149,9 @@
   }
 
   function P_removeRival(S, inc) {
-    S.player.rivals = (S.player.rivals || []).filter(function (r) { return r.id !== inc.id; });
+    // He does not vanish from the party; he loses the seat and the standing,
+    // which the field already knows how to record.
+    RZ.field.retire(S, inc, 'ousted');
   }
 
   /* =======================================================================
@@ -198,7 +198,7 @@
 
   function resolveUltimatum(S, ev, idx) {
     var api = RZ.engine.mkApi(S);
-    var inc = (S.player.rivals || []).filter(function (r) { return r.id === ev.incId; })[0];
+    var inc = RZ.field.byId(S, ev.incId);
     var res = ultimatumOutcome(S, api, inc, idx);
     res.deltas = api.deltas.slice();
     return res;
@@ -308,7 +308,7 @@
      ======================================================================= */
   function blackmailTarget(S) {
     var tier = RZ.engine.mkApi(S).tier();
-    return (S.player.rivals || []).filter(function (r) {
+    return RZ.field.ours(S).filter(function (r) {
       return r.partyId === S.player.partyId && r.power >= 55 &&
              r.dirt && r.dirt.some(function (d) { return !d.used; });
     }).sort(function (a, b) { return b.power - a.power; })[0] || null;
@@ -346,11 +346,14 @@
      An enraged incumbent who does nothing is a broken promise. This is what
      he does with the rest of his career.
      ======================================================================= */
+  // By id across the whole field, not only your own party. Crossing the floor
+  // is supposed to *end* a nemesis, and it ends it by finding the man and
+  // standing him down — which cannot happen if changing your party card has
+  // already made him invisible to this lookup.
   function nemesisOf(S) {
     if (!S.flags.nemesisId) return null;
-    return (S.player.rivals || []).filter(function (r) {
-      return r.id === S.flags.nemesisId && r.alive !== false;
-    })[0] || null;
+    var n = RZ.field.byId(S, S.flags.nemesisId);
+    return (n && n.alive !== false && !n.retired) ? n : null;
   }
 
   var MOVES = [

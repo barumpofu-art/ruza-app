@@ -252,43 +252,44 @@
 
   /* ---------- internal contests ---------- */
   // Delegate-weighted conference vote. Returns {won, playerVotes, rivalVotes, rivalName, byRegion}
-  function conferenceVote(S, difficulty) {
+  // A national delegate contest, region by region. Both sides are scored by the
+  // same function, so the result is a share of delegates rather than a roll
+  // against a threshold: you win where you are better organised, and the map of
+  // where that is true is worth seeing.
+  function conferenceVote(S, opp, opts) {
     var c = RZ.COUNTRIES[S.countryId];
-    var P = S.player;
+    var quiet = opts && opts.noNoise;
     var totalD = 0, mine = 0, byRegion = {};
     c.regions.forEach(function (r) {
       var d = Math.max(4, Math.round(r.seats * 4 + 8));
-      var support = (P.regionSupport[r.id] || 0);
-      var pull = support * 0.9 + P.standing.party * 0.55 + P.fame * 0.30 +
-                 P.standing.leader * 0.10 + P.stats.charisma * 0.16;
-      // where the barracks are a faction, their blessing is worth delegates
-      pull += P.standing.security * (c.inst.security / 170);
-      // a slate votes together
-      pull += Math.min(8, P.allies.length) * 2.5;
-      // patronage-heavy parties respond to money already spent
-      pull += (S.campaign.delegateSpend || 0) * 0.5;
-      pull -= difficulty;
-      pull += RZ.noise(9);
-      var frac = 1 / (1 + Math.exp(-(pull - 45) / 12));
-      var got = Math.round(d * clamp(frac, 0.02, 0.98));
-      byRegion[r.id] = { delegates: d, mine: got };
+      var pPull = RZ.field.conferencePull(RZ.field.playerSide(S, r.id));
+      var oPull = opp
+        ? RZ.field.conferencePull(RZ.field.figureSide(S, opp.fig, r.id, opp.incumbent, opp.targetIdx))
+        : 46;                                   // an open field still has a floor
+      if (!quiet) { pPull += RZ.noise(7); oPull += RZ.noise(7); }
+      pPull = Math.max(1, pPull); oPull = Math.max(1, oPull);
+      var frac = clamp(pPull / (pPull + oPull), 0.02, 0.98);
+      var got = Math.round(d * frac);
+      byRegion[r.id] = { delegates: d, mine: got, theirs: d - got };
       mine += got; totalD += d;
     });
     return { won: mine > totalD / 2, mine: mine, total: totalD, byRegion: byRegion,
              pct: mine / totalD * 100 };
   }
 
-  // A candidate-selection contest inside one constituency / region.
-  function primaryContest(S, difficulty) {
-    var P = S.player;
-    var mine = (P.regionSupport[P.regionId] || 0) * 1.15 + P.standing.grassroots * 0.65 +
-               P.standing.party * 0.45 + P.fame * 0.25 + P.stats.charisma * 0.16 +
-               (S.campaign.delegateSpend || 0) * 0.6 + RZ.noise(10);
-    // Delegates are drawn from the same six electorates, and a bloc that has
-    // decided against you does not send people to fill a hall for you either.
-    if (RZ.blocs) mine += RZ.blocs.swing(S) * 0.8;
-    var theirs = difficulty + RZ.noise(10);
-    return { won: mine > theirs, mine: mine, theirs: theirs, margin: mine - theirs };
+  // A candidate-selection contest inside one constituency. Both sides scored the
+  // same way; the margin is what the room actually looked like.
+  function primaryContest(S, opp, opts) {
+    var quiet = opts && opts.noNoise;
+    var here = S.player.regionId;
+    var mine = RZ.field.primaryScore(RZ.field.playerSide(S, here), here);
+    var theirs = opp
+      ? RZ.field.primaryScore(RZ.field.figureSide(S, opp.fig, here, opp.incumbent, opp.targetIdx), here)
+      : 42;
+    if (!quiet) { mine += RZ.noise(9); theirs += RZ.noise(9); }
+    mine = Math.max(1, mine); theirs = Math.max(1, theirs);
+    return { won: mine > theirs, mine: mine, theirs: theirs, margin: mine - theirs,
+             pct: mine / (mine + theirs) * 100 };
   }
 
   // Winning an actual constituency seat under FPTP.

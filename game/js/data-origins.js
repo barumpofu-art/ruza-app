@@ -223,8 +223,9 @@
       P.capital += 12;
       P.stats.cunning += 10;
       P.stats.integrity -= 4;
-      // The photograph. It is on somebody specific.
-      var mark = P.rivals[0];
+      // The photograph. It is on somebody specific — and somebody senior enough
+      // for it to be worth having kept.
+      var mark = RZ.field.strongestFirst(RZ.field.ours(S))[0];
       if (mark) {
         mark.dirt.push({ label: 'a state vehicle running party errands eleven weeks before a ballot', used: false });
       }

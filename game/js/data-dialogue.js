@@ -2347,7 +2347,886 @@
           ]
         }
       ]
-    }
+    },
+
+    /* ==================== THE FUNERAL ==================== */
+    {
+      id: 'funeral-programme', topic: 'funerals', weight: 12,
+      speaker: function (a) { return who(a, 'the eldest son of the deceased', ''); },
+      where: 'A yard under a tent, the morning of the burial',
+      settleOn: 'grassroots',
+      opening: function (a) {
+        return 'He is not crying. He has been organising since Tuesday and there is no room left in him for it. ' +
+          '"They put you on the programme. Item eleven. My mother did not know you."';
+      },
+      beats: [
+        {
+          q: '"So what are you going to stand up and say about a woman you never met?"',
+          answers: [
+            { t: 'Nothing about her. I will read the message from the party and sit down.', mood: 2,
+              run: function (a) { a.add('grassroots', a.rng(3, 6)); a.add('stats.integrity', a.rng(1, 3)); },
+              reply: '"Thank you." He looks at you properly for the first time. "The last one spoke for twenty minutes about himself."' },
+            { t: 'Tell me about her now and I will say it as though I knew.', mood: 0,
+              run: function (a) { a.add('grassroots', a.rng(1, 4)); a.add('stats.charisma', a.rng(.5, 1.5)); },
+              reply: 'He talks for four minutes. You will use all of it, and he will know you are using it, and it will still be better than nothing.' },
+            { t: 'I will speak about what this ward needs. She would have wanted that.', mood: -3,
+              run: function (a) { a.add('grassroots', -a.rng(4, 8)); a.add('fame', a.rng(0, 2)); a.dirt('funeralspeech', 'A campaign speech delivered over an open grave', 1); },
+              reply: '"You do not know what she would have wanted." He walks off to deal with the chairs.' }
+          ]
+        },
+        {
+          q: function (a) {
+            return '"Second thing. The burial society is ' + money(a, 2) + ' short and the tent people want cash today. ' +
+              'People are looking at you because of what you are."';
+          },
+          answers: [
+            { t: 'Cover it. Quietly, through the society, not from me.', mood: 3, tag: 'cost',
+              when: function (a) { return a.P.money > a.wage(2); },
+              run: function (a) { a.add('money', -a.wage(2)); a.add('grassroots', a.rng(4, 8)); a.add('capital', a.rng(1, 2)); },
+              reply: '"Through the society." He nods slowly. "Then nobody has to thank you in public. That is the correct way."' },
+            { t: 'I will pay it, and I would like that mentioned from the front.', mood: -1,
+              when: function (a) { return a.P.money > a.wage(2); },
+              run: function (a) { a.add('money', -a.wage(2)); a.add('grassroots', a.rng(1, 3)); a.add('fame', a.rng(1, 3)); a.add('stats.integrity', -a.rng(1, 3)); },
+              reply: '"It will be mentioned." His voice does not change. It is mentioned. Everybody hears exactly what it was.' },
+            { t: 'I cannot. I will find someone by this afternoon who can.', mood: 1,
+              run: function (a) { var ok = a.roll('charisma', 46); a.add('grassroots', ok ? a.rng(2, 4) : -a.rng(1, 4)); a.add('business', ok ? a.rng(1, 3) : 0); },
+              reply: '"By this afternoon." He has heard that sentence at four funerals this year, and he is going to hope anyway.' }
+          ]
+        }
+      ],
+      close: function (a, temp) {
+        return {
+          warm: 'You carried a corner of the coffin, which nobody asked you to do and everybody saw.',
+          fair: 'You spoke for ninety seconds and sat down, and afterwards three people you did not know shook your hand.',
+          cool: 'You were thanked from the front in the same sentence as the tent hire company.',
+          hostile: 'The programme ran long and item eleven was quietly dropped.'
+        }[temp];
+      }
+    },
+
+    /* ==================== THE HOUSE ==================== */
+    {
+      id: 'house-whip', topic: 'parliament', weight: 12,
+      speaker: function (a) { return who(a, 'the Chief Whip', ''); },
+      where: 'The whips’ office, ten minutes before division',
+      settleOn: 'party',
+      opening: function (a) {
+        return 'The list is on the desk, face up, so you can see your own name on it. ' +
+          '"You have read the bill. I know you have read the bill, because you are the only one who does."';
+      },
+      beats: [
+        {
+          q: function (a) {
+            return '"Clause nine is indefensible and we are voting for it anyway. Are you in the lobby with us, or are you going to be principled at me?"';
+          },
+          answers: [
+            { t: 'I am in the lobby. Clause nine is not worth a career.', mood: 3,
+              run: function (a) { a.add('party', a.rng(4, 8)); a.add('leader', a.rng(2, 5)); a.add('stats.integrity', -a.rng(1, 3)); },
+              reply: '"Good." He ticks you off without looking. "That is the answer of somebody who intends to still be here in ten years."' },
+            { t: 'I will abstain, and I will not brief anybody about why.', mood: 0,
+              run: function (a) { a.add('party', -a.rng(1, 3)); a.add('stats.integrity', a.rng(1, 3)); a.add('media', a.rng(0, 2)); },
+              reply: '"An abstention." He writes something that is not a tick. "You have bought yourself a conscience at the going rate."' },
+            { t: 'I am voting against it and I will say why on the floor.', mood: -3,
+              run: function (a) { a.add('party', -a.rng(6, 12)); a.add('leader', -a.rng(4, 9)); a.add('media', a.rng(4, 9)); a.add('fame', a.rng(2, 5)); a.add('stats.integrity', a.rng(3, 6)); a.makeRival(); },
+              reply: '"Then say it well." He finally looks up. "Because it is the last speech you will make from that bench."' }
+          ]
+        },
+        {
+          q: '"While you are here. The committee chair is coming vacant. It is a small thing that becomes a big thing. Do you want it?"',
+          answers: [
+            { t: 'Yes. And I will run it properly, which you may regret.', mood: 2,
+              run: function (a) { a.add('party', a.rng(3, 6)); a.add('leader', a.rng(1, 4)); a.add('fame', a.rng(2, 5)); a.add('stats.intellect', a.rng(1, 2)); },
+              reply: '"Properly." He almost smiles. "Everybody says that in this office and nobody has yet done it."' },
+            { t: 'Yes, and I will run it the way you need it run.', mood: 3,
+              run: function (a) { a.add('party', a.rng(5, 9)); a.add('leader', a.rng(3, 7)); a.add('stats.integrity', -a.rng(2, 4)); a.dirt('committee', 'A committee chaired to protect the executive from its own hearings', 2); },
+              reply: '"Now that," he says, "is a useful answer." The word useful is doing a great deal of work.' },
+            { t: 'No. Give it to somebody who needs the allowance.', mood: 1,
+              run: function (a) { a.add('party', a.rng(1, 4)); a.add('grassroots', a.rng(1, 3)); a.recruitAlly(); },
+              reply: '"I will tell them it was your idea." He will. It will be worth more to you than the chair would have been.' }
+          ]
+        }
+      ]
+    },
+
+    /* ==================== THE LIST ==================== */
+    {
+      id: 'list-committee', topic: 'lobbyList', weight: 14,
+      speaker: function (a) { return who(a, 'the chair of the list committee', ''); },
+      where: 'A boardroom with the blinds down',
+      settleOn: 'party',
+      opening: function (a) {
+        var meth = a.C.house.method;
+        return '"You understand how this works. There is no ward, there is no voter, there is this table. ' +
+          (meth === 'pr' || meth === 'mmp'
+            ? 'Your name goes at a number, and the number is the whole of your career."'
+            : 'We rank the nominees before the branches ever see them, and the branches see what we send them."');
+      },
+      beats: [
+        {
+          q: '"Make the case. Not the speech — the case. Why does your name go above the person currently above it?"',
+          answers: [
+            { t: 'Because I deliver a region you cannot afford to lose.', mood: 2,
+              run: function (a) { a.add('party', a.rng(3, 6)); a.addRegion(a.P.regionId, a.rng(2, 5)); },
+              reply: '"Numbers." She turns a page. "Numbers are at least checkable, which is more than most people bring."' },
+            { t: 'Because I have never once embarrassed this party in public.', mood: 0,
+              run: function (a) {
+                var clean = a.P.dirt.filter(function (d) { return d.exposed; }).length === 0;
+                a.add('party', clean ? a.rng(3, 7) : -a.rng(2, 6));
+                a.add('stats.integrity', clean ? a.rng(0, 2) : 0);
+              },
+              reply: '"Let us see." She has a folder. Everybody at this table has a folder about everybody else at this table.' },
+            { t: 'Because you owe me, and we both know for what.', mood: -2,
+              run: function (a) { a.add('party', -a.rng(2, 6)); a.add('leader', -a.rng(1, 4)); a.add('stats.cunning', a.rng(1, 2)); a.dirt('listthreat', 'A list place demanded rather than argued for, in front of witnesses', 2); },
+              reply: 'The room goes quiet in the particular way a room goes quiet when somebody says the true thing out loud.' }
+          ]
+        },
+        {
+          q: function (a) {
+            return '"There is a young woman from ' + a.esc(a.homeName()) + ' at forty-one on the draft. She is better than you and she has no structures. What happens to her?"';
+          },
+          answers: [
+            { t: 'Move her up. I will take the lower number.', mood: 3,
+              run: function (a) { a.add('party', -a.rng(0, 3)); a.add('grassroots', a.rng(4, 8)); a.add('stats.integrity', a.rng(3, 6)); a.recruitAlly(); a.legacyMark('madeWay'); },
+              reply: '"You are the first person to say that in eleven years of me asking it." She writes it down. She writes down who says it.' },
+            { t: 'Leave her at forty-one. She has time. I do not.', mood: 0,
+              run: function (a) { a.add('party', a.rng(1, 3)); a.add('stats.integrity', -a.rng(0, 2)); },
+              reply: '"She has time." A small nod. "Everybody at forty-one has time until the list is published."' },
+            { t: 'Take her off. I do not want somebody better behind me.', mood: -3,
+              run: function (a) { a.add('party', -a.rng(3, 7)); a.add('stats.cunning', a.rng(1, 3)); a.add('stats.integrity', -a.rng(4, 8)); a.makeRival(); a.dirt('blockedher', 'A candidate removed from a list for being too good', 2); },
+              reply: '"Off." She writes that down too. In this room, honesty of that kind is not rewarded. It is filed.' }
+          ]
+        }
+      ],
+      close: function (a, temp) {
+        return {
+          warm: 'The draft list circulated on Friday. You had moved up nine places and nobody has explained why.',
+          fair: 'You held your number. In a list conference, holding your number is a win nobody congratulates you for.',
+          cool: 'You dropped four places, which is survivable, and everybody who matters noticed.',
+          hostile: 'You are on the list. You are on the part of the list that gets read out at the end, quickly.'
+        }[temp];
+      }
+    },
+
+    /* ==================== THE TENDER BOARD ==================== */
+    {
+      id: 'tender-board', topic: 'tender', weight: 12,
+      speaker: function (a) { return who(a, 'a procurement officer', 'the evaluation committee'); },
+      where: 'A meeting room with the bid documents still sealed',
+      settleOn: 'business',
+      opening: function (a) {
+        return 'She has worked here for nineteen years and has watched eleven ministers come through that door. ' +
+          '"Before you say anything, Honourable — I am going to write down what you ask me for. I always do."';
+      },
+      beats: [
+        {
+          q: '"So. What are you asking me for?"',
+          answers: [
+            { t: 'Nothing. I came to see how the evaluation works, and I will leave.', mood: 3,
+              run: function (a) { a.add('stats.integrity', a.rng(2, 5)); a.add('stats.intellect', a.rng(1, 2)); a.add('business', -a.rng(0, 2)); },
+              reply: '"Then I will write that down as well." For the first time in nineteen years she has to write something new.' },
+            { t: 'Score the local bidder fairly. Just fairly. That is all.', mood: 1,
+              run: function (a) { a.add('business', a.rng(2, 5)); a.addRegion(a.P.regionId, a.rng(1, 4)); a.add('stats.integrity', -a.rng(0, 2)); },
+              reply: '"Fairly." She writes it. "I will note that you asked for fairly, and not for a name."' },
+            { t: 'There is a company. I would like it to win.', mood: -3, tag: 'risk',
+              run: function (a) {
+                a.add('money', a.wage(a.rng(8, 22))); a.add('business', a.rng(4, 9));
+                a.add('stats.integrity', -a.rng(4, 8));
+                a.dirt('tenderfix', 'A tender directed to a named company in front of a procurement officer who keeps notes', 4);
+              },
+              reply: 'She writes down the name. She writes down the date, the time, and that you were alone.' }
+          ]
+        },
+        {
+          q: '"May I say something out of turn? The last three people who sat there are all still in Cabinet. The two who said no to them are not still in this building."',
+          answers: [
+            { t: 'Then you are transferred to my office, on the same pay, starting Monday.', mood: 3,
+              run: function (a) { a.add('stats.integrity', a.rng(2, 4)); a.add('party', -a.rng(0, 3)); a.recruitAlly(); a.legacyMark('protectedOfficial'); },
+              reply: 'She takes a long moment. "People have offered to protect me before. Nobody has ever done it on a Tuesday."' },
+            { t: 'I cannot protect you. I can promise not to be the one who moves you.', mood: 1,
+              run: function (a) { a.add('stats.integrity', a.rng(1, 3)); a.add('business', -a.rng(0, 2)); },
+              reply: '"That is a smaller promise than the other one and I believe it more."' },
+            { t: 'Then perhaps do not say things out of turn.', mood: -3,
+              run: function (a) { a.add('security', a.rng(1, 3)); a.add('stats.integrity', -a.rng(2, 5)); a.nation('corruption', a.rng(.4, 1.4)); },
+              reply: 'She closes the file. "Understood, Honourable." Nineteen years of notes are still in her drawer.' }
+          ]
+        }
+      ]
+    },
+
+    /* ==================== POLICY ==================== */
+    {
+      id: 'policy-technocrat', topic: 'policy', weight: 12,
+      speaker: function (a) { return who(a, 'a development economist', 'the national university'); },
+      where: 'A seminar room with eleven people in it and a projector that will not focus',
+      settleOn: 'media',
+      opening: function (a) {
+        return '"I have read your party’s framework document. All ninety pages. ' +
+          'I have three questions and none of them are hostile, which you will find harder than hostile."';
+      },
+      beats: [
+        {
+          q: function (a) {
+            return '"Your document promises to halve unemployment. It is at ' + unemployment(a) +
+              '%. What is the mechanism? Not the aspiration — the mechanism."';
+          },
+          answers: [
+            { t: 'There isn’t one. The document is a wish list and I helped write it.', mood: 3,
+              run: function (a) { a.add('stats.integrity', a.rng(3, 6)); a.add('media', a.rng(3, 7)); a.add('party', -a.rng(3, 7)); a.add('stats.intellect', a.rng(1, 3)); },
+              reply: 'Somebody at the back actually laughs. "Thank you. Now we can have a useful hour."' },
+            { t: 'Public works, at scale, financed by borrowing we can service.', mood: 2,
+              run: function (a) { a.add('stats.intellect', a.rng(2, 4)); a.add('media', a.rng(2, 5)); a.add('business', -a.rng(1, 4)); a.promise('jobs', 'A public works programme at a scale nobody has costed'); },
+              reply: '"Servicing." He writes the word on the board and circles it. "That is the whole argument and you have at least found it."' },
+            { t: 'Growth. Growth solves it. That is the mechanism.', mood: -2,
+              run: function (a) { a.add('business', a.rng(2, 5)); a.add('media', -a.rng(2, 5)); a.add('stats.intellect', -a.rng(0, 2)); },
+              reply: '"Growth." He does not write it on the board. "We have had growth for six years. Would you like to see the unemployment series?"' }
+          ]
+        },
+        {
+          q: '"Second question. If the modelling says your flagship policy will not work, do you want to be told?"',
+          answers: [
+            { t: 'Tell me in writing, and I will publish it either way.', mood: 3,
+              run: function (a) { a.add('media', a.rng(4, 8)); a.add('intl', a.rng(2, 5)); a.add('stats.intellect', a.rng(1, 3)); a.legacyMark('publishedEvidence'); },
+              reply: '"In writing." He looks at his colleagues. "Get it in writing, was the instruction, from a politician."' },
+            { t: 'Tell me privately. I will decide what happens to it.', mood: 1,
+              run: function (a) { a.add('stats.intellect', a.rng(1, 3)); a.add('media', a.rng(0, 2)); },
+              reply: '"Privately." He nods. "That is the honest version of the usual answer, at least."' },
+            { t: 'Tell me after the election. Not before.', mood: -3,
+              run: function (a) { a.add('party', a.rng(1, 4)); a.add('media', -a.rng(3, 7)); a.add('intl', -a.rng(1, 4)); a.add('stats.integrity', -a.rng(2, 4)); },
+              reply: 'He puts the cap back on the marker. That is the end of the seminar, whatever the programme says.' }
+          ]
+        }
+      ]
+    },
+
+    /* ==================== THE DIASPORA ==================== */
+    {
+      id: 'diaspora-hall', topic: 'diaspora', weight: 12,
+      speaker: function (a) { return who(a, 'a nurse who has been away eleven years', ''); },
+      where: 'A hired hall with the heating on too high',
+      settleOn: 'intl',
+      opening: function (a) {
+        return '"There are three hundred of us in this room and between us we send home more money every month ' +
+          'than your ministry spends on clinics. We are not asking for a favour. We are asking a question."';
+      },
+      beats: [
+        {
+          q: '"Can we vote? Yes or no, and if no, say no."',
+          answers: [
+            { t: 'No. Your party has blocked it and I have voted for the block.', mood: 2,
+              run: function (a) { a.add('stats.integrity', a.rng(3, 6)); a.add('intl', a.rng(2, 5)); a.add('party', -a.rng(1, 4)); },
+              reply: 'The room makes a sound. "At least he came here to say it to our faces," somebody says, loudly enough.' },
+            { t: 'Not yet. I will put my name to the bill and it will fail.', mood: 3,
+              run: function (a) { a.add('intl', a.rng(4, 8)); a.add('media', a.rng(2, 5)); a.add('party', -a.rng(2, 6)); a.promise('diasporavote', 'A bill to give the diaspora the vote'); },
+              reply: '"It will fail." She nods. "Fine. Fail publicly and we will fund the next attempt."' },
+            { t: 'It is under consideration at the highest level.', mood: -3,
+              run: function (a) { a.add('intl', -a.rng(3, 7)); a.add('media', -a.rng(1, 4)); },
+              reply: 'Three hundred people who left because of sentences like that one look at you.' }
+          ]
+        },
+        {
+          q: '"Then the other question. My brother is a doctor here. What is at home for him if he comes back?"',
+          answers: [
+            { t: 'Honestly? Less money, worse equipment, and work that matters.', mood: 3,
+              run: function (a) { a.add('intl', a.rng(3, 7)); a.add('stats.integrity', a.rng(2, 4)); a.add('grassroots', a.rng(1, 3)); },
+              reply: '"That is the first recruitment pitch I have believed." She half-smiles. "Tell him yourself. He is at the back."' },
+            { t: 'A post, a house and a car within ninety days. I will arrange it.', mood: 1,
+              run: function (a) { a.add('intl', a.rng(2, 5)); a.add('fame', a.rng(1, 3)); a.promise('returnpost', 'A post, a house and a car within ninety days for a returning doctor'); },
+              reply: '"Ninety days." She writes the date on the back of her hand, and she means it as a warning.' },
+            { t: 'Frankly, nothing. Tell him to stay and keep sending money.', mood: -1,
+              run: function (a) { a.add('intl', a.rng(0, 2)); a.add('stats.integrity', a.rng(1, 3)); a.add('grassroots', -a.rng(2, 5)); a.nation('health', -a.rng(0, 1)); },
+              reply: 'She does not argue. That is worse than if she had.' }
+          ]
+        }
+      ]
+    },
+
+    /* ==================== THE BOOK ==================== */
+    {
+      id: 'book-ghost', topic: 'book', weight: 12,
+      speaker: function (a) { return who(a, 'a publisher', ''); },
+      where: 'A hotel lounge, two coffees, one recorder on the table',
+      settleOn: 'media',
+      opening: function (a) {
+        return '"Everybody in your position writes one of these and almost all of them are unreadable, ' +
+          'because they are written to avoid a court case rather than to say anything. Which are we doing?"';
+      },
+      beats: [
+        {
+          q: function (a) {
+            var d = a.worstDirt();
+            return '"Start with the hard one. ' +
+              (d ? 'There is a matter — ' + a.esc(d.label.toLowerCase()) + '. Is it in the book?"'
+                 : 'There is nothing on your file, which readers will not believe. What do you give them instead?"');
+          },
+          answers: [
+            { t: 'It goes in. My version, in full, before anybody else writes theirs.', mood: 3,
+              run: function (a) {
+                var d = a.worstDirt();
+                if (d && !d.exposed) { a.exposeDirt(d.id); a.add('media', a.rng(5, 10)); a.add('stats.integrity', a.rng(3, 6)); }
+                else { a.add('media', a.rng(3, 6)); a.add('stats.integrity', a.rng(1, 3)); }
+                a.add('fame', a.rng(4, 9));
+              },
+              reply: '"Then we have a book." She turns the recorder round to face you. "Most people take three meetings to get there."' },
+            { t: 'It stays out, and so does everything near it.', mood: 0,
+              run: function (a) { a.add('fame', a.rng(2, 5)); a.add('media', -a.rng(0, 3)); a.add('money', a.wage(a.rng(2, 6))); },
+              reply: '"Then it is a career summary with photographs." She shrugs. "Those sell too. To your own branches."' },
+            { t: 'It goes in, and it happens to somebody else in the telling.', mood: -2,
+              run: function (a) { a.add('fame', a.rng(3, 7)); a.add('stats.cunning', a.rng(1, 3)); a.add('stats.integrity', -a.rng(3, 6)); a.makeRival(); a.dirt('memoirlie', 'A memoir in which somebody else carries what you did', 3); },
+              reply: '"I will need that lawyered." She writes a note. "And they will read it, and they will remember."' }
+          ]
+        },
+        {
+          q: '"Last thing. Who is this for — the country, the party, or the person who has to decide about you in five years?"',
+          answers: [
+            { t: 'The country. Even the parts that make me look small.', mood: 3,
+              run: function (a) { a.add('media', a.rng(4, 8)); a.add('fame', a.rng(3, 7)); a.add('stats.integrity', a.rng(2, 5)); a.legacyMark('honestMemoir'); },
+              reply: '"Then write it slowly." She means it as a compliment and as a warning.' },
+            { t: 'The person deciding in five years. Obviously.', mood: 1,
+              run: function (a) { a.add('leader', a.rng(3, 7)); a.add('party', a.rng(2, 5)); a.add('media', -a.rng(0, 3)); a.add('fame', a.rng(2, 4)); },
+              reply: '"At least you know what you are doing." She has published nine of these. She knows what she is doing too.' },
+            { t: 'The party. It will be launched at conference.', mood: 1,
+              run: function (a) { a.add('party', a.rng(4, 8)); a.add('media', -a.rng(1, 4)); a.spendOnDelegates(a.rng(1, 4)); },
+              reply: '"Then we print two thousand and the party buys eighteen hundred." That is the whole business model, said out loud.' }
+          ]
+        }
+      ]
+    },
+
+    /* ==================== OPPOSITION RESEARCH ==================== */
+    {
+      id: 'oppo-investigator', topic: 'oppo', weight: 12,
+      speaker: function (a) { return who(a, 'a former police detective', ''); },
+      where: 'A parked car outside a shopping centre',
+      settleOn: 'party',
+      opening: function (a) {
+        var r = a.aRival();
+        return '"I have four pages on ' + (r ? '<strong>' + a.esc(r.name) + '</strong>' : 'your man') +
+          '. Two of them are boring. One of them is a court record. And one of them is about a child."';
+      },
+      beats: [
+        {
+          q: '"Do you want all four pages, or three?"',
+          answers: [
+            { t: 'Three. Burn the fourth in front of me.', mood: 3,
+              run: function (a) { var f = a.digOnRival(); a.add('stats.integrity', a.rng(3, 6)); a.add('party', a.rng(1, 3)); },
+              reply: 'He does it with the car lighter, which takes an embarrassingly long time. "Most people say all four."' },
+            { t: 'All four. I will decide later what I use.', mood: -1,
+              run: function (a) { var f = a.digOnRival(); if (f) a.add('stats.cunning', a.rng(1, 3)); a.add('stats.integrity', -a.rng(2, 4)); },
+              reply: '"Later." He hands over the envelope. "Nobody has ever decided later. They decide the night before a vote."' },
+            { t: 'All four, and go back for a fifth.', mood: -3, tag: 'risk',
+              run: function (a) {
+                a.digOnRival(); a.add('money', -a.wage(4)); a.add('stats.cunning', a.rng(2, 4));
+                a.add('stats.integrity', -a.rng(4, 7));
+                if (a.chance(0.4)) a.dirt('investigator', 'A private investigator on retainer, and an invoice trail', 3);
+              },
+              reply: '"There is always a fifth." He is pleased. That should worry you more than it does.' }
+          ]
+        },
+        {
+          q: '"Question for you now. When they hire somebody like me to do the same to you — and they have — what will he find?"',
+          answers: [
+            { t: 'Nothing. And I intend to keep it that way.', mood: 2,
+              run: function (a) { a.add('stats.integrity', a.rng(1, 3)); a.add('media', a.rng(1, 3)); },
+              reply: '"Nothing." He nods, entirely unconvinced, which is his professional condition.' },
+            { t: 'Enough. Which is why I want to know first.', mood: 2,
+              run: function (a) { var d = a.worstDirt(); a.add('stats.cunning', a.rng(1, 3)); a.add('capital', a.rng(1, 2)); if (d) a.add('media', a.rng(0, 2)); },
+              reply: '"That is the correct answer." He starts the engine. "Frightened clients are careful clients."' },
+            { t: 'Whatever he finds, he can be bought before he files it.', mood: -2,
+              run: function (a) { a.add('money', -a.wage(3)); a.add('stats.cunning', a.rng(1, 3)); a.add('stats.integrity', -a.rng(2, 5)); a.dirt('bought', 'A researcher paid to stop researching', 2); },
+              reply: '"Sometimes." He pulls out into traffic. "And sometimes he takes both payments."' }
+          ]
+        }
+      ]
+    },
+
+    /* ==================== REHABILITATION ==================== */
+    {
+      id: 'rehab-bishop', topic: 'rehab', weight: 12,
+      when: function (a) { return a.P.dirt.some(function (d) { return d.exposed; }); },
+      speaker: function (a) { return who(a, 'a bishop', 'the council of churches'); },
+      where: 'A vestry that smells of floor polish',
+      settleOn: 'grassroots',
+      opening: function (a) {
+        var d = a.worstDirt();
+        return '"They have asked me to sit with you before the service on Sunday. ' +
+          'I have agreed, and I want to be clear that I have not agreed to stand next to you afterwards for the photograph."';
+      },
+      beats: [
+        {
+          q: function (a) {
+            var d = a.worstDirt();
+            return '"So. ' + (d ? a.esc(d.label) : 'The matter') + '. In this room, with nobody writing: did you do it?"';
+          },
+          answers: [
+            { t: 'Yes. All of it, and worse than was reported.', mood: 3,
+              run: function (a) { a.add('stats.integrity', a.rng(4, 8)); a.clearExposed(1); a.add('media', a.rng(2, 5)); a.add('party', -a.rng(1, 4)); },
+              reply: 'He is quiet for a while. "Then on Sunday you will say that, in those words, and I will stand next to you."' },
+            { t: 'Some of it. The reporting was worse than the facts.', mood: 1,
+              run: function (a) { var ok = a.roll('charisma', 50); a.add('media', ok ? a.rng(2, 5) : -a.rng(2, 5)); if (ok) a.clearExposed(1); },
+              reply: '"Some of it." He has heard the arithmetic of some of it many times. "We will see how Sunday goes."' },
+            { t: 'No. It was manufactured and you know by whom.', mood: -2,
+              run: function (a) { a.add('media', -a.rng(2, 6)); a.add('stats.integrity', -a.rng(1, 4)); a.add('party', a.rng(0, 3)); },
+              reply: '"I do not know by whom." He stands. "And I am not going to be the person who says it for you."' }
+          ]
+        },
+        {
+          q: '"What are you actually asking the congregation for — forgiveness, or a second term?"',
+          answers: [
+            { t: 'Forgiveness. The seat is a separate question and I will not raise it.', mood: 3,
+              run: function (a) { a.add('grassroots', a.rng(4, 8)); a.add('stats.integrity', a.rng(2, 5)); a.add('fame', a.rng(1, 3)); },
+              reply: '"Then come at nine, and sit at the back like everybody else who is asking for something."' },
+            { t: 'Both. I am not going to pretend otherwise in a church.', mood: 2,
+              run: function (a) { a.add('grassroots', a.rng(2, 5)); a.add('stats.integrity', a.rng(1, 3)); a.add('party', a.rng(0, 2)); },
+              reply: 'He almost smiles. "That is at least an honest transaction. God has heard worse in here."' },
+            { t: 'A second term. Let us not be sentimental about it.', mood: -3,
+              run: function (a) { a.add('grassroots', -a.rng(3, 7)); a.add('media', -a.rng(1, 4)); a.add('stats.cunning', a.rng(1, 2)); },
+              reply: '"Then you do not need me." He opens the vestry door. "You need a rally, and you have confused the two."' }
+          ]
+        }
+      ]
+    },
+
+    /* ==================== THE LAST WEEKEND ==================== */
+    {
+      id: 'campaign-manager', topic: 'campaign', weight: 12,
+      when: function (a) { return a.isCampaignSeason(); },
+      speaker: function (a) { return who(a, 'your campaign manager', ''); },
+      where: 'A campaign office at eleven at night, out of coffee',
+      settleOn: 'grassroots',
+      opening: function (a) {
+        return '"We have money for one more weekend and three places to spend it. ' +
+          'I need a decision now, not in the morning, because the buses have to be booked tonight."';
+      },
+      beats: [
+        {
+          q: function (a) {
+            return '"Option one: ' + a.esc(a.homeName()) + ', where we are already winning. Option two: the ward that hates us. ' +
+              'Option three: the radio buy that reaches both and nobody remembers."';
+          },
+          answers: [
+            { t: 'Home. Run the score up where they already love us.', mood: 1,
+              run: function (a) { a.addRegion(a.P.regionId, a.rng(5, 10)); a.campaignEffort(a.rng(3, 6)); a.add('grassroots', a.rng(2, 5)); a.add('money', -a.wage(3)); },
+              reply: '"Safe." She writes it down. "Safe wins seats and it does not win arguments."' },
+            { t: 'The ward that hates us. Go and be shouted at.', mood: 3,
+              run: function (a) { var ok = a.roll('grit', 48); a.campaignEffort(a.rng(4, 8)); a.add('media', ok ? a.rng(4, 8) : a.rng(1, 3)); a.add('grassroots', ok ? a.rng(3, 6) : -a.rng(1, 4)); a.add('money', -a.wage(4)); a.add('stats.grit', a.rng(1, 2)); },
+              reply: '"Good." She is already on the phone. "Wear the old jacket. Not that one."' },
+            { t: 'Radio. It is boring and it is the highest return.', mood: 1,
+              run: function (a) { a.add('money', -a.wage(5)); a.add('fame', a.rng(3, 6)); a.add('media', a.rng(2, 5)); a.campaignEffort(a.rng(2, 5)); },
+              reply: '"Boring and correct." She books it. "Nobody will thank you and the numbers will move."' }
+          ]
+        },
+        {
+          q: '"Second decision, and I want you to think before you answer. Do we go negative on them in the last forty-eight hours?"',
+          answers: [
+            { t: 'No. We finish on what we are for.', mood: 3,
+              run: function (a) { a.add('stats.integrity', a.rng(2, 5)); a.add('media', a.rng(2, 5)); a.campaignEffort(a.rng(1, 3)); },
+              reply: '"Then I will write the closing script tonight." She sounds relieved, and she has been doing this for fifteen years.' },
+            { t: 'Yes, but only on the record. Nothing personal.', mood: 1,
+              run: function (a) { a.campaignEffort(a.rng(2, 5)); a.add('media', a.rng(0, 3)); a.add('stats.cunning', a.rng(1, 2)); },
+              reply: '"On the record." She nods. "That is a line people can see you holding, which is worth something on Monday."' },
+            { t: 'Yes. Everything we have, on the last night, everywhere.', mood: -2, tag: 'risk',
+              run: function (a) {
+                a.campaignEffort(a.rng(5, 10)); a.add('money', -a.wage(4));
+                a.add('media', -a.rng(2, 6)); a.add('stats.integrity', -a.rng(2, 5));
+                if (a.chance(0.45)) a.dirt('smear', 'A last-night campaign that ran on somebody’s family', 3);
+              },
+              reply: '"On the last night they cannot answer it." She does not look happy about knowing that.' }
+          ]
+        }
+      ]
+    },
+
+    /* ==================== THE TIMELINE ==================== */
+    {
+      id: 'social-comms', topic: 'social', weight: 11,
+      speaker: function (a) { return who(a, 'your communications officer, twenty-four years old', ''); },
+      where: 'A back office, phone face up between you',
+      settleOn: 'media',
+      opening: function (a) {
+        return '"The post from last night did four hundred thousand. That is the good news. ' +
+          'The comments are the news."';
+      },
+      beats: [
+        {
+          q: '"They have found a clip of you from 2019 saying the opposite. Do we delete last night’s post, or ride it?"',
+          answers: [
+            { t: 'Neither. Post the 2019 clip myself and say what changed my mind.', mood: 3,
+              run: function (a) { a.add('media', a.rng(4, 9)); a.add('fame', a.rng(3, 6)); a.add('stats.integrity', a.rng(2, 4)); a.add('party', -a.rng(0, 3)); },
+              reply: 'She is already typing. "That is going to do a million and half of them will be furious in a way that helps."' },
+            { t: 'Delete it. Say the account was compromised.', mood: -3,
+              run: function (a) { a.add('media', -a.rng(3, 8)); a.add('fame', a.rng(1, 4)); a.add('stats.integrity', -a.rng(2, 5)); a.dirt('deleted', 'A deleted post, a screenshot of it, and a claim nobody believed', 2); },
+              reply: '"Everybody has the screenshot." She says it gently, the way you tell someone their fly is undone.' },
+            { t: 'Ride it. Say nothing. It dies in two days.', mood: 1,
+              run: function (a) { a.add('media', -a.rng(0, 3)); a.add('fame', a.rng(0, 2)); a.add('stats.grit', a.rng(.5, 1.5)); },
+              reply: '"Two days," she agrees. "Unless somebody keeps it alive, and somebody usually does."' }
+          ]
+        },
+        {
+          q: '"Can I ask something? Do you want to be liked online, or do you want to win an election? Because those are different accounts."',
+          answers: [
+            { t: 'Win the election. Post less, and never at night.', mood: 2,
+              run: function (a) { a.add('grassroots', a.rng(2, 5)); a.add('media', a.rng(1, 3)); a.add('fame', -a.rng(0, 2)); },
+              reply: '"Thank you." She takes the phone off the table. "I will take it off you at nine every night, then."' },
+            { t: 'Be liked. Reach is a currency and I intend to spend it.', mood: 1,
+              run: function (a) { a.add('fame', a.rng(4, 8)); a.add('media', a.rng(1, 4)); a.add('grassroots', -a.rng(0, 3)); a.add('party', -a.rng(0, 3)); },
+              reply: '"Then we go hard and we accept the cost." She is twenty-four and she has already priced the cost.' },
+            { t: 'Neither. Run the account for the branches, not the country.', mood: 2,
+              run: function (a) { a.add('party', a.rng(3, 6)); a.add('grassroots', a.rng(2, 4)); a.add('fame', -a.rng(0, 2)); a.spendOnDelegates(a.rng(1, 3)); },
+              reply: '"Boring, targeted, and it is what actually gets you re-elected." She changes the pinned post while you watch.' }
+          ]
+        }
+      ]
+    },
+
+    /* ==================== SECOND MEETINGS ==================== */
+    {
+      id: 'factions-convenor', topic: 'factions', weight: 11,
+      speaker: function (a) { return who(a, 'a faction convenor', ''); },
+      where: 'A guest house dining room, booked out for the afternoon',
+      settleOn: 'party',
+      opening: function (a) {
+        var r = a.aRival();
+        return '"There are two slates and there is no third slate, whatever people tell you at lunch. ' +
+          (r ? '<strong>' + a.esc(r.name) + '</strong> is on one of them. ' : '') +
+          'Before conference you will be on one of them too, and it is better to choose than to be allocated."';
+      },
+      beats: [
+        {
+          q: '"So which is it? And do not say you are focused on the issues, because I will write that down as the other slate."',
+          answers: [
+            { t: 'Yours. Wholeheartedly, and I want it known publicly.', mood: 3,
+              run: function (a) { a.add('party', a.rng(5, 10)); a.add('leader', -a.rng(2, 6)); a.recruitAlly(); a.makeRival(); },
+              reply: '"Publicly." He is pleased and slightly wary. "Publicly means you cannot sell us in March."' },
+            { t: 'Yours, quietly. I will not say it in a hall.', mood: 1,
+              run: function (a) { a.add('party', a.rng(2, 5)); a.add('stats.cunning', a.rng(1, 3)); a.add('stats.integrity', -a.rng(0, 2)); },
+              reply: '"Quietly." He writes a small mark next to your name. "Quiet people get quiet positions."' },
+            { t: 'Neither. I will build my own and you will have to deal with it.', mood: -2,
+              run: function (a) { a.add('party', -a.rng(3, 7)); a.add('grassroots', a.rng(2, 5)); a.add('stats.grit', a.rng(1, 3)); a.makeRival(); a.makeRival(); },
+              reply: '"Your own." He does not laugh, which is the most alarming part. "Then we will see you at conference."' }
+          ]
+        },
+        {
+          q: '"Whichever way you go — what do you want when it is over? Say the position out loud. Everybody here has one and pretending otherwise wastes the afternoon."',
+          answers: [
+            { t: function (a) { var n = RZ.engine.nextRung(a.S); return n ? 'I want ' + n.title + '. Nothing else.' : 'I want the top job. Nothing else.'; }, mood: 2,
+              run: function (a) { a.add('party', a.rng(3, 6)); a.add('leader', -a.rng(0, 3)); a.add('fame', a.rng(1, 3)); },
+              reply: '"Good. Now three people in this building know, and one of them will tell your rival by Thursday. That is normal."' },
+            { t: 'Nothing. I want the slate to win and I will take what comes.', mood: 1,
+              run: function (a) { a.add('party', a.rng(2, 5)); a.add('leader', a.rng(1, 4)); a.add('stats.integrity', a.rng(0, 2)); },
+              reply: '"Nobody wants nothing." He writes it down anyway. "But it is a good thing to have said in front of witnesses."' },
+            { t: 'A ministry, and the province, and my people in the branches.', mood: -1,
+              run: function (a) { a.add('party', a.rng(1, 4)); a.add('leader', -a.rng(2, 5)); a.add('stats.cunning', a.rng(1, 2)); a.promise('slate2', 'Three things demanded of a slate in a room with witnesses'); },
+              reply: '"All three." He puts the pen down. "You will get one and you will be told it was all you asked for."' }
+          ]
+        }
+      ]
+    },
+
+    {
+      id: 'delegates-theirs', topic: 'delegates', weight: 10,
+      when: function (a) { return a.rivalCount() > 0; },
+      speaker: function (a) {
+        var r = a.aRival();
+        return { name: RZ.makeName(a.C), role: 'a regional secretary', org: r ? 'currently pledged to ' + r.name : '' };
+      },
+      where: 'A filling station forecourt on the road out of the capital',
+      settleOn: 'party',
+      opening: function (a) {
+        var r = a.aRival();
+        return '"I am pledged. Everybody knows I am pledged. ' +
+          (r ? 'I have been ' + a.esc(r.name) + '’s man since before you had a title. ' : '') +
+          'And I am standing here talking to you at a petrol station, so draw your own conclusion."';
+      },
+      beats: [
+        {
+          q: '"Nineteen delegates. What is your offer, and do not make it money, because I can get money from them."',
+          answers: [
+            { t: 'A seat at the table when the positions are decided. Named, now.', mood: 3,
+              run: function (a) { a.add('party', a.rng(4, 8)); a.spendOnDelegates(a.rng(5, 9)); a.promise('table', 'A named seat at the table for a regional secretary who switched'); },
+              reply: '"Named." He repeats it. "Then say the name to me now, in your own voice, so I can hear whether you mean it."' },
+            { t: 'Nothing. Come across because you think I am better.', mood: 1,
+              run: function (a) { var ok = a.roll('charisma', 55); a.add('party', ok ? a.rng(3, 7) : -a.rng(0, 3)); if (ok) a.spendOnDelegates(a.rng(2, 5)); a.add('stats.integrity', a.rng(1, 3)); },
+              reply: '"Nothing." He laughs, once. "You are either very confident or very new."' },
+            { t: 'Tell me what he has on you and I will make that go away.', mood: -1,
+              run: function (a) { a.add('stats.cunning', a.rng(1, 3)); a.add('party', a.rng(1, 4)); a.spendOnDelegates(a.rng(3, 6)); a.add('stats.integrity', -a.rng(2, 5)); a.dirt('freed', 'A delegate broker released from somebody else’s hold, and now in yours', 2); },
+              reply: 'He is quiet for a long moment. "You have done this before." He gets in the car with you.' }
+          ]
+        },
+        {
+          q: '"One condition either way. If you lose, do I go back to him, or do I go down with you?"',
+          answers: [
+            { t: 'Go back to him. I will say I sent you.', mood: 3,
+              run: function (a) { a.add('party', a.rng(3, 6)); a.add('stats.integrity', a.rng(2, 5)); a.recruitAlly(); },
+              reply: '"That is not how any of them answer that." He nods slowly. "It is how the ones who last answer it."' },
+            { t: 'You go down with me. That is what pledging means.', mood: 0,
+              run: function (a) { a.add('party', a.rng(2, 5)); a.spendOnDelegates(a.rng(2, 4)); a.add('stats.cunning', a.rng(0, 2)); },
+              reply: '"Then I want it to be worth going down for." Fair enough, and now the price has gone up.' },
+            { t: 'If I lose, none of this conversation happened.', mood: 1,
+              run: function (a) { a.add('stats.cunning', a.rng(1, 3)); a.add('party', a.rng(1, 3)); },
+              reply: '"It did not happen anyway." He looks at the forecourt camera above your heads. Neither of you mentions it.' }
+          ]
+        }
+      ]
+    },
+
+    {
+      id: 'barracks-protest', topic: 'securocrats', weight: 10,
+      when: function (a) { return a.S.nation.society.unrest > 42; },
+      speaker: function (a) { return who(a, 'the Commissioner of Police', ''); },
+      where: 'A police headquarters office with the blinds shut at midday',
+      settleOn: 'security',
+      opening: function (a) {
+        return '"There will be twenty thousand of them on Thursday. I have four hundred officers, ' +
+          'of whom perhaps ninety have done public order training this decade. I need a political instruction, in writing."';
+      },
+      beats: [
+        {
+          q: '"What is my instruction if they come off the route and head for the ministry?"',
+          answers: [
+            { t: 'Let them arrive. Stand at the gate and let them shout.', mood: 3,
+              run: function (a) { a.add('grassroots', a.rng(4, 8)); a.add('media', a.rng(3, 6)); a.add('security', -a.rng(2, 5)); a.nation('unrest', -a.rng(2, 6)); a.legacyMark('letThemMarch'); },
+              reply: '"In writing?" You write it. He folds it into his shirt pocket, and something in his shoulders drops.' },
+            { t: 'Hold the line, water only, no live rounds under any circumstance.', mood: 2,
+              run: function (a) { a.add('security', a.rng(2, 5)); a.add('media', a.rng(1, 3)); a.nation('unrest', -a.rng(1, 4)); },
+              reply: '"No live rounds." He writes that down himself, twice, because a second copy has saved men before.' },
+            { t: 'Disperse them before they reach the ministry. However you have to.', mood: -3, tag: 'risk',
+              run: function (a) {
+                a.add('security', a.rng(4, 8)); a.add('grassroots', -a.rng(5, 10)); a.add('media', -a.rng(4, 9));
+                a.nation('unrest', a.rng(3, 9));
+                if (a.chance(0.5)) { a.nation('deaths', a.irange(1, 6)); a.dirt('publicorder', 'An order to disperse a march, and the people who did not go home', 4); }
+              },
+              reply: '"However I have to." He does not move. "Honourable, I would like that sentence signed."' }
+          ]
+        },
+        {
+          q: '"And the other question nobody asks me. If the order comes from above you, and it is worse than yours — what do I do?"',
+          answers: [
+            { t: 'Refuse it, in writing, and call me the same hour.', mood: 3,
+              run: function (a) { a.add('security', a.rng(3, 6)); a.add('leader', -a.rng(3, 7)); a.add('stats.integrity', a.rng(3, 6)); a.recruitAlly(); },
+              reply: '"You understand what you have just made yourself part of." He does not say it as a warning. He says it as a fact.' },
+            { t: 'Follow it. And write down who gave it and when.', mood: 2,
+              run: function (a) { a.add('security', a.rng(2, 5)); a.add('stats.cunning', a.rng(1, 3)); a.add('capital', a.rng(1, 2)); },
+              reply: '"A record." He nods. "Records have outlived every man who gave me an order in this room."' },
+            { t: 'Follow it. That is what the chain of command is.', mood: -1,
+              run: function (a) { a.add('security', a.rng(3, 6)); a.add('leader', a.rng(2, 5)); a.add('stats.integrity', -a.rng(2, 5)); a.nation('coup', a.rng(.3, 1.2)); },
+              reply: '"That is what it is," he agrees, and neither of you believes it is a complete answer.' }
+          ]
+        }
+      ]
+    },
+
+    {
+      id: 'press-hostile', topic: 'media', weight: 10,
+      speaker: function (a) { return who(a, 'a talk radio host', RZ.pick(a.C.media)); },
+      where: 'A live studio, eight minutes to the news',
+      settleOn: 'media',
+      opening: function (a) {
+        return '"We are live. My first caller is a nurse from your own ' + a.esc(a.t.region) +
+          ' who has not been paid since April, and she has been holding for forty minutes."';
+      },
+      beats: [
+        {
+          q: '"She wants to know when. Not whether. When."',
+          answers: [
+            { t: 'I do not know, and I am going to find out and come back on this show.', mood: 3,
+              run: function (a) { a.add('media', a.rng(4, 8)); a.add('grassroots', a.rng(3, 6)); a.add('stats.integrity', a.rng(2, 4)); a.promise('nursepay', 'To come back on air with a date for unpaid nurses'); },
+              reply: '"Same show, same time, next month." He says it to the audience, not to you. Now it is a fixture.' },
+            { t: 'By the end of the month. I will put my name to that.', mood: 2,
+              run: function (a) { a.add('media', a.rng(2, 5)); a.add('grassroots', a.rng(3, 7)); a.promise('nursepaydate', 'Nurses paid by the end of the month, said on live radio'); },
+              reply: '"End of the month." He repeats the date twice, clearly, for the tape.' },
+            { t: 'The Treasury process is under way and I will not pre-empt it.', mood: -3,
+              run: function (a) { a.add('media', -a.rng(4, 9)); a.add('grassroots', -a.rng(3, 7)); a.add('party', a.rng(0, 2)); },
+              reply: 'He lets the silence run for four seconds, which on radio is a very long time, and then goes to the next caller.' }
+          ]
+        },
+        {
+          q: function (a) {
+            var d = a.worstDirt();
+            return d ? '"Before the news. ' + a.esc(d.label) + '. You have never answered it on this station."'
+                     : '"Before the news. Everybody in your position has a file. What is in yours?"';
+          },
+          answers: [
+            { t: 'Ask me anything about it. I will stay past the news.', mood: 3,
+              run: function (a) { var d = a.worstDirt(); if (d && !d.exposed) a.exposeDirt(d.id); a.add('media', a.rng(4, 9)); a.add('fame', a.rng(3, 6)); a.add('stats.grit', a.rng(1, 3)); },
+              reply: '"He is staying past the news," he tells the country, delighted. It is the best forty minutes of his year.' },
+            { t: 'I have answered it. Repeatedly. Play the tape.', mood: 0,
+              run: function (a) { a.add('media', -a.rng(0, 3)); a.add('fame', a.rng(1, 3)); a.add('stats.cunning', a.rng(0, 2)); },
+              reply: '"We have the tape." He plays it. It is worse than you remembered.' },
+            { t: 'I am not doing this on air. Take me off.', mood: -3,
+              run: function (a) { a.add('media', -a.rng(6, 12)); a.add('fame', a.rng(2, 5)); a.add('party', -a.rng(1, 4)); },
+              reply: '"He has taken the headphones off." He describes it, live, in detail, for ninety seconds.' }
+          ]
+        }
+      ]
+    },
+
+    {
+      id: 'money-mining', topic: 'fundraise', weight: 10,
+      speaker: function (a) { return who(a, 'a country manager', 'a mining company'); },
+      where: 'A boardroom on the top floor, view of the whole capital',
+      settleOn: 'business',
+      opening: function (a) {
+        return '"Let me save us both an hour. We fund everybody. We funded your predecessor and we will fund your successor. ' +
+          'The only question that changes is what we get for it, and the answer is usually nothing, which suits us."';
+      },
+      beats: [
+        {
+          q: '"So. What do you need, and what do you imagine we want?"',
+          answers: [
+            { t: 'I need the campaign funded. You want a phone call answered. Nothing more.', mood: 2,
+              run: function (a) { a.add('money', a.wage(a.rng(8, 16))); a.add('business', a.rng(3, 7)); a.add('stats.integrity', -a.rng(0, 2)); },
+              reply: '"Answered, not obeyed." He writes the cheque himself, which is a signal in itself.' },
+            { t: 'Nothing from you. I came to tell you about the tailings dam.', mood: 3,
+              run: function (a) { a.add('business', -a.rng(3, 7)); a.add('media', a.rng(3, 7)); a.add('grassroots', a.rng(3, 6)); a.add('stats.integrity', a.rng(3, 6)); a.nation('infra', a.rng(0, 1)); },
+              reply: 'He puts the pen down. "That is the first time anyone has come up here to make our lives harder for free."' },
+            { t: 'Everything you can give, and I will not ask about the licence renewal.', mood: -2,
+              run: function (a) { a.add('money', a.wage(a.rng(16, 30))); a.add('business', a.rng(5, 10)); a.add('stats.integrity', -a.rng(4, 8)); a.dirt('licence', 'A licence renewal that was never scrutinised, and a donation that was never declared', 3); },
+              reply: '"You will not ask." He smiles. "You have understood the arrangement faster than most."' }
+          ]
+        },
+        {
+          q: function (a) {
+            return '"One more thing. Your ' + a.esc(a.t.region) + ' has our smelter and our dust. ' +
+              'If the community sues us, whose side are you on?"';
+          },
+          answers: [
+            { t: 'Theirs. Publicly, and from the first day.', mood: 2,
+              run: function (a) { a.add('business', -a.rng(4, 9)); a.addRegion(a.P.regionId, a.rng(4, 8)); a.add('grassroots', a.rng(3, 6)); a.add('stats.integrity', a.rng(3, 5)); },
+              reply: '"Then we will fund your opponent as well." He says it without heat. It is simply the arithmetic.' },
+            { t: 'Neither. I will not take a side in litigation.', mood: 1,
+              run: function (a) { a.add('business', a.rng(1, 4)); a.add('grassroots', -a.rng(1, 4)); },
+              reply: function (a) { return '"Neither is a side," he says, "and everybody in your ' + a.esc(a.t.region) + ' will know which one."'; } },
+            { t: 'Yours, quietly. And I will need that reflected.', mood: -1,
+              run: function (a) { a.add('money', a.wage(a.rng(10, 20))); a.add('business', a.rng(4, 8)); a.add('grassroots', -a.rng(3, 7)); a.add('stats.integrity', -a.rng(3, 6)); a.dirt('smelter', 'A community case quietly opposed on behalf of the company that funds you', 3); },
+              reply: '"It will be reflected." Two words, and a career’s worth of leverage handed over in them.' }
+          ]
+        }
+      ]
+    },
+
+    {
+      id: 'youth-unemployed', topic: 'youth', weight: 10,
+      when: function (a) { return a.S.nation.economy.unemployment > 26; },
+      speaker: function (a) { return who(a, 'the ' + a.t.youthWing + ' provincial secretary', ''); },
+      where: 'A community hall with no chairs, everybody standing',
+      settleOn: 'grassroots',
+      opening: function (a) {
+        return '"Half this room has a degree and ' + unemployment(a) + '% of this country has nothing. ' +
+          'They did not come to be told about the pipeline of opportunities. Do not use that phrase."';
+      },
+      beats: [
+        {
+          q: '"They want to know why they should join a party at all, when the last three intakes are still waiting."',
+          answers: [
+            { t: 'Because it is the only door, and I am not going to pretend it is a good one.', mood: 3,
+              run: function (a) { a.add('grassroots', a.rng(4, 9)); a.add('party', a.rng(1, 4)); a.add('stats.integrity', a.rng(2, 5)); a.recruitAlly(); },
+              reply: 'Somebody near the front says "at least he said it." The room does not cheer. The room listens, which is rarer.' },
+            { t: 'They should not. Organise outside it and make us come to you.', mood: 2,
+              run: function (a) { a.add('grassroots', a.rng(3, 7)); a.add('party', -a.rng(4, 8)); a.add('media', a.rng(2, 5)); a.makeRival(); },
+              reply: 'The provincial secretary’s face does something complicated. The room, however, has woken up.' },
+            { t: 'Because I will get twenty of you placed by December.', mood: 1,
+              run: function (a) { a.add('grassroots', a.rng(3, 6)); a.promise('youthjobs', 'Twenty young people placed by December'); a.add('capital', -a.rng(0, 2)); },
+              reply: '"Twenty." He counts the room with his eyes. There are two hundred. Everyone does the arithmetic at once.' }
+          ]
+        },
+        {
+          q: '"And when the marches start — because they will start — will you be on the platform or in the Cabinet room?"',
+          answers: [
+            { t: 'On the platform. Whatever it costs me inside.', mood: 3,
+              run: function (a) { a.add('grassroots', a.rng(5, 10)); a.add('leader', -a.rng(4, 9)); a.add('party', -a.rng(2, 6)); a.add('fame', a.rng(3, 6)); a.makeRival(); },
+              reply: 'They believe you, which is the dangerous part, because now you have to be there.' },
+            { t: 'In the room. That is where the decision gets made.', mood: 0,
+              run: function (a) { a.add('leader', a.rng(2, 5)); a.add('party', a.rng(1, 4)); a.add('grassroots', -a.rng(2, 5)); },
+              reply: '"In the room." He nods, unsurprised. "Then bring something out of it, or do not come back here."' },
+            { t: 'Neither. I will be wherever it is useful to be that week.', mood: -3,
+              run: function (a) { a.add('stats.cunning', a.rng(1, 3)); a.add('grassroots', -a.rng(4, 8)); a.add('stats.integrity', -a.rng(1, 4)); },
+              reply: 'The hall empties from the back while you are still speaking, which is the modern form of walking out.' }
+          ]
+        }
+      ]
+    },
+
+    {
+      id: 'donors-conditions', topic: 'donors', weight: 10,
+      speaker: function (a) { return who(a, 'a resident representative', 'a development bank'); },
+      where: 'An embassy district office with very good air conditioning',
+      settleOn: 'intl',
+      opening: function (a) {
+        return '"The facility is approved in principle. In principle is doing a lot of work in that sentence, ' +
+          'and the work it is doing is called conditionality."';
+      },
+      beats: [
+        {
+          q: '"The first condition is an audit of the last three years of procurement. Published. Can you deliver it?"',
+          answers: [
+            { t: 'Yes, published in full, including the parts about my own ministry.', mood: 3,
+              run: function (a) { a.add('intl', a.rng(5, 10)); a.add('media', a.rng(3, 7)); a.add('party', -a.rng(4, 9)); a.nation('corruption', -a.rng(1, 3)); a.legacyMark('publishedAudit'); a.makeRival(); },
+              reply: '"Including your own." She writes it into the term sheet in front of you, which is how you know she did not expect it.' },
+            { t: 'Yes. Published with the annexes withheld.', mood: 1,
+              run: function (a) { a.add('intl', a.rng(2, 5)); a.add('party', -a.rng(1, 4)); a.add('stats.cunning', a.rng(1, 2)); },
+              reply: '"The annexes are the audit." She says it pleasantly. "But we have all signed worse."' },
+            { t: 'No. And I would rather tell you now than in eighteen months.', mood: 2,
+              run: function (a) { a.add('intl', -a.rng(1, 4)); a.add('stats.integrity', a.rng(3, 6)); a.add('party', a.rng(2, 5)); },
+              reply: '"Thank you." She closes the folder. "Do you know how much of my life is spent discovering this in month nineteen?"' }
+          ]
+        },
+        {
+          q: '"Second. Our board will ask me whether this money will still be here in five years or whether it becomes somebody’s house."',
+          answers: [
+            { t: 'Some of it will become somebody’s house. Build that into the design.', mood: 3,
+              run: function (a) { a.add('intl', a.rng(4, 8)); a.add('stats.intellect', a.rng(1, 3)); a.add('party', -a.rng(1, 4)); },
+              reply: 'She actually laughs. "I am going to quote you to the board, anonymously, and it will help."' },
+            { t: 'Ring-fence it. Separate account, joint signature, published monthly.', mood: 2,
+              run: function (a) { a.add('intl', a.rng(3, 7)); a.add('party', -a.rng(2, 5)); a.nation('corruption', -a.rng(.5, 2)); },
+              reply: '"Joint signature." She writes it. "Your Treasury will fight this for nine months and then agree."' },
+            { t: 'It will be spent as the government of this country decides.', mood: -2,
+              run: function (a) { a.add('party', a.rng(2, 5)); a.add('intl', -a.rng(3, 7)); },
+              reply: '"That is a sovereignty answer." She caps her pen. "It is also, in my experience, a smaller facility."' }
+          ]
+        }
+      ]
+    },
+
+    {
+      id: 'church-prosperity', topic: 'church', weight: 10,
+      speaker: function (a) { return who(a, 'the founder and senior pastor', 'a church of nine thousand'); },
+      where: 'An office behind a stage, with a screen showing the offering totals',
+      settleOn: 'grassroots',
+      opening: function (a) {
+        return '"Nine thousand on a Sunday. Three services. I can put you in front of all three, ' +
+          'and I want you to understand clearly that I am not doing it because I like you."';
+      },
+      beats: [
+        {
+          q: '"What I want is the land at the edge of town rezoned. Say yes and you speak at eleven."',
+          answers: [
+            { t: 'No. And I would like to speak at eleven anyway.', mood: 2,
+              run: function (a) { var ok = a.roll('charisma', 52); a.add('grassroots', ok ? a.rng(3, 7) : -a.rng(0, 3)); a.add('stats.integrity', a.rng(3, 6)); a.add('fame', ok ? a.rng(2, 5) : 0); },
+              reply: 'He looks at you for a while. "You may speak at eight. Eight is a smaller service, and it is still nine hundred people."' },
+            { t: 'I will look at the file honestly. That is all I will promise.', mood: 1,
+              run: function (a) { a.add('grassroots', a.rng(2, 5)); a.add('fame', a.rng(1, 4)); },
+              reply: '"Honestly." He weighs it. "Every politician says honestly and means later. You may speak at nine."' },
+            { t: 'Yes. Get me the file reference and it is done.', mood: 3,
+              run: function (a) { a.add('grassroots', a.rng(5, 10)); a.add('fame', a.rng(3, 7)); a.add('stats.integrity', -a.rng(3, 6)); a.dirt('rezone', 'Land rezoned for a church in exchange for a pulpit', 3); },
+              reply: '"Eleven o’clock." He is already writing your name on the running order in marker.' }
+          ]
+        },
+        {
+          q: '"When you are up there, are you going to tell them how to vote? Because I do not allow that, and everybody does it."',
+          answers: [
+            { t: 'No. I will speak about the flood and sit down.', mood: 3,
+              run: function (a) { a.add('grassroots', a.rng(3, 7)); a.add('stats.integrity', a.rng(2, 4)); a.add('fame', a.rng(1, 3)); },
+              reply: '"Then you will be invited back." Which, in a church of nine thousand, is the whole prize.' },
+            { t: 'Not in words. They will know.', mood: 1,
+              run: function (a) { a.add('grassroots', a.rng(3, 6)); a.add('fame', a.rng(2, 4)); a.add('stats.cunning', a.rng(1, 2)); },
+              reply: '"They always know." He is not offended. He has been doing this longer than you have.' },
+            { t: 'Yes. That is what I came for and we both know it.', mood: -1,
+              run: function (a) { a.add('grassroots', a.rng(4, 8)); a.add('media', -a.rng(2, 5)); a.add('stats.integrity', -a.rng(2, 4)); a.dirt('pulpit', 'A pulpit used for a campaign, filmed by three people in the third row', 2); },
+              reply: '"At least you are not lying in a church." He stands. "Eleven o’clock. Do not mention my name."' }
+          ]
+        }
+      ]
+    },
   ];
 
   RZ.DIALOGUE = SCENES;

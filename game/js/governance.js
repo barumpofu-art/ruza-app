@@ -358,6 +358,10 @@
     });
 
     // ---- consequences ----
+    // An election moves offices around. Whatever it did, the party leadership
+    // and the head of state must still name real, single people afterwards.
+    RZ.field.syncLeadership(S);
+
     if (S.nation.presidentParty !== S.nation.presidentPartyPrev) S.nation.yearsInPower = 0;
     S.nation.presidentPartyPrev = S.nation.presidentParty;
     S.nextElection = S.date.year + c.houseTerm;
@@ -566,7 +570,7 @@
       age: 'You died at ' + pl.age + ', at home, with the television on.',
       coup: 'Soldiers surrounded the residence at 4am. The broadcast came at six, read by a colonel nobody had heard of.',
       defeated: 'The country voted you out. You conceded, eventually.',
-      retire: 'You walked away.',
+      retire: 'You stood down at the end of the term, having said a year before that you would.',
       stepdown: 'You resigned, and handed over the instruments of state on a Tuesday morning.',
       noconfidence: 'The House removed you on a Thursday afternoon, by six votes.',
       dismissed: 'The King relieved you of your duties. No reason was given, and none was required.',
@@ -599,6 +603,19 @@
       out.push('<p>You reached ' + RZ.esc(lg.rung.title.toLowerCase()) + ' and no further. ' +
         (pl.electionsLost > pl.electionsWon ? 'The ballots were rarely kind.'
           : 'The ladder simply ran out of time.') + '</p>');
+
+      // The rung above you was never empty, and somebody is sitting in it now.
+      var above = RZ.field.contender(S, Math.min(pl.rungIdx + 1, RZ.ladderFor(c.id).length - 1));
+      if (above) {
+        out.push('<p>' + RZ.esc(above.fig.name) + ' is ' + RZ.esc(above.fig.role) +
+          '. They were ' + (above.fig.since <= (pl.officeSince ? pl.officeSince.year : S.date.year)
+            ? 'there before you arrived and they are there still'
+            : 'behind you once') + ', and they will be in the room when the next one is decided.</p>');
+      }
+    }
+
+    if (S.legacyMarks.leftOnOwnTerms) {
+      out.push('<p>You chose the day. Almost nobody in this region does, and the ones who do are remembered for it long after the arguments they won have been forgotten.</p>');
     }
 
     var exposed = pl.dirt.filter(function (d) { return d.exposed; });

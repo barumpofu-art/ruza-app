@@ -26,8 +26,10 @@ android {
     applicationId = "app.kgosi.cadre"
     minSdk = 24
     targetSdk = 34
-    versionCode = 1
-    versionName = "1.0"
+    // CI passes these from game/VERSION so the package, the title screen and
+    // the release tag all say the same thing. A local build is just "dev".
+    versionCode = (project.findProperty("kgosiVersionCode") as String?)?.toInt() ?: 1
+    versionName = (project.findProperty("kgosiVersionName") as String?) ?: "dev"
   }
 
   buildTypes {

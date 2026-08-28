@@ -401,7 +401,7 @@
     // Branches decide the slate, and a machine decides the branches.
     var base = P.standing.grassroots * 0.45 + P.standing.party * 0.45 + P.fame * 0.10;
     var allies = (P.allies || []).length * 2.5;
-    var enemies = (P.rivals || []).reduce(function (t, r) { return t + r.power * 0.06; }, 0);
+    var enemies = RZ.field.rivals(S).reduce(function (t, r) { return t + r.power * 0.06; }, 0);
     var threshold = 26 + c.inst.patronage * 0.16 + (tier >= 6 ? 8 : 0);
     var score = base + allies - enemies + RZ.range(-8, 8);
     if (score >= threshold) return null;

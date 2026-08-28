@@ -37,7 +37,10 @@
     return RZ.weighted(pool, function (sc) { return sc.weight || 5; });
   }
 
-  function begin(S, scene, act) {
+  // `resume` reopens a meeting that was interrupted — the app was closed with a
+  // question on the table. The answers already given have already changed the
+  // state and are not replayed: the room is simply picked up where it was.
+  function begin(S, scene, act, resume) {
     var api = RZ.engine.mkApi(S);
     S.seenScenes = S.seenScenes || {};
     S.seenScenes[scene.id] = S.turn;
@@ -45,23 +48,47 @@
     var speaker = scene.speaker(api);
     var convo = {
       sceneId: scene.id, scene: scene, api: api, speaker: speaker,
-      act: act || null,
+      act: act || null, eventId: scene.eventId || null,
       where: text(scene.where, api, null),
       beat: 0, mood: 0, done: false, transcript: []
     };
-    // Two things the answers need, and they need the speaker to be resolved
+    // Four things the answers need, and they need the speaker to be resolved
     // first, which is why they are attached here rather than in mkApi.
     api.them = speaker;
     api.remember = function (what, tone) { return RZ.cast && RZ.cast.remember(S, speaker, what, tone); };
     api.recalls = function (tone) { return RZ.cast && RZ.cast.recalls(S, speaker, tone); };
     api.rel = function () { return speaker && speaker.rel !== undefined ? speaker.rel : 0; };
 
-    // A meeting with somebody you have met before does not start from nothing.
-    var hello = RZ.cast ? RZ.cast.greeting(S, speaker) : '';
-    if (hello) convo.transcript.push({ who: 'them', text: hello });
-    convo.transcript.push({ who: 'them', text: text(scene.opening, api, convo) });
+    if (resume && resume.beat > 0 && resume.beat < scene.beats.length) {
+      convo.beat = resume.beat;
+      convo.mood = resume.mood || 0;
+      convo.transcript.push({ who: 'them', text: 'You were halfway through this. They are still waiting.' });
+    } else {
+      // A meeting with somebody you have met before does not start from
+      // nothing. Only on a fresh start: you do not get greeted twice for
+      // having closed the app halfway through.
+      var hello = RZ.cast ? RZ.cast.greeting(S, speaker) : '';
+      if (hello) convo.transcript.push({ who: 'them', text: hello });
+      convo.transcript.push({ who: 'them', text: text(scene.opening, api, convo) });
+    }
     pushQuestion(convo);
     return convo;
+  }
+
+  // An event that is a room rather than a card. The event definition carries
+  // the beats itself, so the whole situation stays in one place in data-events.
+  function beginEvent(S, resume) {
+    var ev = S.pendingEvent;
+    if (!ev || !ev.talk) return null;
+    var def = (RZ.EVENTS || []).filter(function (e) { return e.id === ev.id; })[0];
+    if (!def || !def.beats) return null;
+    var scene = {
+      id: 'event:' + def.id, eventId: def.id, topic: 'event',
+      speaker: def.speaker, where: def.where, opening: def.opening || def.body,
+      beats: def.beats, close: def.close, settles: def.settles,
+      settleOn: def.settleOn, headline: def.headline
+    };
+    return begin(S, scene, null, resume);
   }
 
   function pushQuestion(convo) {
@@ -105,8 +132,15 @@
       close(convo);
     }
     // Each answer has already changed the state, so hold it now: leaving the
-    // app halfway through a meeting should not undo what you just said.
-    RZ.engine.save(convo.api.S);
+    // app halfway through a meeting should not undo what you just said. For an
+    // event the position in the room is held too, because an event is not
+    // escapable and has to be resumable exactly where it was left.
+    var S = convo.api.S;
+    if (convo.eventId && S.pendingEvent && S.pendingEvent.id === convo.eventId) {
+      if (convo.done) S.pendingEvent = null;
+      else { S.pendingEvent.talkBeat = convo.beat; S.pendingEvent.talkMood = convo.mood; }
+    }
+    RZ.engine.save(S);
   }
 
   function close(convo) {
@@ -159,7 +193,7 @@
 
   RZ.dialogue = {
     byId: byId, beginById: beginById, summon: summon,
-    sceneFor: sceneFor, scenesFor: scenesFor, begin: begin,
+    sceneFor: sceneFor, scenesFor: scenesFor, begin: begin, beginEvent: beginEvent,
     options: options, choose: choose, temperature: temperature
   };
 })();

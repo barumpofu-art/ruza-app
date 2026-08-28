@@ -271,11 +271,15 @@
 
     // They become the incumbent for every mechanic that already knows what an
     // incumbent is, rather than a second thing the code has to remember.
-    var npc = RZ.makeNpc(c, { id: ct.id, name: ct.name, partyId: ct.partyId, regionId: ct.regionId, power: 92 });
+    var npc = RZ.field.addRival(S, 92);
+    npc.name = ct.name;
+    npc.regionId = ct.regionId;
+    npc.partyId = ct.partyId;
+    npc.role = cap(c.terms.hos);
     npc.aggression = 100;
     npc.nemesis = true;
     npc.incumbent = true;
-    S.player.rivals.push(npc);
+    ct.id = npc.id;
     S.flags.nemesisId = npc.id;
 
     RZ.engine.pushFeed(S, {

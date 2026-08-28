@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FILES = [
   'core.js', 'data-countries.js', 'data-ladder.js', 'data-actions.js',
-  'data-events.js', 'data-dialogue.js', 'data-origins.js', 'people.js', 'elections.js',
+  'data-events.js', 'data-dialogue.js', 'data-origins.js', 'people.js', 'field.js', 'elections.js',
   'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js', 'constituency.js', 'statecraft.js', 'legislation.js', 'contender.js', 'blocs.js', 'cast.js'
 ];
 
@@ -49,6 +49,10 @@ function ok(what, cond, detail) {
   return false;
 }
 function section(t) { console.log(`\n${t}`); }
+
+// Main replaced the player's private rival list with a whole field of party
+// figures who have careers of their own. Same people, one lookup away.
+function foes(S) { return RZ.field.strongestFirst(RZ.field.ours(S)); }
 
 /* A career at whatever height the test needs. */
 function career(cid = 'ZA', seed = 7, rungIdx = 4) {
@@ -648,10 +652,10 @@ section('11. Mandate, revolt, the file and the nemesis');
 
     const strong = mk(211, 4);
     strong.player.capital = 90; strong.player.standing.party = 92; strong.player.standing.grassroots = 92;
-    strong.player.rivals.forEach((r) => { r.power = 10; });
+    foes(strong).forEach((r) => { r.power = 10; });
     const weak = mk(212, 4);
     weak.player.capital = 20; weak.player.standing.party = 5; weak.player.standing.grassroots = 5;
-    weak.player.rivals.forEach((r) => { r.power = 95; });
+    foes(weak).forEach((r) => { r.power = 95; });
     ok('a strong challenger has better odds than a weak one',
       RZ.revolt.revoltOdds(strong).pct > RZ.revolt.revoltOdds(weak).pct,
       `${RZ.revolt.revoltOdds(strong).pct}% vs ${RZ.revolt.revoltOdds(weak).pct}%`);
@@ -659,7 +663,7 @@ section('11. Mandate, revolt, the file and the nemesis');
     // Winning promotes.
     const W = mk(213, 4);
     W.player.capital = 90; W.player.standing.party = 95; W.player.standing.grassroots = 95;
-    W.player.rivals.forEach((r) => { r.power = 5; });
+    foes(W).forEach((r) => { r.power = 5; });
     const rungBefore = W.player.rungIdx;
     const res = RZ.revolt.revolt(W, RZ.engine.mkApi(W));
     ok('a won revolt promotes you', res.won && W.player.rungIdx > rungBefore,
@@ -677,7 +681,7 @@ section('11. Mandate, revolt, the file and the nemesis');
       for (let seed = 220; seed < 320; seed++) {
         const T = mk(seed, 4);
         T.player.capital = 30;
-        T.player.rivals.forEach((r) => { r.power = 98; r.dirt = []; });
+        foes(T).forEach((r) => { r.power = 98; r.dirt = []; });
         setup(T);
         const res = RZ.revolt.revolt(T, RZ.engine.mkApi(T));
         if (!res.won) return { S: T, res: res };
@@ -725,25 +729,27 @@ section('11. Mandate, revolt, the file and the nemesis');
     // Option 2 only appears when you brought something.
     const F = losingRevolt((T) => {
       T.player.standing.party = 2;
-      T.player.rivals[0].regionId = T.player.regionId;
-      T.player.rivals[0].dirt = [{ label: 'a tender awarded to a relative', used: false }];
+      // On whoever the revolt will actually name, not merely the strongest.
+      const inc = RZ.revolt.incumbent(T);
+      inc.regionId = T.player.regionId;
+      inc.dirt = [{ label: 'a tender awarded to a relative', used: false }];
     }).S;
     ok('a file adds a third way out', F.pendingEvent.choices.length === 3);
     const homeF = F.player.regionId, intF = F.player.stats.integrity;
     RZ.engine.resolveEvent(F, 2);
     ok('using it keeps your ward', F.player.regionId === homeF);
     ok('and your leadership', F.player.standing.leader > 0);
-    ok('but burns the file', F.player.rivals.every((r) => (r.dirt || []).every((d) => d.used)) ||
+    ok('but burns the file', foes(F).every((r) => (r.dirt || []).every((d) => d.used)) ||
       !RZ.engine.mkApi(F).hasLeverage());
-    ok('and maxes his aggression', F.player.rivals.some((r) => r.aggression === 100 && r.nemesis));
+    ok('and maxes his aggression', foes(F).some((r) => r.aggression === 100 && r.nemesis));
   }
 
   // The file, traded up.
   {
     const B = mk(230, 5);
     // Exactly one file, on exactly one man, so "spent" means spent.
-    B.player.rivals.forEach((r) => { r.power = 70; r.dirt = []; });
-    B.player.rivals[0].dirt = [{ label: 'a second family', used: false }];
+    foes(B).forEach((r) => { r.power = 70; r.dirt = []; });
+    foes(B)[0].dirt = [{ label: 'a second family', used: false }];
     ok('a file on a superior is a target', !!RZ.revolt.blackmailTarget(B));
     const rungBefore = B.player.rungIdx;
     const res = RZ.revolt.blackmail(B, RZ.engine.mkApi(B));
@@ -771,17 +777,17 @@ section('11. Mandate, revolt, the file and the nemesis');
     V.player.rungIdx = lad.length - 2;
     V.player.capital = 90;
     ok('a revolt cannot take an office decided by the country', !RZ.revolt.canRevolt(V));
-    V.player.rivals[0].dirt = [{ label: 'a file', used: false }];
-    V.player.rivals[0].power = 80;
+    foes(V)[0].dirt = [{ label: 'a file', used: false }];
+    foes(V)[0].power = 80;
     ok('and neither can a file', RZ.revolt.blackmail(V, RZ.engine.mkApi(V)).fail === true);
   }
 
   // The nemesis actually does something.
   {
     const N = mk(240, 5);
-    N.player.rivals[0].power = 80;
-    N.flags.nemesisId = N.player.rivals[0].id;
-    N.player.rivals[0].nemesis = true;
+    foes(N)[0].power = 80;
+    N.flags.nemesisId = foes(N)[0].id;
+    foes(N)[0].nemesis = true;
     let moved = 0;
     for (let i = 0; i < 120 && moved < 6; i++) {
       N.date.month++;
@@ -790,12 +796,12 @@ section('11. Mandate, revolt, the file and the nemesis');
       if (r && r.move) moved++;
     }
     ok('a nemesis spends his turns on you', moved >= 3, `${moved} moves`);
-    ok('and it lands in the feed', N.feed.some((f) => f.src === N.player.rivals[0].name));
+    ok('and it lands in the feed', N.feed.some((f) => f.src === foes(N)[0].name));
     ok('he does not act every single month', N.flags.nemesisLast !== undefined);
 
     const Q = mk(241, 5);
-    Q.player.rivals[0].power = 80;
-    Q.flags.nemesisId = Q.player.rivals[0].id;
+    foes(Q)[0].power = 80;
+    Q.flags.nemesisId = foes(Q)[0].id;
     Q.tempo = 'week';
     ok('and he stays out of the campaign weeks', RZ.revolt.nemesisTurn(Q) === null);
 
@@ -805,7 +811,7 @@ section('11. Mandate, revolt, the file and the nemesis');
       const T = mk(242, 5);
       const a = RZ.engine.mkApi(T);
       try {
-        const o = mv.go(T, a, T.player.rivals[0]);
+        const o = mv.go(T, a, foes(T)[0]);
         if (!o || !o.title || !o.body) bad.push(`${mv.id}: no text`);
       } catch (e) { bad.push(`${mv.id}: ${e.message}`); }
     });
@@ -840,7 +846,7 @@ section('11. Mandate, revolt, the file and the nemesis');
     });
     const dumpAct = RZ.sprint.weekActionById('dump');
     ok('the dump is hidden without a file', !dumpAct.when(RZ.engine.mkApi(D)));
-    D.player.rivals[0].dirt = [{ label: 'a tender awarded to a relative', used: false }];
+    foes(D)[0].dirt = [{ label: 'a tender awarded to a relative', used: false }];
     ok('and offered with one', dumpAct.when(RZ.engine.mkApi(D)));
     let backfires = 0, runs = 0;
     for (let i = 0; i < 60; i++) {
@@ -848,7 +854,7 @@ section('11. Mandate, revolt, the file and the nemesis');
         countryId: 'ZA', seed: 300 + i, name: 'C', gender: 'f',
         regionId: cc.regions[0].id, bgId: RZ.BACKGROUNDS[0].id, partyId: cc.parties[0].id, startAs: 'candidate'
       });
-      T.player.rivals[0].dirt = [{ label: 'a tender', used: false }];
+      foes(T)[0].dirt = [{ label: 'a tender', used: false }];
       const res = dumpAct.run(RZ.engine.mkApi(T));
       runs++;
       if (T.player.dirt.some((d) => d.id === 'dump')) backfires++;
@@ -1065,7 +1071,7 @@ section('13. How you got into this');
     ok('the hustler has money and less of a conscience',
       hust.player.money > fire.player.money && hust.player.stats.integrity < fire.player.stats.integrity);
     ok('the schemer starts holding something on somebody',
-      schem.player.rivals.some((r) => (r.dirt || []).some((d) => !d.used)));
+      foes(schem).some((r) => (r.dirt || []).some((d) => !d.used)));
     ok('and can use it immediately', RZ.engine.mkApi(schem).hasLeverage());
     ok('the other two cannot', !RZ.engine.mkApi(fire).hasLeverage());
 
@@ -1161,7 +1167,7 @@ section('14. Capital for elite work, and the ways out of a nemesis');
   // Capital buys the elite manoeuvres; money buys the logistics.
   {
     const S = cand(600);
-    S.player.rivals[0].dirt = [{ label: 'a tender', used: false }];
+    foes(S)[0].dirt = [{ label: 'a tender', used: false }];
     S.player.capital = 3;
     const dump = RZ.sprint.weekActionById('dump');
     ok('a dump needs standing with a journalist, not cash', !dump.when(RZ.engine.mkApi(S)));
@@ -1186,8 +1192,8 @@ section('14. Capital for elite work, and the ways out of a nemesis');
     // Out of the campaign, because he deliberately stays out of those weeks.
     const S = cand(610);
     S.tempo = 'month'; S.sprint = null;
-    S.player.rivals[0].nemesis = true;
-    S.flags.nemesisId = S.player.rivals[0].id;
+    foes(S)[0].nemesis = true;
+    S.flags.nemesisId = foes(S)[0].id;
     ok('there is a nemesis', !!RZ.revolt.nemesisOf(S));
     for (let i = 0; i < 40; i++) {
       S.date.month++; if (S.date.month > 12) { S.date.month = 1; S.date.year++; }
@@ -1200,8 +1206,8 @@ section('14. Capital for elite work, and the ways out of a nemesis');
     // 1. Cross the floor.
     const D = cand(611);
     D.player.rungIdx = 3;
-    D.player.rivals[0].nemesis = true;
-    D.flags.nemesisId = D.player.rivals[0].id;
+    foes(D)[0].nemesis = true;
+    D.flags.nemesisId = foes(D)[0].id;
     D.tempo = 'month'; D.sprint = null;
     D.scandalRisk = 1.2;
     RZ.actionById['defect'].run(RZ.engine.mkApi(D));
@@ -1212,8 +1218,8 @@ section('14. Capital for elite work, and the ways out of a nemesis');
     const O = cand(612);
     O.tempo = 'month'; O.sprint = null;
     O.player.rungIdx = RZ.ladderFor('ZA').length - 3;
-    O.player.rivals[0].nemesis = true;
-    O.flags.nemesisId = O.player.rivals[0].id;
+    foes(O)[0].nemesis = true;
+    O.flags.nemesisId = foes(O)[0].id;
     let gone = false;
     for (let i = 0; i < 60 && !gone; i++) {
       O.date.month++; if (O.date.month > 12) { O.date.month = 1; O.date.year++; }
@@ -1223,21 +1229,18 @@ section('14. Capital for elite work, and the ways out of a nemesis');
     ok('outranking him eventually ends it', gone);
 
     // 3. Break him in public.
-    const E = cand(613);
-    E.player.rivals[0].nemesis = true;
-    E.player.rivals[0].power = 44;
-    E.player.rivals[0].dirt = [{ label: 'a second family', used: false }];
-    E.flags.nemesisId = E.player.rivals[0].id;
-    E.player.stats.cunning = 95;
     let ended = false;
     // A leak lands about half the time; vary the seed rather than rebuilding
     // the identical career thirty times and calling that thirty attempts.
     for (let i = 0; i < 30 && !ended; i++) {
       const T = cand(613 + i);
-      T.player.rivals[0].nemesis = true;
-      T.player.rivals[0].power = 44;
-      T.player.rivals[0].dirt = [{ label: 'a second family', used: false }];
-      T.flags.nemesisId = T.player.rivals[0].id;
+      // One person, held onto: foes() re-sorts by strength, so reading [0]
+      // again after changing a power is not reading the same man.
+      const him = foes(T)[0];
+      him.nemesis = true;
+      him.power = 44;
+      him.dirt = [{ label: 'a second family', used: false }];
+      T.flags.nemesisId = him.id;
       T.player.stats.cunning = 95;
       RZ.engine.mkApi(T).doLeak();
       if (!RZ.revolt.nemesisOf(T)) ended = true;
@@ -1680,9 +1683,10 @@ section('17. Proactive legislation');
       S.player.capital = 90;
       RZ.bill.table(S, RZ.engine.mkApi(S), 'wages');
       // Leverage lives on a rival, not in your own pocket.
+      let filed = null;
       if (how === 'extort') {
-        RZ.engine.mkApi(S).makeRival();
-        S.player.rivals[0].dirt.push({ id: 'x', label: 'A file nobody was meant to see', severity: 8 });
+        filed = RZ.field.addRival(S, 70);
+        filed.dirt.push({ id: 'x', label: 'A file nobody was meant to see', severity: 8 });
       }
       const target = S.bill.blocs.find((x) => !x.pledged);
       const before = target.lean;
@@ -1690,7 +1694,7 @@ section('17. Proactive legislation');
       ok('working a bloc with ' + how + ' moves it', r && target.lean > before,
         before + ' -> ' + (target && target.lean));
       if (how === 'extort') {
-        ok('and extortion spends the file', S.player.rivals[0].dirt[0].used === true);
+        ok('and extortion spends the file', filed.dirt[0].used === true);
         ok('and costs you something you cannot buy back', S.player.stats.integrity < 100);
       }
     }
@@ -2009,35 +2013,67 @@ section('18. The climbing contender');
     ok('and the drawer is emptier', T.contender.dirt.length === 0);
   }
 
-  // The rungs there is only one of.
+  // The rungs there is only one of. Occupancy is not a hard block — the field
+  // raises the price of the chair by however much the person in it is worth,
+  // which is a better answer than a refusal because it can be overcome.
   {
     const lad = RZ.ladderFor('ZA');
-    // Stand one below the first singular rung that is in somebody's gift.
     const appointIdx = lad.findIndex((r) => r.how === 'appoint' && r.tier >= 10);
-    const S = career('ZA', 1240, appointIdx - 1);
-    // Put them exactly in the chair the player is next in line for.
-    S.contender.rungIdx = S.player.rungIdx + 1;
-    const rung = lad[S.player.rungIdx + 1];
-    Object.keys(S.player.standing).forEach((k) => { S.player.standing[k] = 95; });
-    S.player.fame = 95;
-    if (rung.how === 'appoint') {
+
+    function tryFor(seed, occupy) {
+      const S = career('ZA', seed, appointIdx - 1);
       S.parties[S.player.partyId].gov = true;
-      const got = RZ.engine.considerAppointment(S);
-      ok('nobody is appointed to a chair somebody is sitting in', got === null, rung.title);
-      ok('and you are told why', S.feed.some((e) => /already/.test(e.body || '')));
-    } else {
-      ok('the contested rung is a vote, not an appointment', true);
+      Object.keys(S.player.standing).forEach((k) => { S.player.standing[k] = 70; });
+      S.player.fame = 70;
+      // Clear the chair, then seat somebody in it if the case asks for one.
+      S.field.forEach((f) => { if (f.rungIdx === appointIdx) f.rungIdx = 1; });
+      if (occupy) {
+        const f = RZ.field.ours(S)[0];
+        f.rungIdx = appointIdx;
+        f.role = lad[appointIdx].title;
+        f.power = 96;
+        f.side = 'rival';
+        RZ.field.syncLeadership(S);
+      }
+      let got = 0;
+      for (let i = 0; i < 60; i++) {
+        const T = career('ZA', seed + 1000 + i, appointIdx - 1);
+        T.parties[T.player.partyId].gov = true;
+        Object.keys(T.player.standing).forEach((k) => { T.player.standing[k] = 70; });
+        T.player.fame = 70;
+        T.field.forEach((f) => { if (f.rungIdx === appointIdx) f.rungIdx = 1; });
+        if (occupy) {
+          const f = RZ.field.ours(T)[0];
+          f.rungIdx = appointIdx; f.role = lad[appointIdx].title; f.power = 96; f.side = 'rival';
+          RZ.field.syncLeadership(T);
+        }
+        if (RZ.engine.considerAppointment(T)) got++;
+      }
+      return got;
     }
 
-    // Below the singular tiers there is room for both of you.
+    const empty = tryFor(1240, false);
+    const taken = tryFor(1240, true);
+    ok('a strong incumbent makes the chair much harder to get', taken < empty,
+      taken + '/60 with somebody in it vs ' + empty + '/60 empty');
+    ok('but it is a price, not a refusal — the empty chair is winnable', empty > 0, String(empty));
+
+    // Below the singular tiers there is room for more than one of you.
     const L = career('ZA', 1241, 4);
-    L.contender.rungIdx = L.player.rungIdx + 1;
     L.parties[L.player.partyId].gov = true;
     Object.keys(L.player.standing).forEach((k) => { L.player.standing[k] = 95; });
     L.player.fame = 95;
     const low = lad[L.player.rungIdx + 1];
     if (low.how === 'appoint') {
-      ok('there are many of the junior jobs', RZ.engine.considerAppointment(L) !== null, low.title);
+      let any = false;
+      for (let i = 0; i < 40 && !any; i++) {
+        const T = career('ZA', 1241 + i, 4);
+        T.parties[T.player.partyId].gov = true;
+        Object.keys(T.player.standing).forEach((k) => { T.player.standing[k] = 95; });
+        T.player.fame = 95;
+        if (RZ.engine.considerAppointment(T)) any = true;
+      }
+      ok('there are many of the junior jobs', any, low.title);
     } else {
       ok('the junior rung is not an appointment here', true);
     }
@@ -2055,7 +2091,9 @@ section('18. The climbing contender');
     ok('and the country now has their name on it', S.nation.presidentName === S.contender.name);
     ok('you are not the president', S.player.isPresident === false);
     ok('they become the nemesis every other mechanic already understands',
-      S.flags.nemesisId && S.player.rivals.some((r) => r.id === S.flags.nemesisId && r.nemesis));
+      !!(S.flags.nemesisId && RZ.revolt.nemesisOf(S) && RZ.revolt.nemesisOf(S).nemesis));
+    ok('and they take a seat in the field rather than a list of their own',
+      !!RZ.field.byId(S, S.flags.nemesisId));
     ok('and somebody sends for you', S.pendingScene === 'contender-throne');
     ok('the feed says so, loudly', S.feed[0] && S.feed[0].alert === true);
     ok('the throne scene exists', !!RZ.dialogue.byId('contender-throne'));
@@ -2065,34 +2103,48 @@ section('18. The climbing contender');
     ok('and it only happens once', S.pendingScene === null);
   }
 
-  // Taking the job off them on a conference floor.
+  // Taking the job off somebody on a conference floor. The person in the chair
+  // comes from the field now, so this is the field's contender, not ours — but
+  // the thing being tested is the same: a rung has a name on it, and taking it
+  // takes it off that name.
   {
-    const S = career('ZA', 1260, 9);
     const lad = RZ.ladderFor('ZA');
-    const rung = lad[S.player.rungIdx + 1];
-    S.contender.rungIdx = S.player.rungIdx + 1;
-    S.contender.power = 60;
-    Object.keys(S.player.standing).forEach((k) => { S.player.standing[k] = 99; });
-    S.player.fame = 99;
-    S.nextConference = S.date.year; S.date.month = 7;
-    const st = RZ.engine.contestStatus(S);
-    if (rung.how === 'conference' && st.available) {
-      ok('the hall knows who you are standing against', st.against && st.against.name === S.contender.name);
-      const before = S.contender.rungIdx;
+
+    function readyToContest(seed) {
+      const T = career('ZA', seed, 9);
+      const idx = T.player.rungIdx + 1;
+      // Put a beatable somebody in the chair the player wants.
+      T.field.forEach((f) => { if (f.rungIdx === idx) f.rungIdx = 1; });
+      const f = RZ.field.ours(T)[0];
+      f.rungIdx = idx; f.role = lad[idx].title; f.power = 20; f.side = 'neutral';
+      RZ.field.syncLeadership(T);
+      Object.keys(T.player.standing).forEach((k) => { T.player.standing[k] = 99; });
+      T.player.fame = 99; T.player.capital = 200;
+      T.nextConference = T.date.year; T.date.month = 7;
+      T.campaign.delegateSpend = 200;
+      return { S: T, rung: lad[idx], occupant: f };
+    }
+
+    const first = readyToContest(1260);
+    const st = RZ.engine.contestStatus(first.S);
+    if (first.rung.how === 'conference' && st.available) {
+      ok('the hall knows who you are standing against',
+        !!(st.against && st.against.name === first.occupant.name),
+        st.against ? st.against.name : 'nobody named');
+      ok('and how strong they are before you commit', typeof st.against.strength === 'number');
+
       let won = false;
       for (let i = 0; i < 30 && !won; i++) {
-        const T = career('ZA', 1260 + i, 9);
-        T.contender.rungIdx = T.player.rungIdx + 1;
-        T.contender.power = 20;
-        Object.keys(T.player.standing).forEach((k) => { T.player.standing[k] = 99; });
-        T.player.fame = 99; T.player.capital = 200;
-        T.nextConference = T.date.year; T.date.month = 7;
-        T.campaign.delegateSpend = 200;
-        const r = RZ.engine.contest(T);
+        const t = readyToContest(1260 + i);
+        const before = t.occupant.rungIdx;
+        const r = RZ.engine.contest(t.S);
         if (r && r.won) {
           won = true;
-          ok('winning it takes it off them', T.contender.rungIdx < T.player.rungIdx);
-          ok('and they do not forgive it', T.contender.relation === 'hostile');
+          ok('winning it takes it off them',
+            t.occupant.rungIdx < before || t.occupant.retired === true,
+            before + ' -> ' + t.occupant.rungIdx + (t.occupant.retired ? ' (retired)' : ''));
+          ok('and they do not forgive it', t.occupant.side === 'rival' || t.occupant.retired === true);
+          ok('and the sheet names who was deposed', !!(r.deposed && r.deposed.name));
         }
       }
       ok('a strong player can take a contested rung', won);
