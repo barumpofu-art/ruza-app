@@ -22,7 +22,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FILES = [
   'core.js', 'data-countries.js', 'data-ladder.js', 'data-actions.js',
   'data-events.js', 'data-dialogue.js', 'data-origins.js', 'people.js', 'field.js', 'elections.js',
-  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js', 'constituency.js', 'statecraft.js', 'legislation.js', 'contender.js', 'blocs.js', 'cast.js'
+  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js', 'constituency.js', 'statecraft.js', 'legislation.js', 'contender.js', 'blocs.js', 'cast.js', 'docket.js'
 ];
 
 function loadGame() {
@@ -91,6 +91,19 @@ const DIRTY = new Set(['patron', 'tender', 'leak', 'oppo']);
 
 function chooseAction(RZ, S, acts, policy) {
   if (policy === 'random') return acts[Math.floor(RZ.rnd() * acts.length)];
+
+  // A player looks at the diary. It is two gold-bordered cards at the top of
+  // the desk, not one row of thirty — so a directed policy that picks purely on
+  // what it is short of models nobody, and makes the docket look ignored when
+  // it is only invisible to the simulator. Take a booked appointment more often
+  // than not, and let the strategy have the rest of the month.
+  if (RZ.docket) {
+    const waiting = RZ.docket.open(S).filter((e) => acts.some((a2) => a2.id === e.actionId));
+    if (waiting.length && RZ.chance(0.55)) {
+      const e = waiting[Math.floor(RZ.rnd() * waiting.length)];
+      return acts.filter((a2) => a2.id === e.actionId)[0];
+    }
+  }
 
   // Eight weeks out, the seat is the only thing that matters. Blitz the ward
   // you are losing, and keep the taxis booked.
@@ -233,6 +246,8 @@ function playCareer(seed, { trace = false, policy = 'random' } = {}) {
     billsTabled: 0, billsPassed: 0, billsLost: 0, billsLapsed: 0,
     contenderRung: 0, contenderGap: 0, contenderThrone: 0, contenderAllied: 0,
     blocSwing: 0, blocSpread: 0, blocWorst: 0, blocBest: 0, deputations: 0,
+    booked: 0, keptAppt: 0, declined: 0, stoodUp: 0,
+    castKnown: 0, castMean: 0, castWorst: 0, castFloored: 0, castWarm: 0,
     contenderFiles: 0, readings: 0,
     blocsWorked: 0, blocsPledged: 0, concessions: 0,
     revolts: 0, revoltsWon: 0, exiled: 0, apologies: 0, blackmails: 0,
@@ -249,6 +264,19 @@ function playCareer(seed, { trace = false, policy = 'random' } = {}) {
   let lastGov = govBefore();
 
   while (!S.over && r.turns < MAX_TURNS) {
+    // ---- the diary ----
+    // A random player cancels on a whim; a directed one only cancels when the
+    // month is already full of things it wants more.
+    if (RZ.docket) {
+      const waiting = RZ.docket.open(S);
+      r.booked += waiting.length;
+      const cut = policy === 'directed' ? 0.15 : 0.35;
+      if (waiting.length > 1 && RZ.chance(cut)) {
+        r.declined++;
+        RZ.docket.decline(S, waiting[Math.floor(RZ.rnd() * waiting.length)].actionId);
+      }
+    }
+
     // ---- spend the month ----
     let guard = 0;
     while (S.actionsLeft > 0 && guard++ < 12) {
@@ -368,6 +396,12 @@ function playCareer(seed, { trace = false, policy = 'random' } = {}) {
     }
 
     // ---- the month turns ----
+    if (RZ.docket) {
+      const sm = RZ.docket.summary(S);
+      r.keptAppt += sm.kept;
+      r.stoodUp += sm.open;          // nobody said no, nobody came
+    }
+
     let turnOut;
     try { turnOut = RZ.engine.endTurn(S); }
     catch (e) { throw new Error(`endTurn threw in ${cid} at turn ${S.turn}: ${e.message}`); }
@@ -461,6 +495,20 @@ function playCareer(seed, { trace = false, policy = 'random' } = {}) {
     r.contenderGap = S.contender.rungIdx - P.rungIdx;
     r.contenderAllied = S.contender.relation === 'allied' ? 1 : 0;
     r.contenderFiles = S.contender.dirt.length;
+  }
+  if (RZ.cast) {
+    // Where a whole career of meetings, sides taken and appointments not kept
+    // leaves the people who were in the room. If this piles up at the floor the
+    // diary has become a ratchet.
+    const known = RZ.cast.all(S);
+    r.castKnown = known.length;
+    if (known.length) {
+      const rels = known.map((p) => p.rel);
+      r.castMean = rels.reduce((a2, b2) => a2 + b2, 0) / rels.length;
+      r.castWorst = Math.min(...rels);
+      r.castFloored = rels.filter((v) => v <= -45).length / rels.length;
+      r.castWarm = rels.filter((v) => v >= 25).length / rels.length;
+    }
   }
   r.integrity = Math.round(P.stats.integrity);
   r.money = Math.round(P.money);
@@ -635,6 +683,12 @@ console.log(`  the electorate           swing ${fmt(mean((r) => r.blocSwing), 1)
   fmt(mean((r) => r.blocBest))} / worst ${fmt(mean((r) => r.blocWorst))}, spread ${fmt(mean((r) => r.blocSpread))}`);
 console.log(`  deputations              ${fmt(mean((r) => r.deputations), 2)} per career, ${
   fmt(pct((r) => r.deputations > 0))}% of careers had one`);
+console.log(`  the diary                ${fmt(mean((r) => r.booked), 1)} appointments per career: ${
+  fmt(mean((r) => r.keptAppt), 1)} kept, ${fmt(mean((r) => r.declined), 1)} cancelled, ${
+  fmt(mean((r) => r.stoodUp), 1)} simply not attended`);
+console.log(`  the people in the rooms  ${fmt(mean((r) => r.castKnown), 1)} known by the end; mean feeling ${
+  fmt(mean((r) => r.castMean), 1)}, worst ${fmt(mean((r) => r.castWorst), 1)}; ${
+  fmt(100 * mean((r) => r.castFloored))}% cold, ${fmt(100 * mean((r) => r.castWarm))}% warm`);
 console.log(`  the other one            ends on rung ${fmt(mean((r) => r.contenderRung), 1)}, ${
   fmt(mean((r) => r.contenderGap), 1)} rungs from you; ahead of you in ${fmt(pct((r) => r.contenderGap > 0))}% of careers`);
 console.log(`  they reached the top     ${fmt(pct((r) => r.contenderThrone))}% of careers${
@@ -706,6 +760,28 @@ if (mean((r) => r.sprints) > 0 && mean((r) => r.blitzes) === 0) w('the sprint ru
   if (mean((r) => r.blocSpread) < 8) w('the blocs never diverge — policy is not a trade');
   if (mean((r) => r.blocSpread) > 75) w('the blocs diverge wildly — one decision writes off half the country');
   if (mean((r) => r.deputations) === 0) w('no bloc ever sent a deputation — the trigger may be unreachable');
+}
+{
+  // A relationship system with nothing pulling back is a ratchet: every push is
+  // downward and a long career ends with a cast that uniformly hates you.
+  const known = mean((r) => r.castKnown);
+  if (known >= 3) {
+    const floored = 100 * mean((r) => r.castFloored);
+    if (floored > 55) w(`${fmt(floored)}% of the cast ends a career cold — the relationship push is one-way`);
+    if (mean((r) => r.castWarm) === 0) w('nobody is ever warm to you by the end — being liked may be unreachable');
+  }
+}
+{
+  // The diary has to be a real constraint and a real choice: if every month is
+  // fully booked there is nothing to choose, and if nothing is ever booked the
+  // whole thing is decoration.
+  const booked = mean((r) => r.booked);
+  if (booked === 0) w('nothing was ever put in the diary — the docket may be unreachable');
+  else {
+    const kept = 100 * sum((r) => r.keptAppt) / sum((r) => r.booked);
+    if (kept < 8) w(`only ${fmt(kept)}% of appointments are ever kept — the diary is being ignored`);
+    if (kept > 92) w(`${fmt(kept)}% of appointments are kept — the free slots are not being used`);
+  }
 }
 if (policy === 'directed' && mean((r) => r.billsTabled) === 0) {
   w('no bill was ever tabled — the order paper may be unreachable');

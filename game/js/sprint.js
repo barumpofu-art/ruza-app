@@ -37,6 +37,8 @@
 
   function begin(S) {
     S.tempo = 'week';
+    // The month it eats was already booked; nobody is stood up for an election.
+    if (RZ.docket) RZ.docket.suspend(S);
     S.date.week = 1;
     S.sprint = {
       kind: 'election', weeksLeft: WEEKS, week: 1,

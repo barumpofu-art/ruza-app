@@ -611,3 +611,21 @@ strong.good{ color:var(--green); } strong.mid{ color:var(--gold); } strong.bad{ 
 .whip-bar{ height:7px; border-radius:4px; background:var(--line-soft); overflow:hidden; margin-bottom:8px; position:relative; }
 .whip-bar::after{ content:''; position:absolute; left:50%; top:-2px; bottom:-2px; width:1px; background:var(--text-faint); opacity:.7; }
 .whip-bar span{ display:block; height:100%; border-radius:4px; transition:width .3s ease; }
+
+/* the diary — appointments somebody else put in your month */
+.dk-row{ display:flex; align-items:stretch; gap:7px; }
+.dk{ border-color:var(--gold-deep); background:linear-gradient(180deg,#1e2434,#161f2a); }
+.dk .act-ico{ background:#2a2418; border-color:#54452a; }
+.dk .act-d strong{ color:var(--text-dim); font-weight:650; }
+.dk-head{ display:flex; align-items:baseline; gap:9px; }
+.dk-head .act-n{ flex:1 1 auto; min-width:0; }
+.dk-at{ flex:0 0 auto; font-family:var(--mono); font-size:.7rem; color:var(--gold); font-weight:500; }
+.dk.done .dk-at{ color:var(--green); }
+.dk.done{ opacity:.55; border-color:var(--line); background:var(--panel); cursor:default; }
+.dk.done .act-ico{ color:var(--green); }
+.dk-x{
+  flex:0 0 auto; width:52px; border-radius:var(--radius-sm);
+  border:1px solid var(--line); background:var(--ink-2); color:var(--text-faint);
+  font-size:.66rem; letter-spacing:.04em; cursor:pointer; padding:0 4px;
+}
+.dk-x:active{ transform:scale(.98); }

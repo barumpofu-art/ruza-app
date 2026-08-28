@@ -17,7 +17,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FILES = [
   'core.js', 'data-countries.js', 'data-ladder.js', 'data-actions.js',
   'data-events.js', 'data-dialogue.js', 'data-origins.js', 'people.js', 'field.js', 'elections.js',
-  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js', 'constituency.js', 'statecraft.js', 'legislation.js', 'contender.js', 'blocs.js', 'cast.js'
+  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js', 'constituency.js', 'statecraft.js', 'legislation.js', 'contender.js', 'blocs.js', 'cast.js', 'docket.js'
 ];
 
 function loadGame() {
@@ -686,16 +686,30 @@ section('11. Mandate, revolt, the file and the nemesis');
       RZ.revolt.revoltOdds(strong).pct > RZ.revolt.revoltOdds(weak).pct,
       `${RZ.revolt.revoltOdds(strong).pct}% vs ${RZ.revolt.revoltOdds(weak).pct}%`);
 
-    // Winning promotes.
-    const W = mk(213, 4);
-    W.player.capital = 90; W.player.standing.party = 95; W.player.standing.grassroots = 95;
-    foes(W).forEach((r) => { r.power = 5; });
-    const rungBefore = W.player.rungIdx;
-    const res = RZ.revolt.revolt(W, RZ.engine.mkApi(W));
-    ok('a won revolt promotes you', res.won && W.player.rungIdx > rungBefore,
-      `${rungBefore} -> ${W.player.rungIdx}`);
-    ok('and grants the mandate', RZ.revolt.mandateActive(W));
-    ok('and costs capital', W.player.capital < 90);
+    // Winning promotes. The odds cap at 92%, so a revolt is a roll however
+    // strong the challenger is, and any change anywhere else in the game moves
+    // the seeded stream under a fixed seed. Run it enough times to separate
+    // what the rules do from what the dice did.
+    const strongRevolt = (seed) => {
+      const W = mk(seed, 4);
+      W.player.capital = 90; W.player.standing.party = 95; W.player.standing.grassroots = 95;
+      foes(W).forEach((r) => { r.power = 5; });
+      const before = W.player.rungIdx;
+      return { S: W, before, res: RZ.revolt.revolt(W, RZ.engine.mkApi(W)) };
+    };
+    let won = 0, promoted = 0, mandated = 0, paid = 0;
+    for (let seed = 213; seed < 253; seed++) {
+      const t = strongRevolt(seed);
+      if (t.S.player.capital < 90) paid++;
+      if (!t.res.won) continue;
+      won++;
+      if (t.S.player.rungIdx > t.before) promoted++;
+      if (RZ.revolt.mandateActive(t.S)) mandated++;
+    }
+    ok('a strong challenger wins most of the time', won >= 28, `${won}/40`);
+    ok('a won revolt promotes you', won > 0 && promoted === won, `${promoted}/${won}`);
+    ok('and grants the mandate', won > 0 && mandated === won, `${mandated}/${won}`);
+    ok('and costs capital win or lose', paid === 40, `${paid}/40`);
   }
 
   // Losing is an ultimatum, never a game over.
@@ -2867,6 +2881,228 @@ section('21. Multi-speaker rooms');
       names.every((n) => known.includes(n)), names.join(', '));
     ok('and the sides taken survive the save',
       RZ.cast.all(back).some((p) => p.sidedWith > 0 || p.sidedAgainst > 0));
+  }
+}
+
+/* ================= 22. the diary ================= */
+section('22. The docket');
+{
+  // The diary is built for the state it is looked at in, so a test that moves
+  // the player up the ladder has to ask for it again.
+  const diary = (S) => RZ.docket.build(S).entries;
+
+  {
+    const S = career('ZA', 2400, 6);
+    const es = diary(S);
+    ok('the month opens with things already in it', es.length > 0, String(es.length));
+    ok('but never with the whole month in it',
+      es.length < S.actionsPerTurn, es.length + ' of ' + S.actionsPerTurn);
+    ok('every appointment has a time on it', es.every((e) => /^\d\d:\d\d$/.test(e.at)));
+    ok('and no two of them are the same thing',
+      new Set(es.map((e) => e.actionId)).size === es.length);
+    ok('and each one is an action you could actually take',
+      es.every((e) => RZ.engine.availableActions(S).some((a) => a.id === e.actionId)));
+    ok('and none of them is a picker that asks a question first',
+      es.every((e) => !(RZ.actionById[e.actionId] || {}).special));
+    ok('most of them have a person behind them',
+      es.filter((e) => e.who).length >= Math.ceil(es.length / 2),
+      es.map((e) => (e.who ? e.who.name : '—')).join(', '));
+    ok('and a reason that is a sentence', es.every((e) => e.why && e.why.length > 12));
+  }
+
+  // A weekly clock already owns the diary; a second one on top of it is noise.
+  {
+    const S = career('ZA', 2401, 6);
+    RZ.sprint.begin(S);
+    ok('a campaign sprint clears the diary', diary(S).length === 0);
+    ok('and the sprint is what is running instead', S.tempo === 'week');
+  }
+
+  // Somebody you already know, holding something, beats a stranger.
+  {
+    const S = career('ZA', 2402, 6);
+    const c = RZ.COUNTRIES.ZA;
+    const known = RZ.cast.who(S, c, 'the Chief Whip', '');
+    known.met = 4;
+    RZ.cast.remember(S, known, 'You said you would move the clause and you did not', 'bad');
+    const stranger = RZ.cast.who(S, c, 'the bishop', '');
+    const wKnown = RZ.docket.weightFor(S, { person: known });
+    const wStranger = RZ.docket.weightFor(S, { person: stranger });
+    const wNobody = RZ.docket.weightFor(S, { person: null });
+    ok('somebody you know outweighs a stranger', wKnown > wStranger);
+    ok('and a stranger outweighs nobody at all', wStranger > wNobody);
+  }
+
+  // Keeping and declining move the same person in opposite directions.
+  {
+    const S = career('ZA', 2403, 6);
+    let es = diary(S).filter((e) => e.who && e.who.key);
+    let guard = 0;
+    while (!es.length && guard++ < 40) es = diary(S).filter((e) => e.who && e.who.key);
+    ok('a diary with a named person in it turns up', es.length > 0);
+    const e = es[0];
+    const before = RZ.cast.get(S, e.who.key).rel;
+    RZ.docket.keep(S, e.actionId);
+    ok('turning up is worth something', RZ.cast.get(S, e.who.key).rel > before);
+    ok('and the entry is marked kept', RZ.docket.entryFor(S, e.actionId) === null);
+    ok('and it counts', RZ.docket.summary(S).kept === 1);
+  }
+
+  // Cancelling is the courteous half of not coming, and it is priced that way.
+  {
+    const S = career('ZA', 2404, 6);
+    let es = diary(S).filter((x) => x.who && x.who.key);
+    let guard = 0;
+    while (!es.length && guard++ < 40) es = diary(S).filter((x) => x.who && x.who.key);
+    const e = es[0];
+    const p0 = RZ.cast.get(S, e.who.key).rel;
+    const feed0 = S.feed.length;
+    const left = S.actionsLeft;
+    RZ.docket.decline(S, e.actionId);
+    const p = RZ.cast.get(S, e.who.key);
+    ok('cancelling on somebody costs you with them', p.rel < p0, p0 + ' → ' + p.rel);
+    ok('but it does not cost an action', S.actionsLeft === left);
+    ok('and it is not an event in itself', S.feed.length === feed0);
+    ok('and they do not file it against you', !p.stoodUp);
+    ok('and the appointment is gone from the diary', RZ.docket.entryFor(S, e.actionId) === null);
+    ok('and cannot be cancelled twice', RZ.docket.decline(S, e.actionId) === null);
+  }
+
+  // Silence is the expensive one. If it were the other way round the Cancel
+  // button would be a trap and nobody would ever press it.
+  {
+    const S = career('ZA', 2405, 6);
+    let es = diary(S).filter((x) => x.who && x.who.key);
+    let guard = 0;
+    while (!es.length && guard++ < 40) es = diary(S).filter((x) => x.who && x.who.key);
+    const e = es[0];
+    const p0 = RZ.cast.get(S, e.who.key).rel;
+    const feed0 = S.feed.length;
+    const closed = RZ.docket.close(S);
+    ok('the month turning stands up whatever was left', closed.length > 0, String(closed.length));
+    const p = RZ.cast.get(S, e.who.key);
+    ok('not turning up costs you with them', p.rel < p0, p0 + ' → ' + p.rel);
+    ok('and they count it', p.stoodUp === 1);
+    ok('and they remember it', p.memory.some((m) => m.tone === 'bad'));
+    ok('and it is in the record', S.feed.length > feed0);
+    ok('one card for the month, however many mornings', S.feed.length === feed0 + 1);
+    ok('and nothing is left open', RZ.docket.open(S).length === 0);
+  }
+
+  // The two prices, measured against each other on the same person.
+  {
+    const cost = (fn, seed) => {
+      let total = 0, n = 0;
+      for (let i = 0; i < 40; i++) {
+        const S = career('ZA', seed + i, 6);
+        const es = diary(S).filter((x) => x.who && x.who.key);
+        if (!es.length) continue;
+        const e = es[0];
+        const before = RZ.cast.get(S, e.who.key).rel;
+        fn(S, e);
+        total += before - RZ.cast.get(S, e.who.key).rel;
+        n++;
+      }
+      return n ? total / n : 0;
+    };
+    const said = cost((S, e) => RZ.docket.decline(S, e.actionId), 2500);
+    const silent = cost((S) => RZ.docket.close(S), 2600);
+    ok('saying so costs something', said > 0, said.toFixed(1));
+    ok('and saying nothing costs more', silent > said * 1.5,
+      `${said.toFixed(1)} vs ${silent.toFixed(1)}`);
+  }
+
+  // A turn ends with next month already written.
+  {
+    const S = career('ZA', 2406, 6);
+    const first = diary(S).map((e) => e.actionId).join(',');
+    RZ.engine.endTurn(S);
+    if (!S.over) {
+      ok('the next month arrives with its own diary',
+        S.tempo === 'week' || RZ.docket.entries(S).length > 0);
+      ok('and it is stamped to the month it belongs to', S.docket.turn === S.turn);
+      ok('and none of it is already kept or declined',
+        RZ.docket.entries(S).every((e) => !e.kept && !e.declined));
+    }
+  }
+
+  // The diary promises a person; the room delivers that person.
+  {
+    const S = career('ZA', 2407, 6);
+    let es = diary(S).filter((x) => x.sceneId && x.who);
+    let guard = 0;
+    while (!es.length && guard++ < 40) es = diary(S).filter((x) => x.sceneId && x.who);
+    if (es.length) {
+      const e = es[0];
+      const sc = RZ.docket.sceneFor(S, e.actionId);
+      ok('the booked room is still the booked room', sc && sc.id === e.sceneId, e.sceneId);
+      const out = RZ.engine.doAction(S, e.actionId);
+      ok('and taking the appointment opens it', !!(out && out.dialogue));
+      ok('and the person in it is the person the diary named',
+        RZ.cast.shortOf(S, out.dialogue.speaker) === e.who.name,
+        e.who.name + ' vs ' + out.dialogue.speaker.name);
+      ok('and turning up was recorded', RZ.docket.summary(S).kept === 1);
+    }
+  }
+
+  // The diary pushes a relationship down every single month. Without something
+  // pulling the other way that is a one-way ratchet, and the whole cast ends a
+  // long career on the floor.
+  {
+    const S = career('ZA', 2409, 6);
+    const c = RZ.COUNTRIES.ZA;
+    const p = RZ.cast.who(S, c, 'the Chief Whip', '');
+    p.rel = 0; p.lastSeen = 0;
+    for (let i = 0; i < 400; i++) { S.turn = i; RZ.cast.ding(S, p, 4, -45); }
+    ok('cancelling on somebody, over and over, only gets you as far as cold',
+      p.rel >= -45, String(Math.round(p.rel)));
+    const q = RZ.cast.who(S, c, 'the bishop', '');
+    q.rel = 0; q.lastSeen = 0;
+    for (let i = 0; i < 400; i++) { S.turn = i; RZ.cast.ding(S, q, 10, -70); }
+    ok('never turning up goes further, and still stops short of the floor',
+      q.rel >= -70 && q.rel < -45, String(Math.round(q.rel)));
+  }
+
+  {
+    const S = career('ZA', 2410, 6);
+    const c = RZ.COUNTRIES.ZA;
+    const bad = RZ.cast.who(S, c, 'the Chief Whip', '');
+    const good = RZ.cast.who(S, c, 'the bishop', '');
+    bad.rel = -60; good.rel = 60;
+    bad.lastSeen = 0; good.lastSeen = 0;
+    S.turn = 3;
+    RZ.cast.drift(S, 1);
+    ok('a grievance three months old has not started to fade', bad.rel === -60);
+    S.turn = 120;
+    for (let i = 0; i < 100; i++) RZ.cast.drift(S, 1);
+    ok('but years of never seeing them softens it', bad.rel > -60 && bad.rel < 0,
+      String(Math.round(bad.rel)));
+    ok('and it cools a friendship the same way', good.rel < 60 && good.rel > 0,
+      String(Math.round(good.rel)));
+    ok('neither of them crosses over', bad.rel < 0 && good.rel > 0);
+    ok('and somebody you were never anything to stays nothing',
+      RZ.cast.who(S, c, 'the editor', '').rel !== undefined);
+  }
+
+  // Being seen resets the clock: a relationship you are actually maintaining
+  // does not decay under you.
+  {
+    const S = career('ZA', 2411, 6);
+    const p = RZ.cast.who(S, RZ.COUNTRIES.ZA, 'the Chief Whip', '');
+    p.rel = 50;
+    for (let i = 0; i < 60; i++) { S.turn = i; p.lastSeen = i; RZ.cast.drift(S, 1); }
+    ok('a relationship you keep up does not decay', p.rel === 50);
+  }
+
+  // And all of it round-trips.
+  {
+    const S = career('ZA', 2408, 6);
+    diary(S);
+    const before = JSON.stringify(S.docket);
+    RZ.engine.save(S);
+    const back = RZ.engine.load();
+    ok('the diary survives a save', JSON.stringify(back.docket) === before);
+    ok('and is still usable on the other side', RZ.docket.entries(back).length === S.docket.entries.length);
   }
 }
 

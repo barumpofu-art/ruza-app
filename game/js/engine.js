@@ -47,6 +47,8 @@
       flags: {}, feed: [], pendingEvent: null, seenEvents: {},
       actionsLeft: 3, actionsPerTurn: 3, skipTurns: 0, actionsThisMonth: 0,
       buffs: [], capture: { patrons: [], granted: 0, refused: 0 },
+      // What is already in the diary this month, and who put it there.
+      docket: null,
       // Rises while somebody is actively looking for something on you, and
       // falls back when nobody is. Multiplies the chance a file breaks.
       scandalRisk: 0,
@@ -198,6 +200,9 @@
         tone: 'good'
       });
     }
+
+    // The first month is not an empty page either.
+    if (RZ.docket) RZ.docket.build(S);
 
     return S;
   }
@@ -619,10 +624,14 @@
     // Some of these are meetings, not dice rolls. If a conversation is waiting
     // on this topic, the player has to sit through it and answer for himself;
     // the feed entry is written when the room empties.
-    var scene = RZ.dialogue && RZ.dialogue.sceneFor(S, id);
+    // If this was booked, the person in the room is the person the diary
+    // named — the scene was picked when the appointment was made.
+    var booked = RZ.docket && RZ.docket.sceneFor(S, id);
+    var scene = booked || (RZ.dialogue && RZ.dialogue.sceneFor(S, id));
     if (scene) {
       S.actionsLeft -= (act.ap || 1);
       S.actionsThisMonth = (S.actionsThisMonth || 0) + (act.ap || 1);
+      if (RZ.docket) RZ.docket.keep(S, id);
       return { dialogue: RZ.dialogue.begin(S, scene, act) };
     }
 
@@ -631,6 +640,7 @@
     if (!res || res.fail) return { fail: true, res: res, deltas: [] };
     S.actionsLeft -= (act.ap || 1);
     S.actionsThisMonth = (S.actionsThisMonth || 0) + (act.ap || 1);
+    if (RZ.docket) RZ.docket.keep(S, id);
     var entry = {
       kind: res.tone === 'good' ? 'good' : (res.tone === 'bad' ? 'bad' : 'flat'),
       src: (typeof act.name === 'function' ? act.name(api) : act.name),
@@ -800,6 +810,10 @@
     // The electorate reads the same newspaper you do, and six different parts
     // of it draw six different conclusions from it.
     if (RZ.blocs) out.blocs = RZ.blocs.tick(S, span, out);
+    // Everybody you have ever sat with drifts back toward indifference when
+    // you stop appearing. Without this every push on a relationship is one-way
+    // and the whole cast ends a long career at the floor.
+    if (RZ.cast) RZ.cast.drift(S, span);
     // The ward keeps its own opinion of you, and the sites keep building or
     // stop, whether or not you spent an action on them this month.
     if (RZ.ward && mkApi(S).tier() >= 4) RZ.ward.tick(S, span, out);
@@ -827,6 +841,10 @@
     S.actionsLeft = S.actionsPerTurn;
     if (S.skipTurns > 0) { S.skipTurns--; S.actionsLeft = 0; }
     S.actionsThisMonth = 0;
+
+    // Whatever nobody turned up to has now been stood up, and the new month
+    // arrives with two or three things already written into it.
+    if (RZ.docket) { RZ.docket.close(S); RZ.docket.build(S); }
 
     save(S);
     return out;

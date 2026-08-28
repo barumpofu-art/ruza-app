@@ -217,9 +217,15 @@
 
     h += contestCard();
 
-    h += '<div class="block"><div class="block-h">This month' +
+    h += docketBoard(S);
+
+    var booked = {};
+    if (RZ.docket) RZ.docket.entries(S).forEach(function (e) { if (!e.declined) booked[e.actionId] = true; });
+    var hasDiary = Object.keys(booked).length > 0;
+
+    h += '<div class="block"><div class="block-h">' + (hasDiary ? 'The rest of the month' : 'This month') +
          '<span class="sub">' + S.actionsLeft + ' of ' + S.actionsPerTurn + ' left</span></div>';
-    var acts = RZ.engine.availableActions(S);
+    var acts = RZ.engine.availableActions(S).filter(function (a) { return !booked[a.id]; });
     h += '<div class="acts">' + acts.map(function (a) {
       return '<button class="act" data-action="' + a.id + '"' + (S.actionsLeft <= 0 ? ' disabled' : '') + '>' +
         '<span class="act-ico">' + a.ico + '</span>' +
@@ -241,6 +247,54 @@
       b.addEventListener('click', function () { RZ.main.act('blitz'); });
     });
     bindDesk();
+  }
+
+  // The diary. Two or three of these were arranged by somebody else, for a
+  // reason that is true of them, and the month is what is left over after
+  // them. Cancelling is a button because saying so is the courteous half of
+  // not coming; the expensive half is letting the month run out in silence.
+  function docketBoard(S) {
+    if (!RZ.docket) return '';
+    var all = RZ.docket.entries(S);
+    if (!all.length) return '';
+    var live = all.filter(function (e) { return !e.declined; });
+    var stood = all.filter(function (e) { return e.declined; }).length;
+    if (!live.length && !stood) return '';
+
+    var kept = live.filter(function (e) { return e.kept; }).length;
+    var h = '<div class="block"><div class="block-h">In the diary' +
+      '<span class="sub">' + (live.length - kept) + ' still to keep</span></div>';
+
+    h += '<div class="acts">' + live.map(function (e) {
+      var who = e.who ? '<strong>' + esc(e.who.name) + ', ' + esc(e.who.role) + '</strong><br>' : '';
+      if (e.kept) {
+        return '<div class="act dk done">' +
+          '<span class="act-ico">\u2713</span>' +
+          '<span class="act-txt">' +
+            '<span class="dk-head"><span class="act-n">' + esc(e.name) + '</span>' +
+              '<span class="dk-at">kept</span></span>' +
+            '<span class="act-d">' + (e.who ? esc(e.who.name) + ' \u00b7 ' : '') + e.at + '</span>' +
+          '</span></div>';
+      }
+      return '<div class="dk-row">' +
+        '<button class="act dk" data-action="' + e.actionId + '"' + (S.actionsLeft <= 0 ? ' disabled' : '') + '>' +
+          '<span class="act-ico">' + e.ico + '</span>' +
+          '<span class="act-txt">' +
+            '<span class="dk-head"><span class="act-n">' + esc(e.name) + '</span>' +
+              '<span class="dk-at">' + e.at + '</span></span>' +
+            '<span class="act-d">' + who + esc(e.why) + '</span>' +
+          '</span>' +
+        '</button>' +
+        '<button class="dk-x" data-decline="' + e.actionId + '" title="Send word that you are not coming">' +
+          'Cancel</button>' +
+        '</div>';
+    }).join('') + '</div>';
+
+    if (stood) {
+      h += '<p class="note" style="margin:9px 0 0">' + stood + ' appointment' + (stood === 1 ? '' : 's') +
+        ' cancelled. They were told, which costs you far less than letting them sit there.</p>';
+    }
+    return h + '</div>';
   }
 
   // A bill is an arithmetic problem wearing a title. The four rooms it has to
@@ -502,6 +556,9 @@
     var host = el('#pane-desk');
     host.querySelectorAll('[data-action]').forEach(function (b) {
       b.addEventListener('click', function () { RZ.main.act(b.dataset.action); });
+    });
+    host.querySelectorAll('[data-decline]').forEach(function (b) {
+      b.addEventListener('click', function () { RZ.main.decline(b.dataset.decline); });
     });
     host.querySelectorAll('[data-act="end-turn"]').forEach(function (b) {
       b.addEventListener('click', RZ.main.endTurn);

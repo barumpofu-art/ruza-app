@@ -201,6 +201,8 @@
       spent: 0, concessions: 0, extorted: 0
     };
     S.tempo = 'week';
+    // The month it eats was already booked; nobody is stood up for an election.
+    if (RZ.docket) RZ.docket.suspend(S);
     S.date.week = 1;
     api.add('capital', -RZ.range(8, 14));
     api.add('media', RZ.range(2, 6));

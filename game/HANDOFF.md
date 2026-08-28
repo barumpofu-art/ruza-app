@@ -44,6 +44,7 @@ price.
 | `js/contender.js` | *One* named rival who starts the same year — see the note below |
 | `js/blocs.js` | Six demographic blocs cutting across the regions |
 | `js/cast.js` | The persistent cast: the same people, meeting after meeting, and who is called what on screen |
+| `js/docket.js` | The diary: appointments somebody else booked, and the cost of not turning up |
 | `js/ui.js` | All rendering. One module, no framework |
 | `js/main.js` | Bootstrap and flow control |
 
@@ -174,7 +175,7 @@ cannot be filled cleanly · constituency projects, trust and abandonment · MP d
 tier-distinct phases for minister, VP and president · burnout, black swans, purges,
 promises, state capture and SADC intervention · the caucus revolt with a non-fatal
 ultimatum · the nemesis · proactive legislation with a four-bloc House · the climbing
-contender · six demographic blocs.
+contender · six demographic blocs · the diary of appointments somebody else booked.
 
 ## What is next
 
@@ -199,8 +200,30 @@ engine rather than a dashboard with prose on it. Build order, highest leverage f
 
    **Adding one:** authored is the house style for pivotal rooms. Assembled-from-faction
    arguments are possible on the same engine and nothing has been built that way yet.
-4. **The Docket.** Replace the action grid with a scheduled day of named appointments
-   plus a free slot.
+4. ~~**The Docket.**~~ **Done** (`js/docket.js`). The month no longer opens as an empty
+   menu: `build(S)` writes two or three appointments into `S.docket.entries`, each one an
+   action from the same deck, each with a time, a named person from the cast, and a reason
+   read off that person rather than picked at random. The grid underneath becomes "the rest
+   of the month".
+
+   Three rules hold it together and none of them should be quietly relaxed:
+   - **It never fills the month.** `slotsFor` returns `actionsPerTurn - 1`, capped at three.
+     The free slot is the whole point; a diary with no room in it is a corridor.
+   - **It costs nothing extra.** An appointment is the same action at the same AP. What is
+     new is only that *not* going is now a recorded act.
+   - **The diary cannot lie.** The scene is chosen when the appointment is booked and its id
+     is stored on the entry; `RZ.docket.sceneFor` hands it back to `doAction`, so the person
+     who was promised is the person in the room. Fall back to a fresh `sceneFor` only when
+     the booked scene has stopped being reachable.
+
+   Three ways an appointment ends, at three prices, and **the order matters**: keeping it
+   (`keep`, +2 rel, called from `doAction`), cancelling it (`decline`, -2..6 rel, no action
+   spent because not going somewhere never does), and simply not turning up (`close`, run
+   from `endTurn`, -6..13 rel, a bad memory filed against you, grassroots, and one feed card
+   naming everybody who sat there). Silence has to be the expensive one. The first draft had
+   it backwards, which made the Cancel button a trap — a player who read the numbers would
+   never touch it and would let every month run out instead. A campaign sprint or a bill in committee calls `suspend`, which clears the diary
+   with no cost to anybody: an election is a reason the whole country accepts.
 5. **The dramatic pause.** Player choice nodes open on a beat of silence.
 
 Decision still open on 3: whether cabinet arguments are authored (few, hand-written,
@@ -243,6 +266,18 @@ The economy block next to them had it right all along — `growth` and
 quantity, give it a target and revert toward it.** A shock should hurt for a
 year and be recoverable by fixing its cause; it should not be a tax nobody can
 pay off.
+
+Third instance, caught building the docket: `cast.rel` had nothing pulling it
+back. That was harmless while the only thing that moved a relationship was
+actually meeting somebody — you cannot meet the Chief Whip forty months running
+— but the diary pushes 2–3 relationships *down every single month* whether or
+not you engage with it, and a career is three hundred months. `cast.drift()` now
+reverts every relationship toward zero at 2% a month once it has been six months
+since you last sat with that person, and neglect has a floor: `cast.ding(S, p,
+amount, floor)` will not push past −45 for silence or −70 for a cancellation.
+Only things you did in front of somebody take it further than that.
+**The general rule: before adding a per-turn push to any quantity, ask what the
+equal and opposite pull is.**
 
 Related: charge a *personal* failure to a national number only in proportion to
 how national the player is. A broken promise used to take national stability

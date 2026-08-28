@@ -109,6 +109,59 @@ for (const p of ['desk', 'country', 'party', 'self']) {
 }
 console.log('panes:', JSON.stringify(panes));
 
+// The diary is the one board that is rendered before anything is clicked, and
+// both of its buttons go through main.js. Click each of them the way a player
+// does, and drive whatever modal comes back through the DOM.
+const diary = await evaluate(`(function(){
+  RZ.ui.UI.pane = 'desk';
+  RZ.ui.renderGame();
+  var S = RZ.ui.UI.S;
+  var host = document.getElementById('pane-desk');
+  var out = {
+    entries: S.docket ? S.docket.entries.length : -1,
+    rows: host.querySelectorAll('.dk-row').length,
+    board: host.textContent.indexOf('In the diary') >= 0,
+    cancelled: false, kept: false
+  };
+  out.bad = /undefined|NaN|\\[object Object\\]/.test(host.textContent);
+
+  // Cancel one, which costs no action and must not open anything.
+  var x = host.querySelector('[data-decline]');
+  if (x) {
+    var cancelId = x.getAttribute('data-decline');
+    x.click();
+    out.cancelled = !RZ.docket.entryFor(S, cancelId);
+    out.feed = S.feed.length;
+  }
+
+  // Keep another. It may open a meeting; play it out through the buttons.
+  host = document.getElementById('pane-desk');
+  var b = host.querySelector('.dk[data-action]');
+  if (b) {
+    var keepId = b.getAttribute('data-action');
+    b.click();
+    var g = 0;
+    while (g++ < 12) {
+      var choices = document.querySelectorAll('#modal-inner .choice:not([disabled])');
+      if (!choices.length) break;
+      choices[0].click();
+    }
+    var close = document.querySelector('#modal-inner [data-close]');
+    if (close) close.click();
+    out.kept = RZ.docket.summary(S).kept > 0;
+    out.keptId = keepId;
+  }
+  out.left = S.actionsLeft;
+  return out;
+})()`);
+console.log('diary:', JSON.stringify(diary));
+if (diary.entries < 1) throw new Error('the month opened with nothing in the diary');
+if (!diary.board) throw new Error('the diary board never rendered');
+if (!diary.rows) throw new Error('the diary rendered no appointments to keep');
+if (!diary.cancelled) throw new Error('cancelling an appointment did not remove it');
+if (!diary.kept) throw new Error('keeping an appointment was never recorded');
+if (diary.bad) throw new Error('the diary board renders undefined/NaN');
+
 // Play a year: spend actions, take any meeting, end the month, answer any event.
 const played = await evaluate(`(function(){
   var log = { months: 0, meetings: 0, events: 0, contests: 0, errors: [] };
