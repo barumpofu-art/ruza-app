@@ -629,3 +629,32 @@ strong.good{ color:var(--green); } strong.mid{ color:var(--gold); } strong.bad{ 
   font-size:.66rem; letter-spacing:.04em; cursor:pointer; padding:0 4px;
 }
 .dk-x:active{ transform:scale(.98); }
+
+/* the pause — the beat between a question and the answers to it */
+.talk-hold{
+  display:flex; align-items:center; gap:10px;
+  margin:12px 2px 2px; padding:9px 12px;
+  border-left:2px solid var(--line); border-radius:0 var(--radius-sm) var(--radius-sm) 0;
+  background:linear-gradient(90deg,rgba(217,164,65,.05),transparent);
+}
+.talk-hold em{ font-family:var(--serif); font-size:.85rem; color:var(--text-faint); line-height:1.5; font-style:italic; }
+.talk-hold.over{ opacity:.55; }
+.talk-hold.over .hold-dots{ display:none; }
+.hold-dots{ flex:0 0 auto; display:flex; gap:4px; margin-left:auto; }
+.hold-dots i{ width:4px; height:4px; border-radius:50%; background:var(--gold); opacity:.25; animation:holdblink 1.15s infinite; }
+.hold-dots i:nth-child(2){ animation-delay:.18s; }
+.hold-dots i:nth-child(3){ animation-delay:.36s; }
+@keyframes holdblink{ 0%,60%,100%{ opacity:.22; } 30%{ opacity:.9; } }
+
+/* The answers are in the DOM the whole time — a script can still reach them —
+   they are simply not yet on the table. */
+.choices.veiled{
+  opacity:0; transform:translateY(6px); pointer-events:none;
+  transition:opacity .28s ease, transform .28s ease;
+}
+.choices{ transition:opacity .28s ease, transform .28s ease; }
+
+@media (prefers-reduced-motion: reduce){
+  .hold-dots i{ animation:none; opacity:.6; }
+  .choices, .choices.veiled{ transition:none; opacity:1; transform:none; pointer-events:auto; }
+}

@@ -101,6 +101,90 @@
     return begin(S, scene, null, resume);
   }
 
+  /* =======================================================================
+     THE PAUSE
+     =======================================================================
+     A question does not land the moment it is asked. There is a beat where
+     nobody says anything, and it belongs to whoever asked — the whole point of
+     a silence in a room like this is that you are the one who has to end it.
+
+     Mechanically this is nothing: no state, no cost, and the answers underneath
+     are the same answers. It is written down and stored on the conversation
+     rather than generated at render time so that it does not change under the
+     player every time the modal repaints.
+  */
+  var HOLD = {
+    warm: [
+      'A nod, and then nothing. They are giving you the room.',
+      'They sit back. Whatever you say next, they have already decided to take it well.',
+      'The silence is a comfortable one, which is its own kind of pressure.'
+    ],
+    fair: [
+      'They wait. Somebody outside laughs at something else entirely.',
+      'The question sits there. A fan turns somewhere above you.',
+      'They wait, with the patience of a person who has all afternoon.'
+    ],
+    cool: [
+      'Nobody fills the silence. That is deliberate.',
+      'They let it run. You can hear a clock in the next office.',
+      'The pause goes on a little longer than it needs to.'
+    ],
+    hostile: [
+      'They do not blink. The silence is the point.',
+      'Nobody moves. Whatever you say now goes in the file.',
+      'They wait, and they are enjoying the waiting.'
+    ]
+  };
+
+  // What a particular kind of person does with a silence. Keyed on the temper
+  // the cast handed them, so the same official holds a room the same way every
+  // time you are in it.
+  var HOLD_BY_TEMPER = {
+    'does not raise their voice and has never needed to':
+      'They say nothing, at exactly the volume they say everything.',
+    'talks over you and always has':
+      'For once they do not interrupt. That is worse.',
+    'writes everything down, including this':
+      'The pen is already moving. They are writing down how long you take.',
+    'is friendly in a way that is entirely professional':
+      'The warmth stays exactly where it was. So do they.',
+    'has been doing this since before you could vote':
+      'They have sat through this silence with better men than you.',
+    'is younger than you and in a hurry':
+      'They check the time without hiding it.',
+    'never quite looks at you directly':
+      'They are looking somewhere over your shoulder, waiting.',
+    'laughs first and means none of it':
+      'The smile does not move at all.'
+  };
+
+  // Two people who have just disagreed in front of you are a different silence
+  // from one person waiting: somebody in the room is about to lose.
+  function sideHold(convo, beat) {
+    var parties = {};
+    (beat.answers || []).forEach(function (x) { if (x.side) parties[x.side] = true; });
+    var who = Object.keys(parties)
+      .map(function (k) { return convo.people && convo.people[k]; })
+      .filter(function (p) { return !!p; });
+    if (who.length < 2) return null;
+    var S = convo.api.S;
+    var nm = function (p) { return RZ.cast ? RZ.cast.shortOf(S, p) : p.name; };
+    return nm(who[0]) + ' and ' + nm(who[1]) + ' are both looking at you now. ' +
+           'One of them is going to lose.';
+  }
+
+  function pauseFor(convo, beat) {
+    if (!beat) return null;
+    var sided = sideHold(convo, beat);
+    if (sided) return sided;
+    var asker = (beat.by && convo.people && convo.people[beat.by]) || convo.speaker;
+    // A person's own way of holding a room wins about half the time; the rest
+    // is read off how the meeting is going.
+    var own = asker && HOLD_BY_TEMPER[asker.temper];
+    if (own && RZ.chance(0.5)) return own;
+    return RZ.pick(HOLD[temperature(convo.mood)] || HOLD.fair);
+  }
+
   function pushQuestion(convo) {
     var beat = convo.scene.beats[convo.beat];
     if (!beat) return;
@@ -117,6 +201,8 @@
       who: 'them', by: beat.by || null,
       text: text(beat.q, convo.api, convo)
     });
+    // And then nobody says anything, and it is your turn.
+    convo.pause = pauseFor(convo, beat);
   }
 
   function text(v, api, convo) {
@@ -241,6 +327,7 @@
   RZ.dialogue = {
     byId: byId, beginById: beginById, summon: summon,
     sceneFor: sceneFor, scenesFor: scenesFor, begin: begin, beginEvent: beginEvent,
-    options: options, choose: choose, temperature: temperature
+    options: options, choose: choose, temperature: temperature,
+    pauseFor: pauseFor, HOLD: HOLD, HOLD_BY_TEMPER: HOLD_BY_TEMPER
   };
 })();

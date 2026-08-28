@@ -224,7 +224,28 @@ engine rather than a dashboard with prose on it. Build order, highest leverage f
    it backwards, which made the Cancel button a trap — a player who read the numbers would
    never touch it and would let every month run out instead. A campaign sprint or a bill in committee calls `suspend`, which clears the diary
    with no cost to anybody: an election is a reason the whole country accepts.
-5. **The dramatic pause.** Player choice nodes open on a beat of silence.
+5. ~~**The dramatic pause.**~~ **Done.** A question no longer lands with its answers
+   already on the table. `RZ.dialogue.pauseFor(convo, beat)` writes a one-line stage
+   direction for the silence after the question — read off the room's temperature, the
+   asker's `temper` from the cast, and whether two people in the room have just
+   disagreed — and `pushQuestion` stores it as `convo.pause`. `showDialogue` renders it
+   with three pulsing dots and veils the `.choices` block for `RZ.ui.PAUSE_MS` (850ms).
+
+   Four rules, and the tests hold all four:
+   - **It is written once, when the question is asked**, not at render time. The modal
+     repaints on every answer; a silence that re-rolled each repaint would flicker.
+   - **The answers stay in the DOM the whole time.** The veil is `opacity:0` plus
+     `pointer-events:none`, so nothing reflows when it lifts and a script can still
+     reach the buttons. `page-smoke` asserts the *computed* `pointer-events`, because
+     a veil that does not actually block a tap is not a veil.
+   - **Any tap ends it**, and the tap that ends it must not also answer the question.
+     A click on an answer bubbles to the skip handler *after* the modal has repainted,
+     so `release()` is guarded on the beat it was painted for. That guard is the whole
+     bug; without it the next question never holds.
+   - **It is off where it should be**: `RZ.ui.setPause(0)` for the harnesses, and
+     `prefers-reduced-motion` for a player who has asked their phone not to animate.
+
+   Mechanically it is nothing — no state, no cost, the same answers underneath.
 
 Decision still open on 3: whether cabinet arguments are authored (few, hand-written,
 Suzerain-quality) or assembled from each minister's faction and interests (infinite,

@@ -1233,16 +1233,41 @@
   }
 
   /* ---------------- conversation ---------------- */
+  // How long the room holds a question before the answers are on the table.
+  // Exposed so the harnesses can turn it off — a simulation that waits is a
+  // simulation that times out — and so a player who has asked their phone not
+  // to animate things does not get held anywhere.
+  var PAUSE_MS = 850;
+  function pauseMs() {
+    if (!PAUSE_MS) return 0;
+    try {
+      if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return 0;
+    } catch (e) { /* no matchMedia: hold anyway */ }
+    return PAUSE_MS;
+  }
+
   // A meeting runs inside one modal that keeps growing: their questions and your
   // answers stay on screen, so by the closing line you can read back what you
   // committed yourself to in front of them.
   function showDialogue(convo, onDone) {
     var inner = modal('');
+    var holdTimer = null;
     paint();
 
     function paint() {
       var sp = convo.speaker;
       var others = otherPeople(convo);
+      // One silence per question, and only the first time that question is
+      // painted: answering repaints the modal, and re-holding a room you have
+      // already sat in is padding rather than drama.
+      var holding = !convo.done && !!convo.pause && convo.pauseSeen !== convo.beat &&
+                    pauseMs() > 0;
+      // Which question this painting is of. A click on an answer bubbles up to
+      // the skip handler *after* the answer has already been taken and the
+      // modal repainted, so without this the skip would mark the next question
+      // as already sat through.
+      var atBeat = convo.beat;
+      if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
       var html = '<div class="modal-kicker">' + esc(convo.where || 'A meeting') + '</div>' +
         '<h2 class="modal-h">' + esc(sp.name) + '</h2>' +
         '<div class="talk-role">' + esc(sp.role) +
@@ -1264,7 +1289,16 @@
         }).join('') + '</div>' : '') +
           '<button class="btn btn-gold btn-block" data-close>Leave the room</button>';
       } else {
-        html += '<div class="choices">' + RZ.dialogue.options(convo).map(function (o) {
+        // The room holds for a moment before the answers are on the table.
+        // Nothing turns on it — the same answers are underneath and they are in
+        // the DOM the whole time — but a question you are given no time to sit
+        // with is a menu item, and this game is trying not to be a menu.
+        if (holding) {
+          html += '<div class="talk-hold"><em>' + esc(convo.pause) + '</em>' +
+            '<span class="hold-dots"><i></i><i></i><i></i></span></div>';
+        }
+        html += '<div class="choices' + (holding ? ' veiled' : '') + '">' +
+          RZ.dialogue.options(convo).map(function (o) {
           var sided = o.side && convo.people && convo.people[o.side];
           return '<button class="choice' + (sided ? ' sided s' + slotOf(convo, o.side) : '') +
             '" data-i="' + o.i + '"' + (o.ok ? '' : ' disabled') + '>' +
@@ -1287,6 +1321,24 @@
             paint();
           });
         });
+        if (holding) {
+          // A silence you cannot end is a loading screen. Any tap ends it, and
+          // it ends by itself if nobody touches anything.
+          holdTimer = setTimeout(release, pauseMs());
+          inner.addEventListener('click', release, { once: true });
+        }
+      }
+
+      function release() {
+        if (convo.done || convo.beat !== atBeat) return;
+        if (convo.pauseSeen === convo.beat) return;
+        convo.pauseSeen = convo.beat;
+        if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+        var box = inner.querySelector('.choices');
+        var held = inner.querySelector('.talk-hold');
+        if (box) box.classList.remove('veiled');
+        if (held) held.classList.add('over');
+        if (box && box.scrollIntoView) box.scrollIntoView({ block: 'nearest' });
       }
       // Keep the newest exchange in view rather than the top of the meeting —
       // and once it is over, what it cost you.
@@ -1497,6 +1549,8 @@
     els('.tab').forEach(function (t) { t.classList.toggle('is-active', t.dataset.pane === UI.pane); });
   }
 
+  function setPause(ms) { PAUSE_MS = Math.max(0, ms | 0); return PAUSE_MS; }
+
   RZ.ui = {
     UI: UI, show: show, toast: toast, modal: modal, closeModal: closeModal,
     renderCountries: renderCountries, renderCreate: renderCreate, renderGame: renderGame, renderHud: renderHud,
@@ -1504,6 +1558,7 @@
     showAmend: showAmend, showBlitz: showBlitz, showOrigin: showOrigin,
     showDraft: showDraft, showBloc: showBloc, showConcede: showConcede,
     showRigOffer: showRigOffer, showBudget: showBudget, showEnd: showEnd, showAbout: showAbout,
-    paperCard: paperCard
+    paperCard: paperCard, setPause: setPause,
+    pauseMs: function () { return PAUSE_MS; }
   };
 })();
