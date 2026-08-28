@@ -4260,6 +4260,214 @@ section('29. The office that is somebody’s to give');
   }
 }
 
+/* ================= 30. appointments that stop being possible ================= */
+section('30. An appointment whose reason went away');
+{
+  // Circumstances move between the morning the diary is drawn up and the
+  // afternoon. `rehab` is only offered while a file of yours is exposed; clear
+  // the file and the meeting that was about it cannot happen — but the diary
+  // renders its own buttons, so without this it stayed on the desk, clickable,
+  // and doAction ran it straight past its own `when`.
+  const withDirt = (seed) => {
+    const S = career('ZA', seed, 4);
+    S.player.dirt = [{ id: 'x', label: 'something in a file', severity: 3, exposed: true, year: S.date.year }];
+    return S;
+  };
+
+  {
+    const S = withDirt(9600);
+    ok('the action is on offer while the file is out',
+      RZ.engine.availableActions(S).some((a) => a.id === 'rehab'));
+    // Book it by hand — build() picks at random and this must not be flaky.
+    S.docket.entries = [{ actionId: 'rehab', sceneId: null, ico: '🕯️', name: 'Rehabilitate yourself',
+      at: '09:30', who: null, why: 'It is in the diary because of the job.',
+      kept: false, declined: false }];
+    ok('and an appointment for it is live', RZ.docket.live(S).length === 1);
+    ok('and not lapsed', !RZ.docket.lapsed(S, S.docket.entries[0]));
+
+    // The file goes away.
+    S.player.dirt = [];
+    ok('once the file is gone the engine stops offering it',
+      !RZ.engine.availableActions(S).some((a) => a.id === 'rehab'));
+    ok('so the appointment has lapsed', RZ.docket.lapsed(S, S.docket.entries[0]));
+    ok('and the diary stops showing it', RZ.docket.live(S).length === 0);
+  }
+
+  {
+    // Lapsing is not standing somebody up. You could not have gone.
+    const S = withDirt(9601);
+    const c = RZ.COUNTRIES.ZA;
+    const p = RZ.cast.who(S, c, 'the Chief Whip', '');
+    S.docket.entries = [{ actionId: 'rehab', sceneId: null, ico: '🕯️', name: 'Rehabilitate yourself',
+      at: '09:30', who: { key: p.key, name: p.name, role: p.role }, why: 'They asked.',
+      kept: false, declined: false }];
+    S.player.dirt = [];
+    const rel0 = p.rel, feed0 = S.feed.length;
+    const stood = RZ.docket.close(S);
+    ok('a lapsed appointment is struck out at the month end', S.docket.entries[0].declined === true);
+    ok('and marked as lapsed rather than missed', S.docket.entries[0].lapsed === true);
+    ok('and nobody is stood up for it', stood.length === 0);
+    ok('and it costs nothing with them', RZ.cast.get(S, p.key).rel === rel0);
+    ok('and it is not in the record', S.feed.length === feed0);
+  }
+
+  {
+    // A kept appointment stays visible even if its action has since lapsed —
+    // it already happened, and the diary is a record as well as a plan.
+    const S = withDirt(9602);
+    S.docket.entries = [{ actionId: 'rehab', sceneId: null, ico: '🕯️', name: 'Rehabilitate yourself',
+      at: '09:30', who: null, why: 'They asked.', kept: true, declined: false }];
+    S.player.dirt = [];
+    ok('one you kept is still on the page', RZ.docket.live(S).length === 1);
+    ok('and it is not treated as lapsed', !RZ.docket.lapsed(S, S.docket.entries[0]));
+  }
+
+  // And the invariant the browser harness asserts, stated here too: everything
+  // the diary offers is something the engine would accept.
+  {
+    let checked = 0;
+    for (let seed = 0; seed < 40; seed++) {
+      const S = career('ZA', 9700 + seed, seed % 8);
+      RZ.docket.build(S);
+      const offered = new Set(RZ.engine.availableActions(S).map((a) => a.id));
+      RZ.docket.live(S).forEach((e) => {
+        if (e.kept) return;
+        checked++;
+        if (!offered.has(e.actionId)) {
+          ok('the diary never offers an action the engine would refuse', false, e.actionId);
+        }
+      });
+    }
+    ok('the diary never offers an action the engine would refuse', true, `${checked} entries`);
+  }
+}
+
+/* ================= 31. amending the constitution ================= */
+section('31. The constitution, and who can move on it');
+{
+  const lad = RZ.ladderFor('ZA');
+  const senior = (seed, opts = {}) => {
+    const S = career('ZA', seed, lad.findIndex((r) => r.tier >= 8));
+    S.parties[S.player.partyId].gov = true;
+    S.nation.govParties = [S.player.partyId];
+    const c = RZ.COUNTRIES.ZA;
+    const total = c.parties.reduce((t, p) => t + (S.parties[p.id].seats || 0), 0) || c.house.seats;
+    c.parties.forEach((p) => { S.parties[p.id].seats = p.id === S.player.partyId ? Math.ceil(total * 0.75) : 0; });
+    S.player.standing.party = opts.party ?? 85;
+    S.player.standing.leader = opts.leader ?? 85;
+    S.player.capital = opts.capital ?? 80;
+    S.nation.govApproval = opts.approval ?? 65;
+    S.nation.society.unrest = opts.unrest ?? 15;
+    return S;
+  };
+  const has = (S) => RZ.engine.availableActions(S).some((a) => a.id === 'amend');
+
+  // It is a vote in the House, not an executive act — and gating it on the
+  // presidency meant the whole module ran in nobody's career.
+  {
+    const S = senior(9800);
+    ok('a senior minister in government can move an amendment', has(S));
+
+    const back = career('ZA', 9801, 4);
+    back.parties[back.player.partyId].gov = true;
+    back.nation.govParties = [back.player.partyId];
+    ok('a backbencher cannot', !has(back));
+
+    const opp = senior(9802);
+    opp.parties[opp.player.partyId].gov = false;
+    opp.nation.govParties = [];
+    ok('and neither can the opposition', !has(opp));
+  }
+
+  // Two of the four are about the head of state's own tenure. Reading "you may
+  // stand again" to somebody who is not standing for anything makes no sense.
+  {
+    const S = senior(9810);
+    const mine = RZ.gov.amendmentsFor(RZ.engine.mkApi(S)).map((x) => x.id);
+    ok('a minister is not offered the term limit', !mine.includes('termlimit'));
+    ok('nor a longer term', !mine.includes('termlength'));
+    ok('but the ordinary constitutional politics is theirs', mine.length > 0, mine.join(', '));
+
+    const pres = senior(9811);
+    pres.player.isPresident = true;
+    pres.nation.termNumber = 1;
+    const theirs = RZ.gov.amendmentsFor(RZ.engine.mkApi(pres)).map((x) => x.id);
+    ok('a president is offered those too', theirs.includes('termlimit'));
+  }
+
+  // Carried once is carried. `devolve`'s own `when` is simply `true`, so before
+  // this it could be passed again every month, paying out grassroots, media and
+  // stability each time.
+  {
+    const S = senior(9820);
+    const api = RZ.engine.mkApi(S);
+    let r = null;
+    for (let i = 0; i < 40 && !(r && r.passed); i++) {
+      r = RZ.gov.attemptAmendment(RZ.engine.mkApi(S), 'devolve', 40);
+    }
+    ok('devolution can be carried', !!(r && r.passed));
+    ok('and the flag is written', S.flags.amended_devolve === true);
+    ok('and it is never offered again',
+      !RZ.gov.amendmentsFor(RZ.engine.mkApi(S)).some((x) => x.id === 'devolve'));
+    ok('and a constitution is not a renewable resource',
+      !RZ.gov.amendmentsFor(RZ.engine.mkApi(S)).some((x) => x.id === 'devolve'));
+  }
+
+  // Two-thirds is not the only obstacle. These governments all hold 75% of the
+  // House; what separates them is everything else.
+  {
+    const rate = (opts, amend, spend, n = 250) => {
+      let carried = 0, ran = 0;
+      for (let i = 0; i < n; i++) {
+        const S = senior(9900 + i, opts);
+        const api = RZ.engine.mkApi(S);
+        if (!RZ.gov.amendmentsFor(api).some((x) => x.id === amend)) continue;
+        ran++;
+        if (RZ.gov.attemptAmendment(api, amend, spend).passed) carried++;
+      }
+      return ran ? carried / ran : 0;
+    };
+    const strong = { party: 85, leader: 85, capital: 80, approval: 65, unrest: 15 };
+    const angry = { party: 85, leader: 85, capital: 80, approval: 30, unrest: 60 };
+    const middling = { party: 55, leader: 55, capital: 40, approval: 45, unrest: 35 };
+    const weak = { party: 25, leader: 25, capital: 15, approval: 30, unrest: 55 };
+
+    ok('a supermajority alone does not carry a power grab',
+      rate(strong, 'courts', 0) < 0.85, (rate(strong, 'courts', 0) * 100).toFixed(0) + '%');
+    ok('but a strong government in a calm country usually can',
+      rate(strong, 'courts', 0) > 0.35, (rate(strong, 'courts', 0) * 100).toFixed(0) + '%');
+    ok('an angry country makes it much harder',
+      rate(angry, 'courts', 0) < rate(strong, 'courts', 0),
+      `${(rate(angry, 'courts', 0) * 100).toFixed(0)}% vs ${(rate(strong, 'courts', 0) * 100).toFixed(0)}%`);
+
+    // Money is the lever the mechanic is built around: crossbenchers are bought.
+    const dry = rate(middling, 'courts', 0);
+    const paid = rate(middling, 'courts', 40);
+    ok('whipping money is what carries a middling government',
+      paid > dry + 0.3, `${(dry * 100).toFixed(0)}% dry vs ${(paid * 100).toFixed(0)}% paid`);
+    ok('and it cannot buy what is not there',
+      rate(weak, 'courts', 40) < 0.2, (rate(weak, 'courts', 40) * 100).toFixed(0) + '%');
+
+    // Handing power away meets less resistance than taking it.
+    ok('devolving is easier than capturing the courts',
+      rate(strong, 'devolve', 0) > rate(strong, 'courts', 0),
+      `${(rate(strong, 'devolve', 0) * 100).toFixed(0)}% vs ${(rate(strong, 'courts', 0) * 100).toFixed(0)}%`);
+    ok('but it still has to be voted for',
+      rate(weak, 'devolve', 0) < 0.5, (rate(weak, 'devolve', 0) * 100).toFixed(0) + '%');
+  }
+
+  // And a failed attempt is not free.
+  {
+    const S = senior(9950, { party: 20, leader: 20, capital: 60, approval: 20, unrest: 70 });
+    const cap0 = S.player.capital;
+    const r = RZ.gov.attemptAmendment(RZ.engine.mkApi(S), 'courts', 0);
+    ok('losing the vote still costs you capital', S.player.capital < cap0,
+      `${cap0} → ${S.player.capital}`);
+    ok('and it is counted', S.flags.amendmentsTried >= 1);
+    ok('and the amendment is still on the table', !S.flags.amended_courts || r.passed);
+  }
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`);
 if (failures) { console.error(`${failures} failed`); process.exit(1); }
 console.log('every new mechanic fires and does what it says');

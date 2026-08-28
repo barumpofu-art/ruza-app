@@ -94,11 +94,25 @@
         return { title: 'Parliament dissolved', body: 'The proclamation was signed this morning. Everybody in the country now has one job and about five months to do it.', tone: 'flat' };
       } },
 
+    // The one thing on this list that is not an executive act. Amending the
+    // constitution is a vote in the House, and attemptAmendment has always
+    // scored it that way — on party standing, capital and patronage, with not
+    // one term that asks whether you are head of state. Gating it on the
+    // presidency meant an entire module ran in nobody's career: across a
+    // thousand simulated careers, zero amendments were ever attempted, because
+    // three players in a thousand ever became president.
+    //
+    // Anybody senior enough to whip a two-thirds majority can move one. Trying
+    // without the numbers is not free — it costs capital and it fails — so the
+    // mechanic polices itself without needing the office to do it.
     { id: 'amend', ico: '📜', ap: 1, name: 'Amend the constitution', special: 'amend',
+      house: true,
       desc: 'Two-thirds of the House. Nothing less will do it.',
       risky: true,
       when: function (a) {
-        return a.P.isPresident && a.S.nation.termNumber >= 1 && amendmentsFor(a).length > 0;
+        if (!amendmentsFor(a).length) return false;
+        if (a.P.isPresident) return a.S.nation.termNumber >= 1;
+        return a.tier() >= 8 && a.inGov();
       },
       run: function (a) { return { title: '', body: '', special: 'amend' }; } },
 
@@ -110,6 +124,13 @@
   function presidentialActions(S) { 
     var api = RZ.engine.mkApi(S);
     return PRES.filter(function (x) { return !x.when || x.when(api); });
+  }
+
+  // The subset that is moved in the House rather than signed at a desk, for
+  // somebody senior who does not hold the top office.
+  function houseActions(S) {
+    var api = RZ.engine.mkApi(S);
+    return PRES.filter(function (x) { return x.house && (!x.when || x.when(api)); });
   }
   function actionById(id) { return PRES.filter(function (x) { return x.id === id; })[0]; }
 
@@ -168,7 +189,7 @@
   }
 
   var AMENDMENTS = [
-    { id: 'termlimit', name: 'Abolish the term limit',
+    { id: 'termlimit', needsOffice: true, name: 'Abolish the term limit',
       blurb: 'Strike the two-term clause. Everything else in the document stays as it is.',
       when: function (a) { return !!a.C.termLimit && !a.S.flags.termLimitRemoved; },
       pass: function (a) {
@@ -179,7 +200,7 @@
         a.legacyMark('removedTermLimit');
         return 'You may stand again, for as long as you can keep winning. Something has been spent that cannot be earned back.';
       } },
-    { id: 'termlength', name: 'Extend the presidential term to seven years',
+    { id: 'termlength', needsOffice: true, name: 'Extend the presidential term to seven years',
       blurb: 'Not a third term. Simply a longer first one, and a longer second.',
       when: function (a) { return !a.S.flags.termExtended; },
       pass: function (a) {
@@ -215,7 +236,22 @@
       } }
   ];
 
-  function amendmentsFor(a) { return AMENDMENTS.filter(function (x) { return !x.when || x.when(a); }); }
+  // Two of these are about the head of state's own tenure, and reading "you may
+  // stand again" to somebody who is not standing for anything makes no sense.
+  // The rest are ordinary constitutional politics and belong to whoever can
+  // carry the House.
+  function amendmentsFor(a) {
+    return AMENDMENTS.filter(function (x) {
+      if (x.needsOffice && !a.P.isPresident) return false;
+      // Carried once is carried. attemptAmendment has always written this flag
+      // and nothing has ever read it, so `devolve` — whose `when` is simply
+      // `true` — could be passed again every month, paying out grassroots,
+      // media and stability each time. A constitution is not a renewable
+      // resource.
+      if (a.S.flags['amended_' + x.id]) return false;
+      return !x.when || x.when(a);
+    });
+  }
 
   // Two-thirds is arithmetic. The gap between what the government holds and
   // what the constitution demands has to be bought, one member at a time.
@@ -229,14 +265,31 @@
     // Your own benches are not automatic either — a bad amendment loses you some.
     var rebels = Math.round(sup.gov * clamp((45 - a.P.standing.party) / 160, 0, 0.28) *
                             (amendId === 'devolve' ? 0.4 : 1));
-    var need = gap + rebels;
+
+    // And two-thirds is not the only obstacle. Where a government already holds
+    // a supermajority the gap is zero, and the whole thing used to come down to
+    // a handful of rebels — which made amending the constitution a formality,
+    // carried in 97% of attempts. It is never a formality. The courts, the
+    // commissions, the bar associations and the street all have a view, and the
+    // less popular the government the louder every one of them is.
+    var resist = c.inst.judiciary * 0.19 + (c.inst.electoral || 50) * 0.07 +
+                 Math.max(0, 55 - S.nation.govApproval) * 0.21 +
+                 S.nation.society.unrest * 0.095;
+    // Handing power away meets less of it than taking power does, but it still
+    // has to be voted for.
+    if (amendId === 'devolve') resist *= 0.62;
+    var need = gap + rebels + Math.round(resist);
 
     // Crossbenchers are bought with patronage, money, and the sense that you
     // are going to win anyway.
     var reach = a.P.standing.leader * 0.10 + a.P.standing.party * 0.06 +
                 a.P.capital * 0.12 + (spend || 0) * 0.9 +
                 c.inst.patronage * 0.07 - c.inst.judiciary * 0.03;
-    var won = Math.round(Math.max(0, reach) * RZ.range(0.7, 1.35));
+    // A wide roll on purpose. With a narrow one the standing bands sit further
+    // apart than the noise, and the vote stops being a vote: every government
+    // above a line carries everything and every government below it carries
+    // nothing, with no band in between where the whipping actually matters.
+    var won = Math.round(Math.max(0, reach) * RZ.range(0.45, 1.65));
 
     S.flags.amendmentsTried = (S.flags.amendmentsTried || 0) + 1;
     a.add('capital', -Math.min(a.P.capital, 8 + need * 0.4));
@@ -635,7 +688,7 @@
   }
 
   RZ.gov = {
-    presidentialActions: presidentialActions, actionById: actionById,
+    presidentialActions: presidentialActions, houseActions: houseActions, actionById: actionById,
     assemblySupport: assemblySupport, amendmentsFor: amendmentsFor,
     attemptAmendment: attemptAmendment, AMENDMENTS: AMENDMENTS,
     BUDGET_LINES: BUDGET_LINES, applyBudget: applyBudget,

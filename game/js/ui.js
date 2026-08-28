@@ -226,10 +226,10 @@
     // of the month — you went to one funeral and could not go to another, and
     // the action simply vanished with no explanation.
     var booked = {};
-    if (RZ.docket) RZ.docket.entries(S).forEach(function (e) {
-      if (!e.declined && !e.kept) booked[e.actionId] = true;
+    if (RZ.docket) RZ.docket.live(S).forEach(function (e) {
+      if (!e.kept) booked[e.actionId] = true;
     });
-    var hasDiary = RZ.docket ? RZ.docket.entries(S).some(function (e) { return !e.declined; }) : false;
+    var hasDiary = RZ.docket ? RZ.docket.live(S).length > 0 : false;
 
     h += '<div class="block"><div class="block-h">' + (hasDiary ? 'The rest of the month' : 'This month') +
          '<span class="sub">' + S.actionsLeft + ' of ' + S.actionsPerTurn + ' left</span></div>';
@@ -265,7 +265,10 @@
     if (!RZ.docket) return '';
     var all = RZ.docket.entries(S);
     if (!all.length) return '';
-    var live = all.filter(function (e) { return !e.declined; });
+    // Only appointments that are still possible get a button. One whose action
+    // the engine has stopped offering would otherwise sit there clickable and
+    // run past its own `when`.
+    var live = RZ.docket.live(S);
     var stood = all.filter(function (e) { return e.declined; }).length;
     if (!live.length && !stood) return '';
 

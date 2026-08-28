@@ -46,6 +46,18 @@ jobs:
       - name: Play the real page in a browser
         run: bash game/test/page-smoke.sh
 
+      # page-smoke plays one scripted career, so it catches a rendering fault
+      # only if that one career walks into it. Twice now the emulator has been
+      # red while every Node harness was green, because none of them load ui.js.
+      # This plays many careers at random through the real screen and asserts
+      # after every render that the desk and the engine agree about what is on
+      # offer, and that no sheet is ever open with nothing enabled to close it.
+      - name: Play many careers through the real screen
+        run: bash game/test/ui-sim.sh
+        env:
+          CAREERS: '24'
+          MONTHS: '80'
+
   build:
     needs: simulate
     runs-on: ubuntu-latest

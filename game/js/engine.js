@@ -617,6 +617,9 @@
       return true;
     });
     if (S.player.isPresident) list = list.concat(RZ.gov.presidentialActions(S));
+    // Not everything in the governance deck is the head of state's to do. What
+    // is moved in the House belongs to whoever can carry the House.
+    else if (RZ.gov.houseActions) list = list.concat(RZ.gov.houseActions(S));
     // In the sprint the tactical deck comes first: a week is spent in a ward,
     // not on a five-year plan.
     if (S.tempo === 'week' && RZ.sprint) list = RZ.sprint.weekActions(S).concat(list);

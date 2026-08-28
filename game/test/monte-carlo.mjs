@@ -587,7 +587,11 @@ for (const policy of cohorts) report(policy, all[policy]);
     allWarnings.push('[all] no career in any cohort reached the top office — the ladder may still be capped');
   }
   if (!any((r) => r.amendmentsTried > 0)) {
-    allWarnings.push('[all] no amendment attempted in any cohort — president-only, see mechanics.mjs');
+    // It used to be gated on the presidency, which three careers in a thousand
+    // ever reached, so this warning fired every run and named its own cause.
+    // It is a House vote now, open at tier eight in government; if it is still
+    // unreachable the gate has moved again.
+    allWarnings.push('[all] no amendment attempted in any cohort — check the gate on gov.houseActions');
   }
   // Reaching the warning is the reachability question. Whether the brigade
   // then crosses is up to the player, and mechanics.mjs proves both endings.
@@ -700,7 +704,8 @@ console.log(`  the other one            ends on rung ${fmt(mean((r) => r.contend
   fmt(mean((r) => r.contenderGap), 1)} rungs from you; ahead of you in ${fmt(pct((r) => r.contenderGap > 0))}% of careers`);
 console.log(`  they reached the top     ${fmt(pct((r) => r.contenderThrone))}% of careers${
   mean((r) => r.contenderAllied) ? ', allied with you in ' + fmt(pct((r) => r.contenderAllied)) + '%' : ''}`);
-console.log(`  amendments  tried ${fmt(mean((r) => r.amendmentsTried), 2)}/career, carried ${
+console.log(`  amendments  ${sum((r) => r.amendmentsTried)} tried by ${
+  fmt(pct((r) => r.amendmentsTried > 0))}% of careers, ${fmt(mean((r) => r.amendmentsTried), 2)}/career, carried ${
   sum((r) => r.amendmentsTried) ? fmt((100 * sum((r) => r.amendmentsPassed)) / sum((r) => r.amendmentsTried)) + '%' : 'n/a'}`);
 console.log(`  promises made ${fmt(mean((r) => r.promisesMade), 2)}, broken ${fmt(mean((r) => r.promisesBroken), 2)} per career`);
 console.log(`  tenders  granted ${fmt(mean((r) => r.tendersGranted), 2)}  refused ${fmt(mean((r) => r.tendersRefused), 2)} per career`);

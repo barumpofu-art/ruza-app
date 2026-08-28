@@ -127,6 +127,28 @@ is counted exactly once. If you are writing bloc code, use `addRaw`.
 
 ## Testing discipline
 
+**`ui-sim` is the harness the others cannot replace.** dialogue-sim, mechanics, career-sim
+and monte-carlo all load the modules into a Node sandbox, which means **none of them ever
+loads `ui.js` or `main.js`**. Twice in one session the emulator was red while every one of
+them was green, both times over a fault that only exists between the engine and the DOM.
+`page-smoke` covers that gap with *one scripted career*, which catches a rendering fault
+only if that career happens to walk into it — the kept-appointment bug hit fourteen careers
+in a hundred and page-smoke plays one.
+
+`test/ui-sim.sh` plays many careers at random through the real screen and asserts, after
+every render:
+
+- the desk offers **every** action the engine says is available, and **nothing** it does not;
+- an open sheet always has something *enabled* to dismiss it;
+- no pane renders `undefined`, `NaN` or `[object Object]`;
+- rendering never throws and the page logs no errors.
+
+Those are exactly the three faults found the hard way. It runs in CI after page-smoke
+(`CAREERS=24 MONTHS=80`); size it up by hand with `CAREERS=100 MONTHS=200 bash
+game/test/ui-sim.sh`. It found a real bug on its first run — see the lapsed-appointment note
+below.
+
+
 Three harnesses, and they answer different questions. Run all three before committing.
 
 ```
@@ -366,19 +388,68 @@ through. Three changes make it a real route:
 Measured on a Deputy PM during an open vacancy: **92 standing → 46%, 75 → 14%, 60 → 0%,
 34 → 0%.** Demanding, reachable, and decided by standing.
 
-### Standing finding: the top office is rare everywhere, and one mechanic is behind it
+### The constitution: a whole module nobody could reach
 
-With SZ's exploit closed, careers reaching the top office across 1,000 Monte Carlo runs
-sit at **3 in 1,000 (0.3%)** — statistically where it was before any of this work (5 in
-1,000). The 67 in 1,000 briefly reported at 1.7.2 was almost entirely the SZ hole, not a
-real gain; the genuine gain from the purge fix is in the *mid* ladder, where career-sim's
-climb ceilings now spread out to t10 and t11 instead of clustering at t3–t4.
+Amending the constitution was gated on `P.isPresident`, and three players in a thousand
+ever became president — so across 1,000 Monte Carlo careers **zero amendments were ever
+attempted**. An entire module with four authored amendments ran in nobody's game.
 
-The knock-on is a new Monte Carlo warning: **no constitutional amendment is ever attempted
-in either cohort**, because amendments are president-only and nobody is president. That is
-a real coverage hole in a whole module (`governance.amendmentsFor` / `attemptAmendment`)
-and it is worth deciding whether the elected presidencies should be more reachable, or
-whether the amendment mechanic should open earlier than the top office.
+The gate was wrong on its own terms. `attemptAmendment` scores the vote on party standing,
+capital, patronage and the judiciary; there is not one term in it that asks whether you are
+head of state, because an amendment is a vote in the House. It is gated at **tier 8 in a
+governing party** now (`house: true` on the action, `gov.houseActions`, and the branch in
+`engine.availableActions`). The two amendments that are about the head of state's own tenure
+carry `needsOffice: true` and stay presidential — reading *"you may stand again"* to somebody
+who is not standing for anything makes no sense.
+
+Opening it exposed two faults that had been sitting behind the gate:
+
+- **`devolve` never retired.** Its `when` is simply `true` and its `pass()` set no flag, so it
+  could be carried again every month, paying out grassroots, media and stability each time.
+  `attemptAmendment` had always written `S.flags['amended_' + id]` and nothing had ever read
+  it; `amendmentsFor` reads it now, for every amendment.
+- **Two-thirds was the only obstacle.** Where the government already held a supermajority the
+  gap was zero and the whole thing came down to a handful of rebels: **97% of attempts
+  carried.** There is a `resist` term now — courts, commissions, the street, scaled by
+  `inst.judiciary`, `inst.electoral`, how unpopular the government is and how angry the
+  country is — and the roll is widened, because with the old narrow one the standing bands
+  sat further apart than the noise and the vote was a step rather than a vote.
+
+Measured across governments all holding 75% of the House, so the arithmetic is not what is
+being measured:
+
+| | no whipping money | 40 wage units |
+|---|---|---|
+| strong government, calm country | 63% | 100% |
+| strong government, angry country | 30% | 94% |
+| middling government | 0% | 94% |
+| weak government | 0% | 3% |
+
+Money is the lever the mechanic was always built around — crossbenchers are bought — and it
+still cannot buy a majority that is not there.
+
+### Standing finding: the top office is rare everywhere
+
+Careers reaching the top office sit at about **3 in 1,000** across the Monte Carlo, and that
+is where the number has been all along — the 67 in 1,000 briefly seen at 1.7.2 was the
+Eswatini blackmail hole, not a gain. The genuine improvement from the purge fix is in the
+*mid* ladder, where career-sim's climb ceilings now spread to t10 and t12 instead of
+clustering at t3–t4.
+
+This no longer blocks any mechanic — amendments were the one thing gated behind it and they
+are not any more — so it is a question about the shape of the game rather than a coverage
+hole: should reaching head of state be a one-in-three-hundred career, or should the elected
+presidencies be more winnable? Nobody has decided that on purpose yet.
+
+### An appointment whose reason went away
+
+`ui-sim` found this on its first run, in the shipped game. The diary renders its own
+buttons from `S.docket.entries` and never asked whether the action was still on offer.
+`rehab` is only available while a file of yours is exposed; clear the file and the meeting
+that was about it cannot happen — but the diary kept showing it, clickable, and `doAction`
+ran it straight past its own `when`. `RZ.docket.lapsed()` and `RZ.docket.live()` are what
+the UI reads now, and `close()` strikes lapsed entries out silently: you could not have
+gone, so nobody was stood up and nothing is charged to you.
 
 ### A shape to watch for: the one-way ratchet
 

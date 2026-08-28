@@ -156,6 +156,27 @@
     return entries(S).filter(function (e) { return !e.kept && !e.declined; });
   }
 
+  // An appointment whose action is no longer on offer. Circumstances move
+  // between the morning the diary was drawn up and the afternoon: you rehabilitate
+  // yourself, the file stops being exposed, and the meeting that was about it is
+  // no longer a thing that can happen. Those entries are not yours to keep and
+  // not yours to be blamed for — and, crucially, they must not stay on the desk
+  // as a button, because the diary renders its own buttons and `doAction` would
+  // run the action past its own `when`.
+  function lapsed(S, e) {
+    if (!e || e.kept || e.declined) return false;
+    var acts = RZ.engine.availableActions(S);
+    for (var i = 0; i < acts.length; i++) if (acts[i].id === e.actionId) return false;
+    return true;
+  }
+
+  // What is still both open and possible — what the diary should actually show.
+  function live(S) {
+    return entries(S).filter(function (e) {
+      return !e.declined && (e.kept || !lapsed(S, e));
+    });
+  }
+
   // The scene this appointment was booked against, if it is still a scene that
   // could happen. A month is short, but a promotion inside one can invalidate
   // a room, and then it is better to fall back than to force it.
@@ -200,6 +221,12 @@
   // express: the meeting existed, somebody arranged it, and you were not there.
   // It costs more than cancelling, it is remembered, and it is in the record.
   function close(S) {
+    // Anything that stopped being possible is quietly struck out. Standing
+    // somebody up means choosing not to go; it does not mean the meeting
+    // stopped existing while your back was turned.
+    entries(S).forEach(function (e) {
+      if (lapsed(S, e)) { e.declined = true; e.lapsed = true; }
+    });
     var missed = open(S), out = [], names = [];
     if (!missed.length) return out;
     var api = RZ.engine.mkApi(S);
@@ -257,7 +284,8 @@
   RZ.docket = {
     SLOTS: SLOTS,
     init: init, build: build, entries: entries, entryFor: entryFor, open: open,
-    sceneFor: sceneFor, keep: keep, decline: decline, close: close, suspend: suspend,
+    sceneFor: sceneFor, lapsed: lapsed, live: live,
+    keep: keep, decline: decline, close: close, suspend: suspend,
     summary: summary, slotsFor: slotsFor, weightFor: weightFor, bookable: bookable
   };
 })();
