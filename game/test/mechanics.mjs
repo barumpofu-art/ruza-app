@@ -166,6 +166,75 @@ section('3. Congress purge');
   boss.player.standing.grassroots = 2; boss.player.standing.party = 2;
   boss.player.isLeader = true;
   ok('the party leader cannot be left off their own slate', RZ.crisis.congressPurge(boss) === null);
+
+  // The card says "there is no seat to contest this election". That is a
+  // candidates' list, and the offices below the seat are internal ones no
+  // general election touches — so nobody below tier four can be dropped from a
+  // slate they were never on.
+  {
+    const tierOf = (rung) => RZ.ladderFor('ZA')[rung].tier;
+    let belowChecked = 0;
+    for (let rung = 0; rung < RZ.ladderFor('ZA').length; rung++) {
+      if (tierOf(rung) >= 4) break;
+      const S = career('ZA', 40 + rung, rung);
+      S.player.standing.grassroots = 1; S.player.standing.party = 1; S.player.fame = 0;
+      if (RZ.crisis.congressPurge(S) !== null) {
+        ok(`nobody below the seat is purged (rung ${rung}, tier ${tierOf(rung)})`, false);
+      }
+      belowChecked++;
+    }
+    ok('nobody below the seat is dropped from a candidates’ list', belowChecked > 0,
+      `${belowChecked} rungs checked`);
+
+    // And it still bites the moment you actually hold one.
+    const seat = career('ZA', 60, 4);
+    seat.player.standing.grassroots = 3; seat.player.standing.party = 3; seat.player.fame = 1;
+    ok('but a weak member of the house is', !!RZ.crisis.congressPurge(seat));
+  }
+
+  // Allies live in the field with side === 'ally'. `P.allies` has never existed,
+  // so this term contributed exactly nothing and every ally anybody recruited
+  // counted for zero.
+  {
+    const withAllies = career('ZA', 70, 6);
+    const without = career('ZA', 70, 6);
+    [withAllies, without].forEach((S) => {
+      S.player.standing.grassroots = 30; S.player.standing.party = 30; S.player.fame = 10;
+    });
+    for (let i = 0; i < 6; i++) RZ.field.addAlly(withAllies, 50);
+    ok('recruiting allies actually seats them', RZ.field.allies(withAllies).length > 0,
+      String(RZ.field.allies(withAllies).length));
+    ok('and none are seated for the control', RZ.field.allies(without).length === 0);
+    // Six allies are worth fifteen points on the slate; that has to be able to
+    // change an outcome somewhere in the band where it is close.
+    let savedBy = 0;
+    for (let seed = 0; seed < 60; seed++) {
+      const A = career('ZA', 700 + seed, 6);
+      const B = career('ZA', 700 + seed, 6);
+      [A, B].forEach((S) => {
+        S.player.standing.grassroots = 34; S.player.standing.party = 34; S.player.fame = 12;
+      });
+      for (let i = 0; i < 6; i++) RZ.field.addAlly(A, 50);
+      const a1 = RZ.crisis.congressPurge(A);
+      const b1 = RZ.crisis.congressPurge(B);
+      if (!a1 && b1) savedBy++;
+    }
+    ok('and having them keeps you on the slate sometimes', savedBy > 0, `${savedBy}/60`);
+  }
+
+  // The bar scales with the office: a branch slate is not a national one.
+  {
+    const bar = (rung) => {
+      const S = career('ZA', 80, rung);
+      const t = RZ.ladderFor('ZA')[rung].tier;
+      return 12 + t * 3.4 + RZ.COUNTRIES.ZA.inst.patronage * 0.16;
+    };
+    const lad = RZ.ladderFor('ZA');
+    const seatRung = lad.findIndex((r) => r.tier >= 4);
+    const topRung = lad.length - 2;
+    ok('the higher the office the harder it is to stay on the list',
+      bar(topRung) > bar(seatRung), `${bar(seatRung).toFixed(1)} vs ${bar(topRung).toFixed(1)}`);
+  }
 }
 
 /* ================= 4. black swan shocks ================= */
