@@ -162,6 +162,73 @@ if (!diary.cancelled) throw new Error('cancelling an appointment did not remove 
 if (!diary.kept) throw new Error('keeping an appointment was never recorded');
 if (diary.bad) throw new Error('the diary board renders undefined/NaN');
 
+// The pause is the only thing in the game that is purely a matter of timing, so
+// it is the only thing that has to be tested in a browser. Hold a question, and
+// check three things: the answers are veiled but reachable, the silence reads
+// like a sentence, and a tap ends it early.
+const held = await evaluate(`(async function(){
+  RZ.ui.setPause(900);
+  var S = RZ.ui.UI.S;
+  var out = { armed: false };
+  // Find a topic with a room behind it and open it the way an action does.
+  var sc = null, act = null;
+  var avail = RZ.engine.availableActions(S);
+  for (var i = 0; i < avail.length && !sc; i++) {
+    var pool = RZ.dialogue.scenesFor(S, avail[i].id);
+    if (pool.length) { sc = pool[0]; act = avail[i]; }
+  }
+  if (!sc) return out;
+  var cv = RZ.dialogue.begin(S, sc, RZ.actionById[act.id]);
+  RZ.ui.showDialogue(cv, function(){});
+  out.armed = true;
+  out.line = cv.pause;
+
+  var box = document.querySelector('#modal-inner .choices');
+  var hold = document.querySelector('#modal-inner .talk-hold');
+  out.veiled = !!(box && box.classList.contains('veiled'));
+  out.shown = !!hold && hold.textContent.length > 15;
+  out.reachable = !!(box && box.querySelectorAll('.choice').length);
+  // Computed style, not just the class: a veil that does not actually block a
+  // tap is not a veil.
+  out.blocked = !!(box && getComputedStyle(box).pointerEvents === 'none');
+
+  // A tap anywhere ends it, and it must not consume the question.
+  document.querySelector('#modal-inner').click();
+  await new Promise(function (r) { setTimeout(r, 60); });
+  box = document.querySelector('#modal-inner .choices');
+  out.released = !!(box && !box.classList.contains('veiled'));
+  out.beatHeld = cv.beat === 0 && !cv.done;
+
+  // And answering afterwards works, and the next question holds again.
+  var opts = document.querySelectorAll('#modal-inner .choice:not([disabled])');
+  out.options = opts.length;
+  if (opts.length) opts[0].click();
+  await new Promise(function (r) { setTimeout(r, 60); });
+  out.nextHeld = cv.done || !!document.querySelector('#modal-inner .talk-hold');
+
+  // Leave the room in whatever state it is in; the career carries on below.
+  var g = 0;
+  while (!cv.done && g++ < 12) {
+    var o = RZ.dialogue.options(cv).filter(function (z) { return z.ok; });
+    if (!o.length) break;
+    RZ.dialogue.choose(cv, o[0].i);
+  }
+  RZ.engine.finishDialogue(S, cv);
+  RZ.ui.closeModal();
+  RZ.ui.setPause(0);          // the rest of this run plays at simulation speed
+  return out;
+})()`);
+console.log('pause:', JSON.stringify(held));
+if (!held.armed) throw new Error('no room could be opened to test the pause');
+if (!held.shown) throw new Error('the silence was never rendered');
+if (!held.veiled) throw new Error('the answers were on the table straight away');
+if (!held.reachable) throw new Error('the answers are not in the DOM during the pause');
+if (!held.blocked) throw new Error('the veil does not actually block a tap');
+if (!held.released) throw new Error('tapping did not end the pause');
+if (!held.beatHeld) throw new Error('the tap that ended the pause also answered the question');
+if (!held.options) throw new Error('no answers were selectable once the pause ended');
+if (!held.nextHeld) throw new Error('the next question did not hold');
+
 // Play a year: spend actions, take any meeting, end the month, answer any event.
 const played = await evaluate(`(function(){
   var log = { months: 0, meetings: 0, events: 0, contests: 0, errors: [] };

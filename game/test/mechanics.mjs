@@ -3106,6 +3106,93 @@ section('22. The docket');
   }
 }
 
+/* ================= 23. the pause ================= */
+section('23. The pause before you answer');
+{
+  const roomFor = (S, topic) => RZ.dialogue.sceneFor(S, topic);
+
+  // Every question carries one, and it is written when the question is asked
+  // rather than when the screen is drawn — so it does not change under the
+  // player each time the modal repaints.
+  {
+    const S = career('ZA', 2700, 6);
+    const sc = roomFor(S, 'union') || RZ.DIALOGUE[0];
+    const cv = RZ.dialogue.begin(S, sc, null);
+    ok('a question arrives with a silence attached', !!cv.pause, String(cv.pause));
+    ok('and it is a sentence, not a placeholder', cv.pause.length > 15 && /[.!?]$/.test(cv.pause));
+    const first = cv.pause;
+    ok('and it does not change when nothing has happened', cv.pause === first);
+
+    const opts = RZ.dialogue.options(cv).filter((o) => o.ok);
+    RZ.dialogue.choose(cv, opts[0].i);
+    if (!cv.done) {
+      ok('the next question gets its own silence', !!cv.pause);
+    }
+  }
+
+  // It reads the room: a meeting going badly does not hold the same way as one
+  // going well.
+  {
+    const seen = { warm: new Set(), hostile: new Set() };
+    for (let i = 0; i < 60; i++) {
+      const S = career('ZA', 2710 + i, 6);
+      const sc = RZ.DIALOGUE.filter((x) => !x.others && x.beats && x.beats.length)[i % 12];
+      if (!sc) continue;
+      const cv = RZ.dialogue.begin(S, sc, null);
+      const beat = cv.scene.beats[0];
+      cv.mood = 9;   seen.warm.add(RZ.dialogue.pauseFor(cv, beat));
+      cv.mood = -9;  seen.hostile.add(RZ.dialogue.pauseFor(cv, beat));
+    }
+    const warmOnly = [...seen.warm].filter((t) => RZ.dialogue.HOLD.warm.includes(t));
+    const hostileOnly = [...seen.hostile].filter((t) => RZ.dialogue.HOLD.hostile.includes(t));
+    ok('a warm room holds warmly', warmOnly.length > 0, String(warmOnly.length));
+    ok('and a hostile one does not', hostileOnly.length > 0, String(hostileOnly.length));
+    ok('a warm room never uses a hostile line',
+      ![...seen.warm].some((t) => RZ.dialogue.HOLD.hostile.includes(t)));
+  }
+
+  // Somebody's own way of holding a room follows them between meetings.
+  {
+    const S = career('ZA', 2800, 6);
+    const p = RZ.cast.who(S, RZ.COUNTRIES.ZA, 'the Chief Whip', '');
+    ok('everybody in the cast has a way of sitting in a silence',
+      !!RZ.dialogue.HOLD_BY_TEMPER[p.temper], p.temper);
+    ok('and there is one for every temper the cast can hand out',
+      RZ.cast.TEMPERS.every((t) => !!RZ.dialogue.HOLD_BY_TEMPER[t]));
+  }
+
+  // A room where two people have just disagreed holds differently: the silence
+  // names both of them, because one is about to lose.
+  {
+    const rooms = RZ.DIALOGUE.filter((sc) => sc.others &&
+      (sc.beats || []).some((b) => (b.answers || []).some((a) => a.side)));
+    let named = 0;
+    rooms.forEach((sc, i) => {
+      const S = career('ZA', 2900 + i, 12);
+      const cv = RZ.dialogue.begin(S, sc, null);
+      const beat = cv.scene.beats.filter((b) => (b.answers || []).some((a) => a.side))[0];
+      const t = RZ.dialogue.pauseFor(cv, beat);
+      const who = Object.keys(cv.people).filter((k) => k !== '_').map((k) => cv.people[k]);
+      if (who.some((pp) => t.includes(RZ.cast.shortOf(S, pp)))) named++;
+    });
+    ok('a room with two sides in it names them in the silence',
+      rooms.length > 0 && named === rooms.length, `${named}/${rooms.length}`);
+  }
+
+  // And none of it touches the game.
+  {
+    const S = career('ZA', 3000, 6);
+    const sc = roomFor(S, 'union') || RZ.DIALOGUE[0];
+    const cv = RZ.dialogue.begin(S, sc, null);
+    const before = { mood: cv.mood, beat: cv.beat, opts: RZ.dialogue.options(cv).length };
+    RZ.dialogue.pauseFor(cv, cv.scene.beats[0]);
+    RZ.dialogue.pauseFor(cv, cv.scene.beats[0]);
+    ok('reading the silence costs nothing',
+      cv.mood === before.mood && cv.beat === before.beat &&
+      RZ.dialogue.options(cv).length === before.opts);
+  }
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`);
 if (failures) { console.error(`${failures} failed`); process.exit(1); }
 console.log('every new mechanic fires and does what it says');
