@@ -236,12 +236,22 @@ async function drainModals() {
   for (let i = 0; i < 8; i++) {
     const open = await evaluate("(() => { const m = document.getElementById('modal'); return m && !m.hidden; })()");
     if (!open) return;
+    // Every one of these must exclude [disabled]. An answer the player cannot
+    // afford is rendered and disabled, and a disabled button ignores .click()
+    // — so picking the first [data-i] regardless would tap a dead control
+    // sixty-four times and then report the sheet as stuck. A player taps one
+    // that works, and so does this.
     const closed = await evaluate(
-      `(() => { const b = document.querySelector('#modal-inner [data-close]')
-          || document.querySelector('#modal-inner [data-i]')
-          || document.querySelector('#modal-inner [data-r="0"]');
+      `(() => { const pick = (sel) => document.querySelector('#modal-inner ' + sel + ':not([disabled])');
+        const b = pick('[data-close]') || pick('[data-i]') || pick('[data-r="0"]')
+          || pick('[data-go]') || pick('[data-final]') || pick('[data-skip]');
         if (!b) return false; b.click(); return true; })()`);
-    if (!closed) throw new Error('a modal is open with nothing to dismiss it');
+    if (!closed) {
+      const live = await evaluate(
+        `(() => Array.from(document.querySelectorAll('#modal-inner button'))
+            .map((b) => b.className + (b.disabled ? ' [disabled]' : '')).join(', '))()`);
+      throw new Error('a modal is open with nothing usable to dismiss it: ' + live);
+    }
     await sleep(250);
   }
 }
