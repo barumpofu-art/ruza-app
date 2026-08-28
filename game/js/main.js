@@ -451,8 +451,27 @@
     });
   }
 
+  // Election day is four screens now — dawn, the exit polls, one intervention,
+  // and a count that comes in region by region — and the result is not computed
+  // until the third of them has been answered.
   function runElectionFlow() {
     var S = UI.S;
+    if (RZ.eday && RZ.ui.showElectionDay) {
+      RZ.ui.showElectionDay(function () {
+        var r = S.eday && S.eday.result;
+        if (r) {
+          RZ.engine.pushFeed(S, {
+            kind: 'big', src: 'Election ' + r.year,
+            title: electionHeadline(S, r),
+            body: electionSummary(S, r), tone: 'good'
+          });
+          RZ.engine.save(S);
+        }
+        if (S.over) { RZ.ui.showEnd(); return; }
+        RZ.ui.renderGame();
+      });
+      return;
+    }
     var go = function (rig) {
       var r = RZ.gov.runElection(S, { rig: rig });
       RZ.engine.pushFeed(S, {

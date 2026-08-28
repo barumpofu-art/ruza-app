@@ -17,7 +17,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FILES = [
   'core.js', 'data-countries.js', 'data-ladder.js', 'data-actions.js',
   'data-events.js', 'data-dialogue.js', 'data-origins.js', 'people.js', 'field.js', 'elections.js',
-  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js', 'constituency.js', 'statecraft.js', 'legislation.js', 'contender.js', 'blocs.js', 'cast.js', 'docket.js'
+  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js', 'constituency.js', 'statecraft.js', 'legislation.js', 'contender.js', 'blocs.js', 'cast.js', 'docket.js', 'trenches.js', 'family.js', 'electionday.js'
 ];
 
 function loadGame() {
@@ -3190,6 +3190,873 @@ section('23. The pause before you answer');
     ok('reading the silence costs nothing',
       cv.mood === before.mood && cv.beat === before.beat &&
       RZ.dialogue.options(cv).length === before.opts);
+  }
+}
+
+/* ================= 24. the trenches ================= */
+section('24. The trenches');
+{
+  const low = (seed = 3100, rung = 0) => career('ZA', seed, rung);
+
+  // One person, in your own region, for the whole climb.
+  {
+    const S = low();
+    const a = RZ.trenches.keeper(S);
+    const b = RZ.trenches.keeper(S);
+    ok('the register is kept by one person', a.key === b.key, a.name);
+    ok('and they are somebody the cast knows about', !!RZ.cast.get(S, a.key));
+    ok('and the bar to clear rises with the rung', RZ.trenches.need(S) < (() => {
+      const T = low(3101, 3); return RZ.trenches.need(T);
+    })());
+  }
+
+  // Being on the list is the whole game down here, and it is a price rather
+  // than a lock: it can always be paid.
+  {
+    const S = low();
+    S.trenches.favour = 0;
+    ok('you start off the list', !RZ.trenches.onList(S));
+    ok('and being off it costs you in the hall',
+      RZ.trenches.listBonus(S, S.player.regionId) < 0,
+      String(Math.round(RZ.trenches.listBonus(S, S.player.regionId))));
+    S.trenches.favour = RZ.trenches.need(S) + 20;
+    ok('being on it helps', RZ.trenches.listBonus(S, S.player.regionId) > 0);
+    ok('and it is bounded', RZ.trenches.listBonus(S, S.player.regionId) <= 12);
+    ok('it only counts at home', RZ.trenches.listBonus(S, 'nowhere') === 0);
+  }
+
+  // Above the trenches the secretary stops being the door — but does not stop
+  // being a person you know.
+  {
+    const S = low(3110, 8);
+    ok('a minister is not waiting on a branch list', RZ.trenches.onList(S));
+    ok('and the secretary no longer weighs anything',
+      RZ.trenches.listBonus(S, S.player.regionId) === 0);
+    ok('but they are still in the cast', !!RZ.cast.get(S, RZ.trenches.keeper(S).key));
+    ok('and nothing is ticking for them any more', RZ.trenches.tick(S, 1, {}) === null);
+  }
+
+  // The grind moves it, and the two actions exist where they should.
+  {
+    const S = low();
+    S.trenches.favour = 0;
+    const before = S.trenches.favour;
+    const api = RZ.engine.mkApi(S);
+    RZ.actionById.chairs.run(api);
+    ok('carrying chairs is noticed', S.trenches.favour > before, String(Math.round(S.trenches.favour)));
+    ok('and it is counted', S.trenches.chairs === 1);
+    const mid = S.trenches.favour;
+    RZ.actionById.hustle.run(RZ.engine.mkApi(S));
+    ok('running errands is worth more', S.trenches.favour - mid > 1);
+    ok('and it comes out of your own pocket', S.player.money < 0 || S.trenches.hustles === 1);
+  }
+
+  {
+    const S = low();
+    const ids = RZ.engine.availableActions(S).map((a) => a.id);
+    ok('both are on offer at the bottom', ids.includes('chairs') && ids.includes('hustle'));
+    const T = low(3120, 8);
+    const tids = RZ.engine.availableActions(T).map((a) => a.id);
+    ok('and neither is on offer to a minister',
+      !tids.includes('chairs') && !tids.includes('hustle'));
+  }
+
+  // Favour is a push, so it needs a pull: a branch that never sees you forgets.
+  {
+    const S = low();
+    S.trenches.favour = 60;
+    for (let i = 0; i < 120; i++) RZ.trenches.tick(S, 1, {});
+    ok('a branch that never sees you forgets you',
+      S.trenches.favour < 60 && S.trenches.favour >= 0, String(Math.round(S.trenches.favour)));
+    S.trenches.favour = -60;
+    for (let i = 0; i < 120; i++) RZ.trenches.tick(S, 1, {});
+    ok('and it forgets a grudge the same way',
+      S.trenches.favour > -60 && S.trenches.favour <= 0, String(Math.round(S.trenches.favour)));
+  }
+
+  // The offer only arrives in the band where it is genuinely a short cut.
+  {
+    const S = low();
+    const n = RZ.trenches.need(S);
+    S.trenches.favour = 0;
+    ok('nobody offers you a short cut before you have started', !RZ.trenches.wantsOffer(S));
+    S.trenches.favour = n * 0.7;
+    ok('it comes when you are close and short', RZ.trenches.wantsOffer(S));
+    S.trenches.favour = n;
+    ok('and not once you were going to get there anyway', !RZ.trenches.wantsOffer(S));
+    S.trenches.favour = n * 0.7;
+    RZ.trenches.mark(S, 'signed');
+    ok('and never twice', !RZ.trenches.wantsOffer(S));
+  }
+
+  // All three answers do what they say.
+  {
+    const ev = RZ.EVENTS.filter((e) => e.id === 'trench-list')[0];
+    ok('the offer is an event like any other', !!ev && ev.once === true);
+    ok('and it is guarded on the band', !!ev.when);
+
+    const play = (i) => {
+      const S = low(3200 + i);
+      S.trenches.favour = RZ.trenches.need(S) * 0.7;
+      const api = RZ.engine.mkApi(S);
+      const before = S.trenches.favour;
+      const integrity = S.player.stats.integrity;
+      const res = ev.choices[i].run(api);
+      return { S, res, before, integrity, api };
+    };
+
+    const pledged = play(0);
+    ok('pledging the ward puts you on the list',
+      pledged.S.trenches.favour > pledged.before && RZ.trenches.onList(pledged.S));
+    ok('and somebody now holds a marker over you',
+      (pledged.S.capture.patrons || []).length > 0);
+    ok('and it is on your record', pledged.S.trenches.bargain.kind === 'pledged');
+
+    const signed = play(1);
+    ok('signing the form works faster', signed.S.trenches.favour > signed.before);
+    ok('and leaves a document with your name on it',
+      signed.S.player.dirt.some((d) => d.id === 'trench-return'));
+    ok('and costs you something you cannot buy back',
+      signed.S.player.stats.integrity < signed.integrity,
+      `${signed.integrity} → ${Math.round(signed.S.player.stats.integrity)}`);
+
+    const refused = play(2);
+    ok('refusing costs you with them', refused.S.trenches.favour < refused.before);
+    ok('and there is no bargain on your record', !refused.S.trenches.bargain);
+    ok('and it is worth something in itself',
+      refused.S.player.stats.integrity > refused.integrity,
+      `${refused.integrity} → ${Math.round(refused.S.player.stats.integrity)}`);
+    ok('but it does not offer again', !RZ.trenches.wantsOffer(refused.S));
+
+    [pledged, signed, refused].forEach((x, i) => {
+      ok(`answer ${i + 1} renders`, !!x.res.title && !!x.res.body &&
+        !/undefined|NaN|\[object Object\]/.test(x.res.title + x.res.body));
+    });
+  }
+
+  // And it all survives a save.
+  {
+    const S = low();
+    S.trenches.favour = 33; S.trenches.chairs = 4;
+    RZ.trenches.mark(S, 'pledged');
+    RZ.engine.save(S);
+    const back = RZ.engine.load();
+    ok('the register survives a save',
+      Math.round(back.trenches.favour) === 33 && back.trenches.chairs === 4);
+    ok('and so does what you agreed to', back.trenches.bargain.kind === 'pledged');
+  }
+}
+
+/* ================= 25. the household ================= */
+section('25. The family');
+{
+  // Somebody married this, and a couple of people are already attached to it.
+  {
+    const S = career('ZA', 4000, 4);
+    const f = RZ.family.summary(S);
+    ok('there is somebody at home', !!f.spouse, f.spouseFull);
+    ok('and they are in the cast', !!RZ.cast.get(S, S.family.spouseKey));
+    ok('and they are not you', f.spouseFull !== S.player.name);
+    ok('two relatives to begin with', S.family.kin.length === 2);
+    ok('and none of them is the same person',
+      new Set(S.family.kin.map((k) => k.key)).size === S.family.kin.length);
+    ok('nobody has left yet', !f.left);
+  }
+
+  // The household grows to fit the office, and it is paid for out of the same
+  // account the campaign is.
+  {
+    const low = career('ZA', 4001, 1);
+    const high = career('ZA', 4002, 10);
+    ok('a bigger office costs more at home',
+      RZ.family.drain(high) > RZ.family.drain(low),
+      `${RZ.family.drain(low).toFixed(2)} vs ${RZ.family.drain(high).toFixed(2)}`);
+    const before = high.family.kin.length;
+    RZ.family.addKin(high);
+    ok('and another relative costs more again',
+      RZ.family.drain(high) > RZ.family.drain({ ...high, family: { ...high.family, kin: high.family.kin.slice(0, before) } }) ||
+      high.family.kin.length === before + 1);
+  }
+
+  {
+    // It shows up in the money, not just in a number nobody reads.
+    const S = career('ZA', 4003, 8);
+    S.player.money = 0;
+    S.family.kin = [];
+    RZ.engine.endTurn(S);
+    const lean = S.player.money;
+    const T = career('ZA', 4003, 8);
+    T.player.money = 0;
+    while (T.family.kin.length < 6) RZ.family.addKin(T);
+    RZ.engine.endTurn(T);
+    ok('six relatives cost more than none', T.player.money < lean,
+      `${Math.round(lean)} vs ${Math.round(T.player.money)}`);
+  }
+
+  // Patience is spent by the job and bought back only by going home.
+  {
+    const S = career('ZA', 4010, 9);
+    S.family.patience = 80;
+    for (let i = 0; i < 24; i++) RZ.family.monthly(S, 1, {});
+    ok('a big job wears them down', S.family.patience < 80, String(Math.round(S.family.patience)));
+    const worn = S.family.patience;
+    RZ.family.mend(S, 20);
+    ok('and going home buys some of it back', S.family.patience > worn);
+    ok('but never past full', RZ.family.mend(S, 500) === 100);
+  }
+
+  {
+    // Rest is the action that does it, and it says so on screen.
+    const S = career('ZA', 4011, 9);
+    S.family.patience = 40;
+    const res = RZ.actionById.rest.run(RZ.engine.mkApi(S));
+    ok('resting mends it', S.family.patience > 40, String(Math.round(S.family.patience)));
+    ok('and the writing knows who is at home', !!res.body && res.body.length > 20);
+  }
+
+  // And at zero they go, once, with a mark on the record.
+  {
+    const S = career('ZA', 4012, 10);
+    S.family.patience = 0.2;
+    const out = {};
+    const feed0 = S.feed.length;
+    for (let i = 0; i < 4; i++) RZ.family.monthly(S, 1, out);
+    ok('at nothing left, they leave', S.family.left);
+    ok('and it is in the record', S.feed.length > feed0);
+    ok('and on the legacy', !!S.legacyMarks.spouseLeft);
+    const n = S.feed.length;
+    for (let i = 0; i < 6; i++) RZ.family.monthly(S, 1, {});
+    ok('and they do not leave twice', S.feed.length === n);
+  }
+
+  // The ask: a real person, a real amount, and a refusal that is remembered.
+  {
+    const ev = RZ.EVENTS.filter((e) => e.id === 'kin-ask')[0];
+    ok('the ask is an event like any other', !!ev && !!ev.when && !!ev.prep);
+
+    const S = career('ZA', 4020, 6);
+    const api = RZ.engine.mkApi(S);
+    ev.prep(api);
+    const ask = RZ.family.readAsk(S);
+    ok('somebody specific is asking', !!ask && !!ask.person, ask && ask.name);
+    ok('for something specific', !!ask.need.what);
+    ok('and it survives a save', (() => {
+      RZ.engine.save(S);
+      const back = RZ.engine.load();
+      const a2 = RZ.family.readAsk(back);
+      return a2 && a2.person && a2.person.key === ask.person.key;
+    })());
+    ok('the pending ask stores no copy of the person',
+      JSON.stringify(S.family.pending).indexOf(ask.person.name) < 0);
+
+    const money0 = S.player.money;
+    const rel0 = ask.person.rel;
+    ev.choices[0].run(RZ.engine.mkApi(S));
+    ok('paying costs money', S.player.money < money0);
+    ok('and is remembered kindly', RZ.cast.get(S, ask.person.key).rel > rel0);
+    ok('and clears the ask', S.family.pending === null);
+  }
+
+  {
+    const ev = RZ.EVENTS.filter((e) => e.id === 'kin-ask')[0];
+    const S = career('ZA', 4021, 6);
+    ev.prep(RZ.engine.mkApi(S));
+    const ask = RZ.family.readAsk(S);
+    const rel0 = ask.person.rel;
+    ev.choices[2].run(RZ.engine.mkApi(S));
+    const p = RZ.cast.get(S, ask.person.key);
+    ok('refusing costs you with them', p.rel < rel0, `${rel0} → ${Math.round(p.rel)}`);
+    ok('and they hold on to it', p.memory.some((m) => m.tone === 'bad'));
+    ok('and it does not come round again immediately', !RZ.family.wantsAsk(S));
+  }
+
+  // The brother who did not need to be asked.
+  {
+    const ev = RZ.EVENTS.filter((e) => e.id === 'kin-tender')[0];
+    ok('the tender is asked once and only high up', !!ev && ev.once === true);
+    const low = career('ZA', 4030, 2);
+    ok('a councillor’s relatives win nothing', !RZ.family.wantsTender(low));
+    const S = career('ZA', 4031, 8);
+    ok('a minister’s do', RZ.family.wantsTender(S));
+
+    const play = (i, seed) => {
+      const T = career('ZA', seed, 8);
+      const api = RZ.engine.mkApi(T);
+      const before = { integrity: T.player.stats.integrity, dirt: T.player.dirt.length };
+      const res = ev.choices[i].run(api);
+      return { T, res, before };
+    };
+    const stood = play(0, 4040);
+    ok('letting it stand leaves a document', stood.T.player.dirt.length > stood.before.dirt);
+    ok('and is on the record', stood.T.family.tender.kind === 'stood');
+
+    const cut = play(1, 4041);
+    ok('cancelling it is worth something', cut.T.player.stats.integrity > cut.before.integrity);
+    ok('and costs you at home', cut.T.player.standing.grassroots < 100);
+    ok('and marks the legacy', !!cut.T.legacyMarks.foughtCorruption);
+
+    const lied = play(2, 4042);
+    ok('the denial is its own file', lied.T.player.dirt.some((d) => d.id === 'kin-denial'));
+    ok('and only once', !RZ.family.wantsTender(lied.T));
+
+    [stood, cut, lied].forEach((x, i) => {
+      ok(`tender answer ${i + 1} renders`,
+        !!x.res.title && !!x.res.body &&
+        !/undefined|NaN|\[object Object\]/.test(x.res.title + x.res.body));
+    });
+  }
+
+  // And the whole household round-trips.
+  {
+    const S = career('ZA', 4050, 6);
+    S.family.patience = 41;
+    RZ.family.addKin(S);
+    RZ.engine.save(S);
+    const back = RZ.engine.load();
+    ok('the household survives a save',
+      Math.round(back.family.patience) === 41 && back.family.kin.length === S.family.kin.length);
+    ok('and everybody in it is still the same person',
+      back.family.kin.every((k) => !!RZ.cast.get(back, k.key)));
+  }
+}
+
+/* ================= 26. the money after the ballot ================= */
+section('26. What is left in the chest, and who asks about it');
+{
+  const wage = (cid) => RZ.engine.WAGE_BASE[cid];
+
+  // The threshold has to be in wage units or it is nonsense in nine countries
+  // out of ten: the bases run from 450 to 340,000.
+  {
+    const spread = Object.keys(RZ.COUNTRIES).map((cid) => wage(cid));
+    ok('the wage bases really do span orders of magnitude',
+      Math.max(...spread) / Math.min(...spread) > 100,
+      `${Math.min(...spread)} … ${Math.max(...spread)}`);
+
+    const pettyOf = (cid) => {
+      const S = career(cid, 5000, 4);
+      RZ.sprint.begin(S);
+      S.sprint.war.cash = 0;
+      RZ.sprint.end(S);
+      return S.flags.lastSprint.petty;
+    };
+    const ratios = Object.keys(RZ.COUNTRIES).map((cid) => pettyOf(cid) / wage(cid));
+    ok('and petty cash is the same multiple of a wage everywhere',
+      Math.max(...ratios) - Math.min(...ratios) < 0.01,
+      ratios.map((r) => r.toFixed(2)).join(' '));
+  }
+
+  // Below the line it is receipts and taxi fares; above it, somebody kept it.
+  {
+    const run = (cid, cash) => {
+      const S = career(cid, 5010, 4);
+      RZ.sprint.begin(S);
+      S.sprint.war.cash = cash;
+      S.sprint.war.raised = cash * 2;
+      S.player.money = 0;
+      RZ.sprint.end(S);
+      return S;
+    };
+    const small = run('ZA', Math.round(wage('ZA') * 1));
+    ok('a small balance still reaches your account', small.player.money > 0);
+    ok('but nobody calls it anything', !small.flags.pocketedChest);
+    ok('and it does not summon the commission on its own', !small.flags.auditDue);
+
+    const big = run('ZA', Math.round(wage('ZA') * 9));
+    ok('a large one is a decision', !!big.flags.pocketedChest);
+    ok('and it is in the record', big.feed.some((f) => /account was not closed/i.test(f.title)));
+    ok('and it is money you actually have', big.player.money > small.player.money);
+    ok('and the commission will be writing', !!big.flags.auditDue);
+    ok('and the letter knows the amount', big.flags.auditDue.pocketed > 0);
+
+    // Same test in the country with the smallest wage base, to prove the
+    // threshold travels.
+    const sz = run('SZ', Math.round(wage('SZ') * 9));
+    ok('nine wages is a lot of money in every country', !!sz.flags.pocketedChest);
+    const szSmall = run('SZ', Math.round(wage('SZ') * 1));
+    ok('and one wage is petty cash in every country', !szSmall.flags.pocketedChest);
+  }
+
+  // One chest, one letter. Where the money came from and what was left of it
+  // are the same set of bank statements.
+  {
+    const S = career('ZA', 5020, 4);
+    RZ.sprint.begin(S);
+    S.sprint.war.cash = Math.round(wage('ZA') * 8);
+    S.sprint.war.raised = Math.round(wage('ZA') * 30);
+    S.sprint.war.dirty = Math.round(wage('ZA') * 15);
+    RZ.sprint.end(S);
+    ok('one audit covers both', !!S.flags.auditDue &&
+      S.flags.auditDue.pocketed > 0 && S.flags.auditDue.share > 0);
+    S.flags.auditDue.month = 0;
+    const ev = RZ.sprint.auditDue(S);
+    ok('and the letter is one letter', !!ev && ev.audit === true);
+    ok('that mentions where it came from', /return has no line for/.test(ev.body));
+    ok('and what was left of it', /left in it/.test(ev.body));
+    ok('with no undefined anywhere', !/undefined|NaN|\[object Object\]/.test(ev.title + ev.body));
+  }
+
+  // Filing honestly returns the money and closes the file — and a closed file
+  // cannot be the subject of a second inquiry.
+  {
+    const S = career('ZA', 5030, 6);
+    RZ.sprint.begin(S);
+    S.sprint.war.cash = Math.round(wage('ZA') * 8);
+    S.sprint.war.raised = Math.round(wage('ZA') * 30);
+    S.sprint.war.dirty = Math.round(wage('ZA') * 15);
+    RZ.sprint.end(S);
+    S.flags.auditDue.month = 0;
+    const ev = RZ.sprint.auditDue(S);
+    const money0 = S.player.money;
+    const res = RZ.sprint.resolveAudit(S, ev, 0);
+    ok('filing honestly gives the balance back', S.player.money < money0);
+    ok('and says so', /returned to the account/.test(res.body));
+    ok('and closes the file', S.player.dirt.some((d) => d.id === 'returns' && d.settled));
+    ok('and there is nothing left to pocket', !S.flags.pocketedChest);
+
+    // Now expose it and check nobody comes back for a second bite.
+    S.player.dirt.forEach((d) => { d.exposed = true; });
+    const api = RZ.engine.mkApi(S);
+    const comm = RZ.EVENTS.filter((e) => e.id === 'commission')[0];
+    ok('a settled file summons nobody',
+      api.openFiles().length === 0 || !comm.when(api));
+  }
+
+  {
+    // A false return is a live case number, and that one absolutely does.
+    const S = career('ZA', 5031, 6);
+    RZ.sprint.begin(S);
+    S.sprint.war.cash = 0;
+    S.sprint.war.raised = Math.round(wage('ZA') * 30);
+    S.sprint.war.dirty = Math.round(wage('ZA') * 20);
+    RZ.sprint.end(S);
+    S.flags.auditDue.month = 0;
+    const ev = RZ.sprint.auditDue(S);
+    let caught = null;
+    for (let i = 0; i < 40 && !caught; i++) {
+      const T = career('ZA', 5040 + i, 6);
+      RZ.sprint.begin(T);
+      T.sprint.war.cash = 0; T.sprint.war.raised = 100; T.sprint.war.dirty = 80;
+      RZ.sprint.end(T);
+      if (!T.flags.auditDue) continue;
+      T.flags.auditDue.month = 0;
+      const e2 = RZ.sprint.auditDue(T);
+      RZ.sprint.resolveAudit(T, e2, 1);
+      if (T.player.dirt.some((d) => d.id === 'falsereturn')) caught = T;
+    }
+    ok('a false return that is caught is a live file', !!caught);
+    if (caught) {
+      ok('and it is not settled', !caught.player.dirt.filter((d) => d.id === 'falsereturn')[0].settled);
+    }
+    ok('and settling quietly closes it instead', (() => {
+      const T = career('ZA', 5060, 6);
+      RZ.sprint.begin(T);
+      T.sprint.war.cash = 0; T.sprint.war.raised = 100; T.sprint.war.dirty = 80;
+      RZ.sprint.end(T);
+      if (!T.flags.auditDue) return false;
+      T.flags.auditDue.month = 0;
+      T.player.money = RZ.engine.WAGE_BASE.ZA * 40;
+      RZ.sprint.resolveAudit(T, RZ.sprint.auditDue(T), 2);
+      return T.player.dirt.some((d) => d.id === 'returns' && d.settled);
+    })());
+  }
+}
+
+/* ================= 27. the by-election ================= */
+section('27. The by-election');
+{
+  const ev = RZ.EVENTS.filter((e) => e.id === 'byelection')[0];
+  ok('the vacancy exists', !!ev);
+
+  const ready = (seed, rung) => {
+    const S = career('ZA', seed, rung === undefined ? 3 : rung);
+    S.player.standing.grassroots = 70;
+    S.player.standing.party = 60;
+    S.player.fame = 40;
+    S.player.money = RZ.engine.WAGE_BASE.ZA * 40;
+    return S;
+  };
+
+  // It is offered only where a seat is what you are waiting for.
+  {
+    const S = ready(6000, 3);
+    const api = RZ.engine.mkApi(S);
+    const next = RZ.engine.nextRung(S);
+    ok('the next rung is a seat', next.how === 'public', next.how);
+    ok('so a vacancy is possible', ev.when(api));
+
+    S.campaign.season = true;
+    ok('but not during a general election', !ev.when(RZ.engine.mkApi(S)));
+    S.campaign.season = false;
+    RZ.sprint.begin(S);
+    ok('and not in the middle of a sprint', !ev.when(RZ.engine.mkApi(S)));
+  }
+
+  {
+    const S = ready(6001, 6);
+    ok('a minister is not waiting on a by-election',
+      !ev.when(RZ.engine.mkApi(S)) || RZ.engine.nextRung(S).how === 'public');
+  }
+
+  {
+    const S = ready(6002, 3);
+    S.player.standing.grassroots = 1;
+    S.player.standing.party = 1;
+    S.player.fame = 0;
+    ok('and nobody unknown is on the shortlist',
+      RZ.engine.meetsRequirements(S, RZ.engine.nextRung(S)).ok === false &&
+      !ev.when(RZ.engine.mkApi(S)));
+  }
+
+  // A by-election is not a general election with fewer people in it. Turnout
+  // collapses and the people who still come out have a grievance, so it has to
+  // be losable — otherwise it is a free promotion and the funding choice is
+  // decoration.
+  {
+    const rate = (choice, gr, pa, fa, n = 60) => {
+      let wins = 0;
+      for (let i = 0; i < n; i++) {
+        const S = ready(6100 + i, 3);
+        S.player.standing.grassroots = gr; S.player.standing.party = pa; S.player.fame = fa;
+        const before = S.player.rungIdx;
+        ev.prep(RZ.engine.mkApi(S));
+        ev.choices[choice].run(RZ.engine.mkApi(S));
+        if (S.player.rungIdx > before) wins++;
+      }
+      return wins / n;
+    };
+    const weakSelf = rate(0, 30, 25, 10);
+    const strongSelf = rate(0, 70, 60, 40);
+    const weakParty = rate(1, 30, 25, 10);
+    const strongParty = rate(1, 70, 60, 40);
+
+    ok('an unknown can lose a by-election on their own money',
+      weakSelf < 0.85, (weakSelf * 100).toFixed(0) + '%');
+    ok('and a strong candidate usually takes it',
+      strongSelf > weakSelf + 0.1,
+      `${(weakSelf * 100).toFixed(0)}% vs ${(strongSelf * 100).toFixed(0)}%`);
+    ok('the machine is better at this than you are',
+      weakParty > weakSelf, `${(weakSelf * 100).toFixed(0)}% vs ${(weakParty * 100).toFixed(0)}%`);
+    // The point of the whole mechanic: the offer is worth most to the people
+    // least able to refuse it.
+    ok('and it is worth most to whoever needs it most',
+      (weakParty - weakSelf) > (strongParty - strongSelf),
+      `weak +${((weakParty - weakSelf) * 100).toFixed(0)}pts, strong +${((strongParty - strongSelf) * 100).toFixed(0)}pts`);
+  }
+
+  // Fighting it yourself costs money and owes nobody.
+  {
+    let won = null;
+    for (let i = 0; i < 40 && !won; i++) {
+      const S = ready(6100 + i, 3);
+      const before = { rung: S.player.rungIdx, money: S.player.money };
+      ev.prep(RZ.engine.mkApi(S));
+      const res = ev.choices[0].run(RZ.engine.mkApi(S));
+      if (S.player.rungIdx > before.rung) won = { S, res, before };
+    }
+    ok('you can win one on your own money', !!won);
+    if (won) {
+      ok('winning it takes the seat', won.S.player.rungIdx === won.before.rung + 1);
+      ok('and it costs you real money', won.S.player.money < won.before.money);
+      ok('and nobody owns it', !won.S.flags.seatOwed);
+      ok('and the writing says so', /Nobody owns you/.test(won.res.body));
+    }
+  }
+
+  // Letting the region pay wins more often and costs for years.
+  {
+    let bought = null;
+    for (let i = 0; i < 40 && !bought; i++) {
+      const S = ready(6200 + i, 3);
+      const before = S.player.rungIdx;
+      ev.prep(RZ.engine.mkApi(S));
+      const res = ev.choices[1].run(RZ.engine.mkApi(S));
+      if (S.player.rungIdx > before) bought = { S, res };
+    }
+    ok('the machine can deliver a seat', !!bought);
+    if (bought) {
+      ok('and it is owed', bought.S.flags.seatOwed === true);
+      ok('and somebody holds a marker', (bought.S.capture.patrons || []).length > 0);
+      ok('and you are whipped for two years', RZ.revolt.whipped(bought.S));
+    }
+  }
+
+  // And the debt is real: it is worth twelve points the day you move.
+  {
+    const free = ready(6300, 9);
+    const owed = ready(6300, 9);
+    owed.flags.seatOwed = true;
+    const a = RZ.revolt.revoltOdds(free);
+    const b = RZ.revolt.revoltOdds(owed);
+    ok('a bought seat is held against you in the caucus',
+      !a || !b || b.pct < a.pct, a && b ? `${a.pct}% vs ${b.pct}%` : 'no incumbent');
+  }
+
+  // Sitting it out hands it to somebody with a name.
+  {
+    const S = ready(6400, 3);
+    const field0 = S.field.length;
+    ev.prep(RZ.engine.mkApi(S));
+    const res = ev.choices[2].run(RZ.engine.mkApi(S));
+    ok('somebody else takes it', S.field.length >= field0);
+    ok('and they have a name in the story',
+      !/undefined|NaN|\[object Object\]/.test(res.title + res.body));
+  }
+
+  // All three answers render, in all ten countries.
+  {
+    let bad = [];
+    Object.keys(RZ.COUNTRIES).forEach((cid) => {
+      [0, 1, 2].forEach((i) => {
+        const S = career(cid, 6500, 3);
+        S.player.standing.grassroots = 70; S.player.standing.party = 60;
+        S.player.fame = 40; S.player.money = RZ.engine.WAGE_BASE[cid] * 40;
+        const api = RZ.engine.mkApi(S);
+        ev.prep(api);
+        const t = ev.title(api), b = ev.body(api);
+        const res = ev.choices[i].run(RZ.engine.mkApi(S));
+        if (/undefined|NaN|\[object Object\]/.test(t + b + res.title + res.body)) bad.push(cid + '/' + i);
+      });
+    });
+    ok('the vacancy reads in all ten countries', bad.length === 0, bad.join(', '));
+  }
+}
+
+/* ================= 28. election day ================= */
+section('28. Election day, in four phases');
+{
+  const day = (cid = 'ZA', seed = 8000, rung = 6) => {
+    const S = career(cid, seed, rung);
+    S.nextElection = S.date.year;
+    RZ.eday.init(S);
+    return S;
+  };
+
+  // The order is the design: nothing is decided until phase three is answered.
+  {
+    const S = day();
+    ok('the day opens at dawn', S.eday.phase === 'ground');
+    ok('and nothing has been counted', !S.eday.result);
+    RZ.eday.chooseGround(S, 0);
+    ok('the ground game leads to the exit polls', S.eday.phase === 'exit');
+    ok('and still nothing has been counted', !S.eday.result);
+    RZ.eday.takePoll(S);
+    ok('the polls lead to the one intervention', S.eday.phase === 'shift');
+    ok('and STILL nothing has been counted', !S.eday.result,
+      'if this fails the first three phases are decoration');
+    RZ.eday.chooseShift(S, 0);
+    ok('and only then is there a count to run', S.eday.phase === 'count');
+    RZ.eday.runCount(S, {});
+    ok('which produces a real result', !!S.eday.result && !!S.eday.result.gov);
+    ok('and the day is over', S.eday.phase === 'done');
+  }
+
+  // The morning genuinely moves the night.
+  {
+    const swings = RZ.eday.GROUND.map((g, i) => {
+      let total = 0;
+      for (let k = 0; k < 30; k++) {
+        const S = day('ZA', 8100 + k);
+        total += RZ.eday.chooseGround(S, i).swing;
+      }
+      return total / 30;
+    });
+    ok('every way of spending the day is worth something',
+      swings.every((v) => v > 0), swings.map((v) => v.toFixed(1)).join(' '));
+    ok('and they are not all worth the same',
+      Math.max(...swings) - Math.min(...swings) > 1,
+      swings.map((v) => v.toFixed(1)).join(' '));
+  }
+
+  {
+    // The marginals are the gamble: highest ceiling, and it can come to nothing.
+    const runs = [];
+    for (let k = 0; k < 60; k++) {
+      const S = day('ZA', 8200 + k);
+      runs.push(RZ.eday.chooseGround(S, 1).swing);
+    }
+    ok('throwing everything at the marginals can pay hugely',
+      Math.max(...runs) > 6, Math.max(...runs).toFixed(1));
+    ok('and can come to nothing at all',
+      Math.min(...runs) < 1.5, Math.min(...runs).toFixed(1));
+  }
+
+  // The exit poll is a sample, not the answer shown early.
+  {
+    const S = day();
+    RZ.eday.chooseGround(S, 0);
+    const poll = RZ.eday.takePoll(S);
+    ok('the poll adds up to a hundred',
+      Math.abs(Object.keys(poll.byParty).reduce((a, k) => a + poll.byParty[k], 0) - 100) < 0.01);
+    ok('and carries an honest error bar', poll.err > 0, String(poll.err));
+    ok('and says what it can and cannot support', !!poll.read);
+    ok('a country with a better commission polls better',
+      RZ.eday.pollError({ countryId: 'BW' }) <= RZ.eday.pollError({ countryId: 'ZW' }) ||
+      RZ.COUNTRIES.BW.inst.electoral <= RZ.COUNTRIES.ZW.inst.electoral);
+  }
+
+  {
+    // A poll is not wrong in a landslide and should not be — nobody's exit poll
+    // has ever mistaken a fifteen-point lead. What has to be true is that it is
+    // wrong often enough in a *tight* race, because that is the only race in
+    // which phase three is a decision rather than a lookup.
+    // A genuine two-horse race, not an eight-way tie: with every party level,
+    // "who leads" is noise in the poll and noise in the count, and comparing
+    // two coin flips measures nothing.
+    const tighten = (S) => {
+      const c = RZ.COUNTRIES.ZA;
+      const rest = (100 - 68) / Math.max(1, c.parties.length - 2);
+      c.parties.forEach((p, i) => {
+        S.parties[p.id].vote = i === 0 ? 35 : i === 1 ? 33 : rest;
+      });
+      return S;
+    };
+    let wrong = 0, tight = 0, n = 150;
+    for (let k = 0; k < n; k++) {
+      const S = tighten(day('ZA', 8300 + k));
+      RZ.eday.chooseGround(S, 0);
+      const poll = RZ.eday.takePoll(S);
+      if (poll.tight) tight++;
+      RZ.eday.chooseShift(S, 0);
+      const r = RZ.eday.runCount(S, {});
+      if (poll.leadId !== r.gov.lead) wrong++;
+    }
+    ok('in a tight race the exit poll is sometimes wrong about who won',
+      wrong > 0, `${wrong}/${n}`);
+    ok('but it is still usually right', wrong < n * 0.5, `${wrong}/${n}`);
+    ok('and it says so itself when it cannot be trusted', tight > 0, `${tight}/${n}`);
+
+    // And in a landslide it is not wrong, which is also correct.
+    let landslideWrong = 0;
+    for (let k = 0; k < 60; k++) {
+      const S = day('ZA', 8380 + k);
+      RZ.eday.chooseGround(S, 0);
+      const poll = RZ.eday.takePoll(S);
+      RZ.eday.chooseShift(S, 0);
+      const r = RZ.eday.runCount(S, {});
+      if (poll.leadId !== r.gov.lead) landslideWrong++;
+    }
+    ok('and a fifteen-point lead is never called wrong',
+      landslideWrong <= 3, `${landslideWrong}/60`);
+  }
+
+  // The afternoon offers only what the poll would make a person reach for.
+  {
+    const behind = day('ZA', 8400);
+    RZ.eday.chooseGround(behind, 0);
+    RZ.eday.takePoll(behind);
+    behind.eday.poll.ahead = false;
+    behind.eday.poll.tight = false;
+    const ids = RZ.eday.shiftOptions(behind).map((o) => o.id);
+    ok('you can concede when you are clearly losing', ids.includes('concede'));
+    ok('and you cannot declare victory', !ids.includes('claim'));
+
+    const ahead = day('ZA', 8401);
+    RZ.eday.chooseGround(ahead, 0);
+    RZ.eday.takePoll(ahead);
+    ahead.eday.poll.ahead = true;
+    ahead.eday.poll.tight = false;
+    const ids2 = RZ.eday.shiftOptions(ahead).map((o) => o.id);
+    ok('you can claim it when you are ahead', ids2.includes('claim'));
+    ok('and you cannot concede', !ids2.includes('concede'));
+    ok('doing nothing is always on the table',
+      ids.includes('hold') && ids2.includes('hold'));
+  }
+
+  {
+    // Conceding early is a real, costly, recorded thing.
+    const S = day('ZA', 8410);
+    RZ.eday.chooseGround(S, 0);
+    RZ.eday.takePoll(S);
+    S.eday.poll.ahead = false; S.eday.poll.tight = false;
+    const opts = RZ.eday.shiftOptions(S);
+    const i = opts.findIndex((o) => o.id === 'concede');
+    const media0 = S.player.standing.media;
+    const party0 = S.player.standing.party;
+    RZ.eday.chooseShift(S, i);
+    ok('conceding with grace is noticed outside the party', S.player.standing.media > media0);
+    ok('and resented inside it', S.player.standing.party < party0);
+    ok('and it is on the legacy', !!S.legacyMarks.concededEarly);
+  }
+
+  // The count comes in smallest first, so the places that decide it are last.
+  {
+    const S = day();
+    const order = RZ.eday.countOrder(S);
+    const c = RZ.COUNTRIES.ZA;
+    const seats = order.map((id) => c.regionById[id].seats);
+    ok('every region declares exactly once',
+      order.length === c.regions.length && new Set(order).size === order.length);
+    ok('and the small ones declare first',
+      seats.every((v, i) => i === 0 || seats[i - 1] <= v), seats.join(' < '));
+  }
+
+  {
+    const S = day();
+    RZ.eday.chooseGround(S, 0);
+    RZ.eday.takePoll(S);
+    RZ.eday.chooseShift(S, 0);
+    RZ.eday.runCount(S, {});
+    const order = RZ.eday.countOrder(S);
+    const zero = RZ.eday.partial(S, 0);
+    ok('nothing is declared at the start', zero.declared === 0 && zero.pct === 0);
+    for (let n = 1; n <= order.length; n++) {
+      const part = RZ.eday.partial(S, n);
+      if (part.declared !== n) { ok('the count advances one region at a time', false, `${n}`); break; }
+      const tot = Object.keys(part.byParty).reduce((a, k) => a + part.byParty[k], 0);
+      if (Math.abs(tot - 100) > 0.01) { ok('and always adds up to a hundred', false, String(tot)); break; }
+    }
+    ok('the count advances one region at a time', true);
+    ok('and always adds up to a hundred', true);
+    const full = RZ.eday.partial(S, order.length);
+    ok('and finishes at a hundred per cent', full.pct === 100 && full.declared === order.length);
+    ok('and names whoever declared last', !!full.last && !!full.last.name);
+    ok('asking for more regions than exist is safe',
+      RZ.eday.partial(S, 999).declared === order.length);
+  }
+
+  // The full night, in all ten countries, through every ground game and every
+  // shift that is on offer.
+  {
+    let played = 0, bad = [];
+    Object.keys(RZ.COUNTRIES).forEach((cid) => {
+      RZ.eday.GROUND.forEach((g, gi) => {
+        const S = day(cid, 8500 + gi, 6);
+        RZ.eday.chooseGround(S, gi);
+        const poll = RZ.eday.takePoll(S);
+        const opts = RZ.eday.shiftOptions(S);
+        opts.forEach(function (o, oi) {
+          const T = day(cid, 8500 + gi, 6);
+          RZ.eday.chooseGround(T, gi);
+          RZ.eday.takePoll(T);
+          const sh = RZ.eday.chooseShift(T, oi);
+          const r = RZ.eday.runCount(T, {});
+          played++;
+          if (!r || !r.gov || !sh.note) bad.push(cid + '/' + gi + '/' + oi);
+          if (/undefined|NaN|\[object Object\]/.test(sh.note)) bad.push(cid + '/' + gi + '/' + oi + ' text');
+          const part = RZ.eday.partial(T, 2);
+          if (!part || !isFinite(part.byParty[Object.keys(part.byParty)[0]])) {
+            bad.push(cid + '/' + gi + '/' + oi + ' partial');
+          }
+        });
+      });
+    });
+    ok('every path through the night plays in every country', bad.length === 0,
+      `${played} runs, ${bad.length} bad ${bad.slice(0, 4).join(' ')}`);
+  }
+
+  // And the day survives being closed halfway through.
+  {
+    const S = day();
+    RZ.eday.chooseGround(S, 1);
+    RZ.eday.takePoll(S);
+    RZ.engine.save(S);
+    const back = RZ.engine.load();
+    ok('the day survives a save', back.eday.phase === 'shift' && !!back.eday.poll);
+    ok('and the morning is still on the record', !!back.eday.ground.note);
+    RZ.eday.chooseShift(back, 0);
+    const r = RZ.eday.runCount(back, {});
+    ok('and it can be finished on the other side', !!r.gov);
   }
 }
 

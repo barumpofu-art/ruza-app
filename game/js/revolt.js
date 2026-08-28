@@ -102,7 +102,10 @@
     if (!inc) return null;
     var mine = P.standing.party * 0.45 + P.standing.grassroots * 0.30 +
                (P.allies || []).length * 3.5 + P.capital * 0.20 +
-               (mandateActive(S) ? 10 : 0);
+               (mandateActive(S) ? 10 : 0) -
+               // A seat somebody else paid for is a seat somebody else can talk
+               // about, and every member of that caucus was told about it.
+               (S.flags.seatOwed ? 12 : 0);
     var theirs = inc.power * 0.75 + S.parties[P.partyId].machine * 0.35 +
                  c.inst.incumbency * 0.18 + c.inst.patronage * 0.10;
     var pct = clamp(50 + (mine - theirs) * 0.9, 4, 92);

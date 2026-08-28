@@ -45,6 +45,9 @@ price.
 | `js/blocs.js` | Six demographic blocs cutting across the regions |
 | `js/cast.js` | The persistent cast: the same people, meeting after meeting, and who is called what on screen |
 | `js/docket.js` | The diary: appointments somebody else booked, and the cost of not turning up |
+| `js/trenches.js` | The bottom of the ladder: the register, the list, and whoever keeps them |
+| `js/family.js` | The household — a spouse, the relatives, and the brother in the gazette |
+| `js/electionday.js` | Election day in four phases, and the count that comes in region by region |
 | `js/ui.js` | All rendering. One module, no framework |
 | `js/main.js` | Bootstrap and flow control |
 
@@ -252,21 +255,56 @@ Suzerain-quality) or assembled from each minister's faction and interests (infin
 blander). The suggestion on the table is authored for the six or seven pivotal rooms and
 assembled for the rest.
 
-### Backlog carried from earlier
+### The backlog, now cleared
 
-- Carry-over of leftover campaign money into personal wealth. **The threshold must be in
-  wage units, not an absolute figure** — wage bases span 450 to 340,000 across the ten
-  countries.
-- Unify the commission audit with the post-election injunction, so a player is not
-  scrutinised twice for the same money.
-- The by-election, offered as a choice: fight it broke and free, or let the party fund it
-  and owe them every vote.
-- The trenches at the bottom: the branch gatekeeper and the nomination list, the youth
-  league hustle, the first Faustian bargain, carrying chairs.
-- The family legacy: a spouse and siblings consuming wealth, and the brother who wins a
-  tender.
-- Election Day as four phases (ground game, exit polls, tactical shift, live count).
-  **Needs the staggered animated count screen built first — it does not exist.**
+All six items carried from the early sessions are built and tested. What each of
+them turned out to be:
+
+- **The trenches** (`js/trenches.js`). Below tier four the question is not whether you
+  are strong enough, it is whether one person has written your name down. A single
+  persistent cast member — the branch secretary, in your own region, for the whole
+  climb — keeps a `favour` score; `RZ.trenches.listBonus` feeds straight into
+  `field.playerSide().here`, so being off the list costs up to fourteen points in the
+  hall and being well on it is worth twelve. `chairs` and `hustle` are the two actions
+  the bottom of the ladder is actually made of, and they exist nowhere above tier three.
+  Favour decays 3%/month — see the ratchet note below; it is the same lesson again.
+  The first Faustian bargain (`trench-list` in data-events) arrives only in the band
+  where it is genuinely a short cut: close enough to want the list, years off earning it.
+- **The family** (`js/family.js`). `drain()` is added to the monthly outgoings in wage
+  units and scales with both the office and the number of relatives, which is the reason
+  rising never makes anybody rich. The spouse has `patience`, spent by the job and bought
+  back only by `rest`; at zero they leave, once, with a legacy mark. `kin-ask` is the
+  ordinary recurring ask; `kin-tender` is the brother whose company appears in the
+  gazette, which is the one that ends careers.
+- **Campaign money carry-over.** `sprint.end()` no longer evaporates the chest.
+  **The threshold is `PETTY = 2.5` wage units and must stay in wage units** — the bases
+  span 450 to 340,000, so any absolute figure is a rounding error in one country and a
+  fortune in another. Below it, absorbed silently; above it, `S.flags.pocketedChest` and
+  a feed card.
+- **The audit and the injunction, unified.** One chest, one letter: `auditDue` now covers
+  where the money came from *and* what was left of it, in one set of questions. Filing
+  honestly returns the balance and calls `api.settleDirt('returns')`; the general
+  `commission` event now gates on `api.openFiles()` rather than on any exposed dirt, so a
+  file the electoral commission has closed cannot be the subject of a second inquiry.
+  A false return that is *caught* is deliberately left unsettled — that one is a live
+  case number and should come back.
+- **The by-election** (`byelection` in data-events). Offered when the next rung is a
+  `public` one, which is exactly the off-cycle version of the wait those rungs otherwise
+  face. The design point is in `byProtest()`: turnout collapses and the people who still
+  come out have a grievance, so a governing party loses seats it holds comfortably.
+  Measured across sixty runs: a weak candidate wins 62% self-funded and 78% with the
+  region's money; a strong one wins 95% either way. **The machine's offer is worth most
+  to whoever can least afford to refuse it**, which is the whole mechanic. A bought seat
+  sets `S.flags.seatOwed`, worth −12 on `revoltOdds` for the rest of the career.
+- **Election day in four phases** (`js/electionday.js`). Dawn, the exit polls, one
+  intervention, and the count. **The result is not computed until phase three has been
+  answered** — `runCount()` folds the day's swing into `campaign.effort` and only then
+  calls `runElection`, so the first three phases genuinely move it. The exit poll is a
+  *sample*: honest inputs plus sampling error sized off `inst.electoral`, which makes it
+  wrong about the winner often enough in a tight race to make phase three a bet, and
+  never wrong in a landslide, which is also correct. The count declares smallest region
+  first, so the places that decide it speak last. `RZ.ui.setCount(0)` turns off the
+  stagger for the harnesses and `prefers-reduced-motion`.
 
 ### A shape to watch for: the one-way ratchet
 
@@ -297,6 +335,11 @@ reverts every relationship toward zero at 2% a month once it has been six months
 since you last sat with that person, and neglect has a floor: `cast.ding(S, p,
 amount, floor)` will not push past −45 for silence or −70 for a cancellation.
 Only things you did in front of somebody take it further than that.
+Fourth instance, caught the same week: `trenches.favour` is pushed up by every
+month of grinding and would otherwise never come down, which would make the
+list a stopwatch rather than a relationship. It reverts 3% a month, so a branch
+that stops seeing you forgets you.
+
 **The general rule: before adding a per-turn push to any quantity, ask what the
 equal and opposite pull is.**
 

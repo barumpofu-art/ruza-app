@@ -3,7 +3,7 @@ var RZ = (function () {
   'use strict';
 
   // Kept in step with game/VERSION, which CI also stamps into the APK.
-  var VERSION = '1.6.0';
+  var VERSION = '1.7.0';
 
   var _seed = 1;
   function seed(n) { _seed = (n >>> 0) || 1; }

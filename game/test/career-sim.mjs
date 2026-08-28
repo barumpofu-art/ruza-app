@@ -22,7 +22,7 @@ const FILES = [
   'core.js', 'data-countries.js', 'data-ladder.js', 'data-actions.js',
   'data-events.js', 'data-dialogue.js', 'data-origins.js', 'people.js', 'field.js', 'elections.js',
   'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js',
-  'constituency.js', 'statecraft.js', 'legislation.js', 'contender.js', 'blocs.js', 'cast.js', 'docket.js'
+  'constituency.js', 'statecraft.js', 'legislation.js', 'contender.js', 'blocs.js', 'cast.js', 'docket.js', 'trenches.js', 'family.js', 'electionday.js'
 ];
 
 function loadGame() {
@@ -177,6 +177,19 @@ const BUYS = {
 function climbPick(S, avail) {
   const P = S.player;
   const have = new Set(avail.map((a) => a.id));
+
+  // Below tier four the list is the whole game and it is the card at the top of
+  // the desk. A player who is off it works the branch; a simulator that never
+  // does is measuring a game nobody plays.
+  if (RZ.trenches && RZ.trenches.active(S) && !RZ.trenches.onList(S)) {
+    const grind = ['hustle', 'chairs'].filter((id) => have.has(id));
+    if (grind.length && RZ.chance(0.6)) {
+      // Pick once, outside the predicate. Inside it, RZ.pick would be re-rolled
+      // for every element of `avail` and the filter would usually match nothing.
+      const want = RZ.pick(grind);
+      return avail.filter((a) => a.id === want)[0];
+    }
+  }
 
   // The diary is the first thing on the desk, so a climbing player sees it.
   if (RZ.docket) {

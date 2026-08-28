@@ -49,6 +49,10 @@
       buffs: [], capture: { patrons: [], granted: 0, refused: 0 },
       // What is already in the diary this month, and who put it there.
       docket: null,
+      // The register, the list, and whoever keeps them.
+      trenches: null,
+      // The household: who married this, and everybody who attached to it.
+      family: null,
       // Rises while somebody is actively looking for something on you, and
       // falls back when nobody is. Multiplies the chance a file breaks.
       scandalRisk: 0,
@@ -156,6 +160,12 @@
       });
       Object.keys(S.player.stats).forEach(function (k) { S.player.stats[k] = C100(S.player.stats[k]); });
     }
+
+    // A household, which is the one constituency you cannot campaign in.
+    if (RZ.family) RZ.family.init(S);
+
+    // The bottom of the ladder has its own gatekeeper, and she is a person.
+    if (RZ.trenches) RZ.trenches.init(S);
 
     // Six electorates rather than one, sized off this country's own numbers
     // and tilted by the room the origin scene put you in.
@@ -329,6 +339,17 @@
           var e = P.dirt.filter(function (d) { return d.id === id; })[0]; e.severity += 1; return;
         }
         P.dirt.push({ id: id, label: label, severity: sev, exposed: false, year: S.date.year });
+      },
+      // A file that has been adjudicated and closed. It stays on the record —
+      // nothing here is ever erased — but nobody gets to summon you about the
+      // same money a second time.
+      settleDirt: function (id) {
+        var d = P.dirt.filter(function (x) { return x.id === id; })[0];
+        if (d) { d.settled = true; d.settledYear = S.date.year; }
+        return d || null;
+      },
+      openFiles: function () {
+        return P.dirt.filter(function (d) { return d.exposed && !d.settled; });
       },
       worstDirt: function () {
         var un = P.dirt.filter(function (d) { return !d.exposed; });
@@ -674,7 +695,10 @@
     var income = w * (rung.sal || 0);
     var bgIncome = rung.sal ? 0 : w * 1.3;         // the day job you still have
     // constituency office, funerals, school fees, and the relatives who now visit
-    var costs = w * (0.85 + (rung.sal || 0) * 0.62 + P.fame / 110 + (rung.tier >= 4 ? 1.1 : 0.15));
+    // The household is the reason none of this makes anybody rich: it grows to
+    // fit the office, and it is paid out of the same account the campaign is.
+    var kinCost = RZ.family ? RZ.family.drain(S) : 0;
+    var costs = w * (0.85 + (rung.sal || 0) * 0.62 + P.fame / 110 + (rung.tier >= 4 ? 1.1 : 0.15) + kinCost);
     P.money = Math.round(P.money + (income + bgIncome - costs) * span);
     P.capital = Math.min(200, P.capital + (rung.cap || 0) * 0.25 * span);
 
@@ -810,6 +834,11 @@
     // The electorate reads the same newspaper you do, and six different parts
     // of it draw six different conclusions from it.
     if (RZ.blocs) out.blocs = RZ.blocs.tick(S, span, out);
+    // Somebody married this career without being asked whether they wanted to.
+    if (RZ.family) out.family = RZ.family.monthly(S, span, out);
+    // A branch that does not see you forgets you, at about three per cent a
+    // month. Above tier three this stops mattering and stops running.
+    if (RZ.trenches) out.trenches = RZ.trenches.tick(S, span, out);
     // Everybody you have ever sat with drifts back toward indifference when
     // you stop appearing. Without this every push on a relationship is one-way
     // and the whole cast ends a long career at the floor.

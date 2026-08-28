@@ -150,7 +150,10 @@
       // national figure has a floor everywhere, which is most of what fame is
       // for at a conference: delegates from a province you have never worked
       // still know who you are.
-      here: Math.max(P.regionSupport[regionId] || 0, P.fame * 0.28),
+      // Low down the ladder, most of what "here" means is whether the person
+      // who keeps the register has put your name on the list.
+      here: Math.max(P.regionSupport[regionId] || 0, P.fame * 0.28) +
+            (RZ.trenches ? RZ.trenches.listBonus(S, regionId) : 0),
       // "Grassroots" is an average of six electorates who want different
       // things. What counts in a hall is which of them actually turned up, so
       // the bloc swing is folded in here rather than at each contest.

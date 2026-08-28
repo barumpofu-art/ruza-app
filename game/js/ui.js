@@ -215,6 +215,7 @@
         '. Everything you do now is worth more, and costs more.</p></div>';
     }
 
+    h += listCard(S);
     h += contestCard();
 
     h += docketBoard(S);
@@ -464,6 +465,36 @@
             return '<span class="dlt ' + (d.v > 0 ? 'p' : 'n') + '">' + esc(d.label) + ' ' + RZ.signed(d.v) + '</span>';
           }).join('') + '</div>' : '') +
       '</div>';
+  }
+
+  // At the bottom of the ladder the question is not whether you are strong
+  // enough, it is whether one person has written your name down. Show that
+  // person, and show how far off you are, because it is the whole game down
+  // here and it is invisible otherwise.
+  function listCard(S) {
+    if (!RZ.trenches) return '';
+    var st = RZ.trenches.status(S);
+    if (!st) return '';
+    var tone = st.on ? 'var(--green)' : st.pct > 60 ? 'var(--gold)' : 'var(--red)';
+    var h = '<div class="block"><div class="block-h">The list' +
+      '<span class="sub">' + (st.on ? 'your name is on it' : 'your name is not on it') + '</span></div>' +
+      '<div class="card"><div class="list-who">' +
+        '<span class="list-nm">' + esc(st.full) + '</span>' +
+        '<span class="list-role">' + esc(st.role) + '</span></div>' +
+      '<div class="sprint-bar" style="margin:9px 0 8px">' +
+        '<span style="width:' + Math.max(2, st.pct) + '%;background:' + tone + '"></span></div>' +
+      '<p class="note">' + esc(st.read) + '</p>';
+    if (st.bargain) {
+      h += '<p class="note mt" style="color:var(--gold)">' +
+        (st.bargain.kind === 'signed'
+          ? 'You signed something in ' + st.bargain.year + ' that put you here.'
+          : 'You pledged the ward in ' + st.bargain.year + ' to get here.') + '</p>';
+    }
+    if (st.chairs || st.hustles) {
+      h += '<p class="note mt" style="opacity:.75">' + st.chairs + ' night' + (st.chairs === 1 ? '' : 's') +
+        ' stacking chairs, ' + st.hustles + ' errand' + (st.hustles === 1 ? '' : 's') + ' run out of pocket.</p>';
+    }
+    return h + '</div></div>';
   }
 
   function contestCard() {
@@ -782,6 +813,40 @@
       '</div></div>';
   }
 
+  // The household. It is on the "You" pane rather than the desk because it is
+  // not something you do — it is something that is happening to you while you
+  // do everything else.
+  function familyBlock(S) {
+    if (!RZ.family) return '';
+    var f = RZ.family.summary(S);
+    if (!f) return '';
+    var tone = f.left ? 'r' : f.patience > 60 ? 'g' : f.patience > 30 ? '' : 'r';
+    var h = '<div class="block"><div class="block-h">Home' +
+      '<span class="sub">' + f.kin + ' depending on you</span></div><div class="card">';
+    if (f.spouse) {
+      h += '<div class="list-who"><span class="list-nm">' + esc(f.spouseFull) + '</span>' +
+        '<span class="list-role">' + (f.left ? 'left in ' + f.leftYear : 'married to this career') +
+        '</span></div>';
+      if (!f.left) {
+        h += '<div class="bars mt">' + plainBar('Patience', f.patience, tone) + '</div>';
+      }
+    }
+    h += '<p class="note mt">' + esc(f.read) + '</p>';
+    if (f.paid || f.refused) {
+      h += '<p class="note" style="opacity:.75">' + f.paid + ' asked and paid, ' +
+        f.refused + ' turned away.</p>';
+    }
+    if (f.tender) {
+      h += '<p class="note mt" style="color:' +
+        (f.tender.kind === 'cancelled' ? 'var(--green)' : 'var(--red)') + '">' +
+        ({ stood: 'You let the contract stand in ' + f.tender.year + '.',
+           cancelled: 'You cancelled the contract in ' + f.tender.year + '.',
+           denied: 'You said you knew nothing about it, in ' + f.tender.year + '.' }[f.tender.kind] || '') +
+        '</p>';
+    }
+    return h + '</div></div>';
+  }
+
   function renderSelf() {
     var S = UI.S, c = RZ.COUNTRIES[S.countryId], P = S.player;
     var lad = RZ.ladderFor(c.id), rung = lad[P.rungIdx];
@@ -792,6 +857,8 @@
       '<div style="font-family:var(--serif);font-size:1.3rem;font-weight:600">' + esc(P.name) + '</div>' +
       '<p class="note">' + esc(rung.title) + ' · age ' + P.age + ' · ' + bg.ico + ' former ' + esc(bg.name.toLowerCase()) +
       ' from ' + esc(c.regionById[P.regionId].name) + '</p></div></div>';
+
+    h += familyBlock(S);
 
     h += '<div class="block"><div class="block-h">Attributes</div><div class="card"><div class="bars">' +
       plainBar('Oratory', P.stats.oratory) + plainBar('Charisma', P.stats.charisma) +
@@ -812,6 +879,11 @@
     // Where you stand inside the machine right now: the window a mandate buys,
     // the year a failed revolt costs, and the man who has not forgotten.
     var status = [];
+    if (S.flags.seatOwed) {
+      status.push('The region paid for your seat in ' + S.flags.seatOwedYear +
+        '. Everybody in that caucus knows it, and it is worth twelve points against you ' +
+        'the day you try to move on the leadership.');
+    }
     if (RZ.revolt) {
       var now = RZ.revolt.monthIndex(S);
       if (RZ.revolt.mandateActive(S)) {
@@ -1238,6 +1310,18 @@
   // simulation that times out — and so a player who has asked their phone not
   // to animate things does not get held anywhere.
   var PAUSE_MS = 850;
+  // How long the night takes, per declaring region. Same reasoning as the
+  // dialogue pause: a simulation that waits is a simulation that times out, and
+  // a player who asked their phone not to animate should not be made to sit
+  // through a staggered count.
+  var COUNT_MS = 900;
+  function countMs() {
+    if (!COUNT_MS) return 0;
+    try {
+      if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return 0;
+    } catch (e) { /* no matchMedia: animate anyway */ }
+    return COUNT_MS;
+  }
   function pauseMs() {
     if (!PAUSE_MS) return 0;
     try {
@@ -1385,6 +1469,158 @@
   }
 
   /* ---------------- election night ---------------- */
+  /* ---------------- election day ---------------- */
+  // Four screens, in order, and the result is not computed until the third has
+  // been answered — so what the player does in the first three genuinely moves
+  // it, rather than decorating a number that was decided when the day loaded.
+  function showElectionDay(onDone) {
+    var S = UI.S, c = RZ.COUNTRIES[S.countryId];
+    RZ.eday.init(S);
+    ground();
+
+    function head(kicker, title, sub) {
+      return '<div class="modal-kicker">' + esc(kicker) + '</div>' +
+        '<h2 class="modal-h">' + esc(title) + '</h2>' +
+        (sub ? '<p class="modal-b">' + sub + '</p>' : '');
+    }
+
+    // ---- 1. dawn ----
+    function ground() {
+      var opts = RZ.eday.groundOptions(S);
+      var h = head('Election day · ' + S.date.year + ' · 05:40',
+        'The stations open in twenty minutes',
+        'Every party in this country has the same number of cars and the same number of people willing to ' +
+        'drive them all day for nothing. The only thing that separates you is where you send them, and you ' +
+        'are sending them now, before anybody knows anything.') +
+        '<div class="choices">' + opts.map(function (o) {
+          return '<button class="choice" data-i="' + o.i + '">' +
+            '<div class="choice-t">' + esc(o.t) + '</div>' +
+            '<div class="choice-d">' + esc(o.d) + '</div></button>';
+        }).join('') + '</div>';
+      var inner = modal(h);
+      inner.querySelectorAll('[data-i]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var g = RZ.eday.chooseGround(S, parseInt(b.dataset.i, 10));
+          exit(g);
+        });
+      });
+    }
+
+    // ---- 2. midday ----
+    function exit(g) {
+      var poll = RZ.eday.takePoll(S);
+      var mine = c.partyById[S.player.partyId];
+      var lead = c.partyById[poll.leadId];
+      var h = head('Election day · 13:20', 'The first exit polls',
+        esc(g.note)) +
+        '<div class="eres">' + c.parties.slice()
+          .sort(function (a, b) { return poll.byParty[b.id] - poll.byParty[a.id]; })
+          .slice(0, 5).map(function (p) {
+            var v = poll.byParty[p.id];
+            return '<div class="eres-row"><div class="eres-top">' +
+              '<span class="row-dot" style="background:' + p.color + '"></span>' +
+              '<span class="eres-ab">' + esc(p.abbr) + '</span>' +
+              (p.id === S.player.partyId ? '<span class="gold" style="font-size:.72rem">yours</span>' : '') +
+              '<span class="eres-pc">' + RZ.round(v, 1) + '%</span></div>' +
+              '<div class="eres-bar"><span class="eres-fill" style="width:' +
+                Math.min(100, v * 1.6) + '%;background:' + p.color + '"></span></div></div>';
+          }).join('') + '</div>' +
+        '<p class="note mt"><strong>' + esc(lead.abbr) + '</strong> ' +
+          (poll.ahead ? 'ahead' : 'ahead of you') + ' by ' + RZ.round(poll.lead, 1) +
+          ' points — ' + esc(poll.read) + '. The sample carries an error of about ' +
+          RZ.round(poll.err, 1) + ' points either way, and exit polls in this country have been ' +
+          'confidently wrong before.</p>' +
+        '<button class="btn btn-gold btn-block mt" data-go>What do you do about it?</button>';
+      var inner = modal(h);
+      inner.querySelector('[data-go]').addEventListener('click', function () { shift(poll); });
+    }
+
+    // ---- 3. afternoon ----
+    function shift(poll) {
+      var opts = RZ.eday.shiftOptions(S);
+      var h = head('Election day · 15:05', 'The polls close in four hours',
+        'One thing. Whatever you do now is done on the strength of a number nobody can check until ' +
+        'tonight, and it cannot be undone once the stations close.') +
+        '<div class="choices">' + opts.map(function (o, n) {
+          return '<button class="choice" data-i="' + n + '">' +
+            '<div class="choice-t">' + esc(o.t) + '</div>' +
+            '<div class="choice-d">' + esc(o.d) + '</div></button>';
+        }).join('') + '</div>';
+      var inner = modal(h);
+      inner.querySelectorAll('[data-i]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var sh = RZ.eday.chooseShift(S, parseInt(b.dataset.i, 10));
+          rig(sh);
+        });
+      });
+    }
+
+    // The existing offer, kept where it always was in the night: after you have
+    // stopped campaigning and before anybody counts anything.
+    function rig(sh) {
+      if (RZ.gov.canRig(S)) showRigOffer(function (r) { count(sh, r); });
+      else count(sh, 0);
+    }
+
+    // ---- 4. the night ----
+    function count(sh, rigLevel) {
+      var res = RZ.eday.runCount(S, { rig: rigLevel });
+      var order = RZ.eday.countOrder(S);
+      var n = 0, timer = null, done = false;
+      var inner = modal('');
+      draw();
+
+      function draw() {
+        var part = RZ.eday.partial(S, n);
+        var rows = c.parties.slice()
+          .sort(function (a, b) { return part.byParty[b.id] - part.byParty[a.id]; })
+          .slice(0, 6);
+        var h = head('The count · ' + S.date.year,
+          part.declared === 0 ? 'The boxes are moving' : part.pct + '% declared',
+          esc(sh.note));
+        h += '<div class="count-meter"><span style="width:' + Math.max(2, part.pct) + '%"></span></div>' +
+          '<p class="note" style="margin:6px 0 12px">' +
+            (part.last ? '<strong>' + esc(part.last.name) + '</strong> has declared. ' : '') +
+            part.declared + ' of ' + part.of + ' ' + esc(c.terms.region) + 's in.</p>';
+        h += '<div class="eres">' + rows.map(function (p) {
+          var v = part.byParty[p.id] || 0;
+          return '<div class="eres-row"><div class="eres-top">' +
+            '<span class="row-dot" style="background:' + p.color + '"></span>' +
+            '<span class="eres-ab">' + esc(p.abbr) + '</span>' +
+            (p.id === S.player.partyId ? '<span class="gold" style="font-size:.72rem">yours</span>' : '') +
+            '<span class="eres-pc">' + RZ.round(v, 1) + '%</span></div>' +
+            '<div class="eres-bar"><span class="eres-fill count-fill" style="width:' +
+              Math.min(100, v * 1.6) + '%;background:' + p.color + '"></span></div></div>';
+        }).join('') + '</div>';
+        h += done
+          ? '<button class="btn btn-gold btn-block mt" data-final>The full result</button>'
+          : '<button class="btn btn-ghost btn-block mt" data-skip>Skip to the declaration</button>';
+        inner.innerHTML = h;
+        if (done) {
+          inner.querySelector('[data-final]').addEventListener('click', function () {
+            closeModal(); showElection(res, onDone);
+          });
+        } else {
+          inner.querySelector('[data-skip]').addEventListener('click', finish);
+        }
+      }
+
+      function step() {
+        n++;
+        draw();
+        if (n >= order.length) { finish(); return; }
+        timer = setTimeout(step, countMs());
+      }
+      function finish() {
+        if (timer) { clearTimeout(timer); timer = null; }
+        n = order.length; done = true;
+        draw();
+      }
+      if (countMs() > 0) timer = setTimeout(step, countMs());
+      else finish();
+    }
+  }
+
   function showElection(r, onClose) {
     var S = UI.S, c = r.country;
     var parties = c.parties.slice().sort(function (a, b) { return r.vote.byParty[b.id] - r.vote.byParty[a.id]; });
@@ -1550,6 +1786,7 @@
   }
 
   function setPause(ms) { PAUSE_MS = Math.max(0, ms | 0); return PAUSE_MS; }
+  function setCount(ms) { COUNT_MS = Math.max(0, ms | 0); return COUNT_MS; }
 
   RZ.ui = {
     UI: UI, show: show, toast: toast, modal: modal, closeModal: closeModal,
@@ -1558,7 +1795,9 @@
     showAmend: showAmend, showBlitz: showBlitz, showOrigin: showOrigin,
     showDraft: showDraft, showBloc: showBloc, showConcede: showConcede,
     showRigOffer: showRigOffer, showBudget: showBudget, showEnd: showEnd, showAbout: showAbout,
-    paperCard: paperCard, setPause: setPause,
-    pauseMs: function () { return PAUSE_MS; }
+    paperCard: paperCard, setPause: setPause, setCount: setCount,
+    showElectionDay: showElectionDay,
+    pauseMs: function () { return PAUSE_MS; },
+    countMs: function () { return COUNT_MS; }
   };
 })();

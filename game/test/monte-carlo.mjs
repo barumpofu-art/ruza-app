@@ -22,7 +22,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FILES = [
   'core.js', 'data-countries.js', 'data-ladder.js', 'data-actions.js',
   'data-events.js', 'data-dialogue.js', 'data-origins.js', 'people.js', 'field.js', 'elections.js',
-  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js', 'constituency.js', 'statecraft.js', 'legislation.js', 'contender.js', 'blocs.js', 'cast.js', 'docket.js'
+  'engine.js', 'governance.js', 'dialogue.js', 'crisis.js', 'sprint.js', 'revolt.js', 'constituency.js', 'statecraft.js', 'legislation.js', 'contender.js', 'blocs.js', 'cast.js', 'docket.js', 'trenches.js', 'family.js', 'electionday.js'
 ];
 
 function loadGame() {
@@ -91,6 +91,13 @@ const DIRTY = new Set(['patron', 'tender', 'leak', 'oppo']);
 
 function chooseAction(RZ, S, acts, policy) {
   if (policy === 'random') return acts[Math.floor(RZ.rnd() * acts.length)];
+
+  // And below tier four, at the list. It is the card above the diary and it is
+  // the only thing that decides whether a contest is winnable down there.
+  if (RZ.trenches && RZ.trenches.active(S) && !RZ.trenches.onList(S)) {
+    const grind = acts.filter((a2) => a2.id === 'hustle' || a2.id === 'chairs');
+    if (grind.length && RZ.chance(0.6)) return grind[Math.floor(RZ.rnd() * grind.length)];
+  }
 
   // A player looks at the diary. It is two gold-bordered cards at the top of
   // the desk, not one row of thirty — so a directed policy that picks purely on
