@@ -749,7 +749,17 @@ if (policy === 'directed' && mean((r) => r.collapses) > 9) {
 if (policy === 'directed' && pct((r) => r.collapses > 0) < 5) {
   w('medical collapse almost never fires — the threshold may be unreachable');
 }
-if (pct((r) => r.purges > 0) > 85) w('the congress purge hits nearly everybody');
+{
+  // "Was this player ever purged, across fifty years of politics?" is close to
+  // certain for any per-election rate worth having: at 25% a career of ten
+  // elections says yes 94% of the time. Measuring cumulative probability over a
+  // long career told us the mechanic was broken when it was merely present.
+  // The meaningful number is the rate.
+  const el = sum((r) => r.elections), pu = sum((r) => r.purges);
+  const rate = el ? pu / el : 0;
+  if (rate > 0.40) w(`the congress purge drops you from ${fmt(rate * 100)}% of slates — too often to climb through`);
+  if (el > 100 && pu === 0) w('nobody is ever left off a slate — the purge may be unreachable');
+}
 if (mean((r) => r.promisesMade) === 0) w('no promises were ever made — the ledger is unreachable');
 if (mean((r) => r.sprints) === 0) w('the campaign sprint never started — its trigger may be unreachable');
 if (mean((r) => r.sprints) > 0 && mean((r) => r.blitzes) === 0) w('the sprint runs but no ward was ever blitzed');

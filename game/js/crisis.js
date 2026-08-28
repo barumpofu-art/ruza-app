@@ -409,15 +409,29 @@
     if (S.flags.purgedFor === S.nextElection) return null;   // once per cycle
     if (P.isPresident || P.isLeader) return null;            // you chair it
     var tier = RZ.engine.mkApi(S).tier();
-    if (tier < 2) return null;                               // no slate to be on
+    // The card this produces says "there is no seat to contest this election".
+    // That is a candidates' list, and a branch chairperson is not on one — they
+    // hold an internal office that no general election touches. The gate was at
+    // tier two, which meant a ward councillor could be dropped from a slate they
+    // were never on. It only bites from the seat upward.
+    if (tier < 4) return null;
 
     S.flags.purgedFor = S.nextElection;
 
     // Branches decide the slate, and a machine decides the branches.
     var base = P.standing.grassroots * 0.45 + P.standing.party * 0.45 + P.fame * 0.10;
-    var allies = (P.allies || []).length * 2.5;
+    // Allies are figures on the ladder with `side === 'ally'`, reached through
+    // field.allies(). `P.allies` has never existed, so this term — and the
+    // identical one in revoltOdds — silently contributed nothing at all, and
+    // every ally anybody ever recruited counted for exactly zero here.
+    var allies = RZ.field.allies(S).length * 2.5;
     var enemies = RZ.field.rivals(S).reduce(function (t, r) { return t + r.power * 0.06; }, 0);
-    var threshold = 26 + c.inst.patronage * 0.16 + (tier >= 6 ? 8 : 0);
+    // What it takes to stay on a slate scales with the slate. Comparing an
+    // absolute standing score against an absolute bar meant a branch chairperson
+    // was being measured against what a cabinet minister needs, and was dropped
+    // from a *branch* list for not having national numbers. The bar now rises
+    // with the office, which is the thing that was actually intended.
+    var threshold = 12 + tier * 3.4 + c.inst.patronage * 0.16;
     var score = base + allies - enemies + RZ.range(-8, 8);
     if (score >= threshold) return null;
 

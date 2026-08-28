@@ -306,6 +306,52 @@ them turned out to be:
   first, so the places that decide it speak last. `RZ.ui.setCount(0)` turns off the
   stagger for the harnesses and `prefers-reduced-motion`.
 
+### Two dead terms and a bar set at the wrong height
+
+Chasing "the congress purge hits nearly everybody" turned up three separate faults, none
+of which was the one guessed at first. Method that found them, since it is the reusable
+part: instrument the function, run the same probe on the *previous release's tree*
+(`git archive <sha> game | tar -x -C /tmp/old`), and compare. 1.6.0 reached the purge
+check 0 times in 120 careers; 1.7.0 reached it 21 times. That delta is what made the
+cause findable.
+
+1. **`P.allies` has never existed.** Allies are figures in `S.field` with
+   `side === 'ally'`, reached through `RZ.field.allies(S)`. Both `congressPurge` and
+   `revoltOdds` read `(P.allies || []).length`, which is always zero — so every ally
+   anybody has ever recruited counted for exactly nothing in the two places the game
+   says they matter. The instrumentation made it obvious: `mean allies 0.0`, in every
+   sample, in every country.
+2. **The purge was gated at tier 2.** Its own card says *"there is no seat to contest
+   this election"* — that is a candidates' list, and the offices below the seat are
+   internal ones no general election touches. A ward councillor was being dropped from a
+   slate they were never on. It is gated at tier 4 now.
+3. **The bar was absolute where it should have scaled.** `threshold = 26 + patronage*0.16`
+   compared a branch chairperson's standing against what a cabinet minister needs. It is
+   `12 + tier*3.4 + patronage*0.16` now, so what it takes to stay on a list rises with the
+   value of the list.
+
+Why 1.7.0 surfaced it: the trenches gave low-tier players a route to actually win internal
+contests, so many more careers reached tiers 2–3 — and at tiers 2–3 the purge fired on
+essentially everybody it was asked about. The mechanic had been fine for releases only
+because nobody was ever getting far enough to be asked.
+
+### Standing finding: Eswatini's top office is now far too easy
+
+Fixing the purge opened the ladder — careers reaching the top office went from 5 in 1,000
+to 67 in 1,000 — but almost all of that gain landed in one country. **SZ went from ~6% to
+58% of careers reaching the top office; every other country is between 0% and 4%.**
+
+The cause is not in the fix. SZ is the monarchy: `hos` is `how: 'appoint'`, so the route
+is "reach the rung below it, wait for `S.flags.postVacant`, clear a score check" — with no
+general election and no party leadership contest in the way. It was always the softest
+path in the game, and the wrongly-applied tier-2/3 purge was the only thing culling the
+queue of people walking up it. Removing the purge did not create the hole; it stopped
+hiding it.
+
+Worth deciding deliberately, and *not* by re-breaking the purge: the King's appointment
+needs a real gate of its own — a competing candidate with a claim, a requirement to have
+held a specific portfolio, or a vacancy that is rarer than it currently is.
+
 ### A shape to watch for: the one-way ratchet
 
 Twice now a quantity meant to find a level has been written as a permanent
@@ -350,16 +396,13 @@ councillor's unbuilt borehole destabilising the republic about 126 times.
 
 ### Standing findings, recorded rather than fixed
 
-- **The new content made the average career dirtier, and the purge noticed.** Across
-  1,000 Monte Carlo careers the median `dirt` went 31 → 45 and median `integrity` 14 → 7,
-  and "the congress purge hits nearly everybody" now trips in *both* cohorts where it
-  previously tripped in neither. This is not a bug: the trenches, the household and the
-  by-election each add a way to acquire a file (`trench-return`, `kin-tender`,
-  `kin-denial`, `rollchallenge`), the directed policy takes every offer it is given, and
-  `congressPurge` reads dirt. Every one of those offers has a clean answer that the
-  simulator never picks. Worth deciding deliberately: either the purge's threshold should
-  scale with how much dirt the game now hands out, or the clean answers need to be worth
-  more than they currently are.
+- ~~The new content made the average career dirtier, and the purge noticed.~~
+  **Wrong on both counts, and worth leaving here as a worked example of guessing instead
+  of measuring.** `congressPurge` does not read `dirt` at all — it reads standing, allies
+  and rival power — and the Monte Carlo picks event choices *uniformly at random* in both
+  cohorts, so it takes the clean answer exactly as often as the dirty one. Neither half of
+  that explanation survived a probe. What the probe actually found is written up under
+  "Two dead terms and a bar set at the wrong height" below.
 
 - **The route that reaches the presidency is the corrupt one.** The clean directed policy
   caps at tier 11. That may be the right politics, but it is a design choice nobody has

@@ -101,7 +101,7 @@
     var inc = incumbent(S);
     if (!inc) return null;
     var mine = P.standing.party * 0.45 + P.standing.grassroots * 0.30 +
-               (P.allies || []).length * 3.5 + P.capital * 0.20 +
+               RZ.field.allies(S).length * 3.5 + P.capital * 0.20 +
                (mandateActive(S) ? 10 : 0) -
                // A seat somebody else paid for is a seat somebody else can talk
                // about, and every member of that caucus was told about it.
