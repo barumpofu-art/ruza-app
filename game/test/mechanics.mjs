@@ -2651,6 +2651,35 @@ section('21. Multi-speaker rooms');
 
   ok('there are rooms with more than one person in them', rooms.length >= 4, String(rooms.length));
 
+  // Most of a career is spent at the bottom of the ladder, so most of these
+  // have to be openable from there. A room only a president can walk into is
+  // content almost nobody sees.
+  {
+    const S = career('ZA', 1999, 0);
+    const api = RZ.engine.mkApi(S);
+    const open = rooms.filter((sc) => !sc.when || sc.when(api));
+    ok('most of them open to somebody with no office at all',
+      open.length >= Math.ceil(rooms.length / 2),
+      open.map((sc) => sc.id).join(', ') + ' of ' + rooms.length);
+
+    // And each of those is reachable through an action available down there.
+    open.forEach((sc) => {
+      const act = RZ.actionById[sc.topic] || RZ.gov.actionById(sc.topic);
+      if (!act) throw new Error(sc.id + ' has no action behind it');
+      const t = act.tier || [0, 13];
+      if (t[0] > 1) throw new Error(sc.id + ' opens at tier 0 but its action needs tier ' + t[0]);
+    });
+    ok('and the action that opens each of them is available down there too', true);
+
+    // The high ones are gated because the fiction requires it, not by accident.
+    const gated = rooms.filter((sc) => sc.when && !sc.when(api));
+    gated.forEach((sc) => {
+      const S2 = career('ZA', 1998, 12);
+      if (!sc.when(RZ.engine.mkApi(S2))) throw new Error(sc.id + ' is closed even at the top of the ladder');
+    });
+    ok('and every gated room does open once you are senior enough', true);
+  }
+
   // Everybody in the room is resolved, named, and persistent.
   {
     const S = career('ZA', 2000, 12);

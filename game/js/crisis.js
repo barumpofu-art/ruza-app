@@ -213,6 +213,9 @@
      ======================================================================= */
   function owe(S, name, weight) {
     S.capture = S.capture || { patrons: [], granted: 0, refused: 0 };
+    // A debt with nobody's name on it cannot come and collect, and the code
+    // that collects it says the name out loud. Somebody is always owed.
+    if (!name) name = RZ.makeName(RZ.COUNTRIES[S.countryId]);
     var existing = S.capture.patrons.filter(function (p) { return p.name === name; })[0];
     if (existing) { existing.owed += weight; existing.since = S.turn; return existing; }
     var p = { name: name, owed: weight, since: S.turn, asks: 0, granted: 0, refused: 0, lastAsk: -99 };
