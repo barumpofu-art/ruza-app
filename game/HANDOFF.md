@@ -350,6 +350,17 @@ councillor's unbuilt borehole destabilising the republic about 126 times.
 
 ### Standing findings, recorded rather than fixed
 
+- **The new content made the average career dirtier, and the purge noticed.** Across
+  1,000 Monte Carlo careers the median `dirt` went 31 → 45 and median `integrity` 14 → 7,
+  and "the congress purge hits nearly everybody" now trips in *both* cohorts where it
+  previously tripped in neither. This is not a bug: the trenches, the household and the
+  by-election each add a way to acquire a file (`trench-return`, `kin-tender`,
+  `kin-denial`, `rollchallenge`), the directed policy takes every offer it is given, and
+  `congressPurge` reads dirt. Every one of those offers has a clean answer that the
+  simulator never picks. Worth deciding deliberately: either the purge's threshold should
+  scale with how much dirt the game now hands out, or the clean answers need to be worth
+  more than they currently are.
+
 - **The route that reaches the presidency is the corrupt one.** The clean directed policy
   caps at tier 11. That may be the right politics, but it is a design choice nobody has
   explicitly made.
