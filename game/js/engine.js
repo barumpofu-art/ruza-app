@@ -858,10 +858,35 @@
     e.debt = clamp(e.debt + ((S.nation.budget.debtsvc < 10 ? 0.25 : -0.05) - e.growth * 0.05) * span + RZ.noise(0.15) * span, 5, 220);
     e.reserves = clamp(e.reserves + (shock * 0.06 - (e.inflation > 20 ? 0.05 : 0)) * span + RZ.noise(0.05) * span, 0.1, 20);
 
-    s.unrest = C100(s.unrest + ((e.inflation > 15 ? 0.7 : -0.35) + (e.unemployment > 30 ? 0.4 : -0.2) +
-                    (S.nation.govApproval < 35 ? 0.5 : -0.3)) * span + RZ.noise(0.5) * span);
+    // Unrest, stability and coup risk revert towards what conditions imply,
+    // the same way growth and inflation and approval already do above.
+    //
+    // They used to be step accumulators — a fixed monthly push with no level
+    // to settle at. South Africa opens at 32% unemployment, so the "+0.4 while
+    // unemployment is over thirty" never switched off and unrest climbed to a
+    // hundred and stayed there for the rest of the career, whatever anybody
+    // did. Stability was worse: only shocks ever moved it and only one
+    // presidential action ever pushed it back, so every country ended at zero.
+    // Both then dragged the electorate's ceiling down with them.
+    //
+    // A level, not a push: a shock still hurts for a year and a half, and
+    // neglect still costs you, but both are now recoverable by fixing the
+    // thing that caused them.
+    var unrestTarget = C100(12 + Math.max(0, e.inflation - 6) * 1.3 +
+                            Math.max(0, e.unemployment - 20) * 0.75 +
+                            Math.max(0, 45 - S.nation.govApproval) * 0.55 +
+                            s.corruption * 0.10);
+    s.unrest = C100(s.unrest + (unrestTarget - s.unrest) * pull(0.06) + RZ.noise(0.5) * span);
+
+    var stabilityTarget = C100(74 - s.unrest * 0.45 - Math.max(0, e.inflation - 8) * 0.6 -
+                               s.corruption * 0.12 + (s.judiciary - 50) * 0.15);
+    s.stability = C100(s.stability + (stabilityTarget - s.stability) * pull(0.04) + RZ.noise(0.3) * span);
+
     s.corruption = C100(s.corruption + RZ.noise(0.3) * span - (s.judiciary > 65 ? 0.12 : -0.06) * span);
-    s.coup = C100(s.coup + ((s.unrest > 60 ? 0.4 : -0.25) + (c.inst.security > 60 ? 0.12 : -0.1)) * span + RZ.noise(0.2) * span);
+
+    var coupTarget = C100(c.inst.security * 0.22 + Math.max(0, s.unrest - 45) * 0.55 -
+                          s.stability * 0.20);
+    s.coup = C100(s.coup + (coupTarget - s.coup) * pull(0.06) + RZ.noise(0.2) * span);
 
     var target = C100(52 + (e.growth - 2.5) * 3 - Math.max(0, e.inflation - 6) * 0.7 -
                       Math.max(0, e.unemployment - 20) * 0.35 - s.unrest * 0.15 - s.corruption * 0.12 +
