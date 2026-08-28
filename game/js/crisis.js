@@ -342,6 +342,12 @@
       if (age < due) return;
       // Escalating, and only every few months so it is pressure rather than noise.
       if (pr.lastBite !== undefined && S.turn - pr.lastBite < 5) return;
+      // Six bites is about two and a half years of being asked about it, by
+      // which point it has produced a file and a nickname. After that it stops
+      // being a recurring bill and becomes what it always really was: a thing
+      // on your record. It went on biting every five months forever, which
+      // over a long career is a tax nobody could see and nobody could pay off.
+      if ((pr.bites || 0) >= 6) { pr.spent = true; return; }
       pr.lastBite = S.turn;
       pr.bites = (pr.bites || 0) + 1;
       fired = true;
@@ -350,7 +356,13 @@
       a.add('grassroots', -RZ.range(1, 4) * severity);
       a.add('party', -RZ.range(0.5, 2.5) * severity);
       a.add('stats.integrity', -RZ.range(0.3, 1.2));
-      a.nation('stability', -RZ.range(0.3, 1.5) * severity);
+      // The country only wobbles for a promise made by somebody the country
+      // has heard of. A ward councillor's unbuilt borehole is a personal
+      // disgrace, not a national emergency — and charging it to national
+      // stability every five months for the rest of a career was quietly
+      // destabilising the republic on behalf of one broken borehole.
+      var reach = Math.max(0, a.tier() - 5) / 8;
+      if (reach > 0) a.nation('stability', -RZ.range(0.3, 1.5) * severity * reach);
 
       if (pr.bites === 3) {
         a.dirt('broken-' + pr.id,

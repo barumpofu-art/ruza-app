@@ -3,7 +3,7 @@
 State of the build, the conventions it is written to, and what is next. Written so a
 fresh session can pick the work up without re-reading the whole tree.
 
-Last updated for 1.3.0 (multi-speaker rooms).
+Last updated for 1.4.0.
 
 ---
 
@@ -138,7 +138,7 @@ node game/test/monte-carlo.mjs        # what do the rules do at scale?
   topic reachable through an action or a summon. If a scene needs state to exist, build
   it in `prepare()` rather than making the scene defensive about a state the game never
   produces.
-- **mechanics** builds the exact state each system needs. 505 checks in 21 sections.
+- **mechanics** builds the exact state each system needs. 511 checks in 21 sections.
   This is where anything gated on high office gets tested, because no automated policy
   reaches the presidency reliably.
 - **monte-carlo** runs 1,000 seeded careers in two cohorts — `random` (a coin, the honest
@@ -223,6 +223,31 @@ assembled for the rest.
   tender.
 - Election Day as four phases (ground game, exit polls, tactical shift, live count).
   **Needs the staggered animated count screen built first — it does not exist.**
+
+### A shape to watch for: the one-way ratchet
+
+Twice now a quantity meant to find a level has been written as a permanent
+push, and both times it quietly wrecked something far away:
+
+- `blocs.reads()` applied an unbounded monthly drift, so in any country with
+  unemployment over thirty the young sat at zero for ever.
+- `society.unrest`, `society.coup` and `society.stability` were step
+  accumulators. South Africa opens at 32% unemployment, so unrest's "+0.4 while
+  over thirty" never switched off and it pinned at 100; stability was only ever
+  pushed *down*, by shocks and by broken promises, with one presidential action
+  as the sole way back.
+
+The economy block next to them had it right all along — `growth` and
+`inflation` mean-revert toward the country's own figures via `pull()`, and
+`govApproval` reverts toward a computed target. **If you are adding a national
+quantity, give it a target and revert toward it.** A shock should hurt for a
+year and be recoverable by fixing its cause; it should not be a tax nobody can
+pay off.
+
+Related: charge a *personal* failure to a national number only in proportion to
+how national the player is. A broken promise used to take national stability
+every five months for the rest of the career, at any tier — one ward
+councillor's unbuilt borehole destabilising the republic about 126 times.
 
 ### Standing findings, recorded rather than fixed
 

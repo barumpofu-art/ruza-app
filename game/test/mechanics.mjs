@@ -230,7 +230,33 @@ section('5. Promises & debts');
   ok('an overdue promise starts costing you', pr.bites >= 2, `bites=${pr.bites}`);
   ok('and the cost lands on grassroots standing', S.player.standing.grassroots < grass0);
   ok('escalating to a scandal', S.player.dirt.some((d) => d.id === 'broken-road'));
-  ok('and the fallout hits national stability', S.nation.society.stability < 62);
+
+  // Whose promise it was decides whether the country notices. A ward
+  // councillor's unbuilt road is a personal disgrace; a senior minister's is a
+  // national one. It used to be charged to national stability either way, every
+  // five months for the rest of the career.
+  ok('a junior figure\u2019s broken promise is not a national emergency',
+    S.nation.society.stability >= 62 - 0.001, RZ.round(S.nation.society.stability, 1));
+  {
+    const big = career('ZA', 43, 12);
+    RZ.engine.mkApi(big).promise('road', 'A tarred road to the clinic', { due: 12 });
+    big.date.year += 2;
+    const stab0 = big.nation.society.stability;
+    for (let i = 0; i < 4; i++) { big.turn += 6; big.actionsThisMonth = 0; RZ.crisis.monthly(big, {}); }
+    ok('but a senior one\u2019s does move the country', big.nation.society.stability < stab0,
+      RZ.round(stab0, 1) + ' -> ' + RZ.round(big.nation.society.stability, 1));
+  }
+
+  // And it stops being a monthly bill once it is simply part of your record.
+  {
+    const T = career('ZA', 44, 5);
+    RZ.engine.mkApi(T).promise('road', 'A road', { due: 12 });
+    T.date.year += 2;
+    for (let i = 0; i < 30; i++) { T.turn += 6; T.actionsThisMonth = 0; RZ.crisis.monthly(T, {}); }
+    const p = T.player.promises[0];
+    ok('a broken promise stops biting eventually', p.bites <= 6, 'bites=' + p.bites);
+    ok('and is marked as spent rather than settled', p.spent === true && !p.settled);
+  }
 
   // Cabinet promises come due when the posts are handed out, not on a timer.
   const S2 = career('ZA', 42, 8);
