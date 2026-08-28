@@ -3,7 +3,7 @@
 State of the build, the conventions it is written to, and what is next. Written so a
 fresh session can pick the work up without re-reading the whole tree.
 
-Last updated at commit `89f410d` plus the persistent cast.
+Last updated at commit `356204b` (the merge with main).
 
 ---
 
@@ -40,7 +40,8 @@ price.
 | `js/constituency.js` | Ward trust, projects, lobbying, delivery and abandonment |
 | `js/statecraft.js` | Cabinet, and the crises that summon you at minister/VP/president |
 | `js/legislation.js` | Drafting a bill and the four-week whipping sprint |
-| `js/contender.js` | The rival who starts the same year and climbs the same ladder |
+| `js/field.js` | Everybody else on the ladder: party figures with careers of their own |
+| `js/contender.js` | *One* named rival who starts the same year — see the note below |
 | `js/blocs.js` | Six demographic blocs cutting across the regions |
 | `js/cast.js` | The persistent cast: the same people, meeting after meeting |
 | `js/ui.js` | All rendering. One module, no framework |
@@ -48,6 +49,24 @@ price.
 
 The conversation engine also hands each scene `a.them` (the person opposite),
 `a.remember(what, tone)`, `a.recalls(tone)` and `a.rel()`.
+
+## Two systems of rivals, on purpose
+
+`field.js` (from main) and `contender.js` (from this branch) both put people on
+the ladder and both climb it. **They are deliberately kept separate** — this was
+asked and answered, so do not collapse them:
+
+- **`field.js` is the establishment.** Every rung has a holder, contests are
+  scored against whoever is actually in the doorway, and people are deposed,
+  wounded and retired as careers run. It answers *who is in my way this month*.
+- **`contender.js` is the one you are told about at character creation.** A
+  single named rival generated against your origin trait, with a personal
+  relationship, a file you can keep on them, and an ending of its own if they
+  reach the top before you do. It answers *who is the story about*.
+
+Where they touch: an ascended contender takes a seat in the field
+(`RZ.field.addRival`) and becomes the nemesis, so every mechanic that already
+understands an incumbent understands them too.
 
 ## Conventions that matter
 
@@ -101,9 +120,11 @@ is counted exactly once. If you are writing bloc code, use `addRaw`.
 Three harnesses, and they answer different questions. Run all three before committing.
 
 ```
-node game/test/dialogue-sim.mjs     # is the content well-formed and reachable?
-node game/test/mechanics.mjs        # does each system fire and do what it says?
-node game/test/monte-carlo.mjs      # what do the rules do at scale?
+node game/test/dialogue-sim.mjs       # is the content well-formed and reachable?
+node game/test/mechanics.mjs          # does each system fire and do what it says?
+node game/test/career-sim.mjs --careers 4   # whole careers, invariants every turn
+bash game/test/page-smoke.sh          # the real page in a real browser
+node game/test/monte-carlo.mjs        # what do the rules do at scale?
 ```
 
 - **dialogue-sim** plays every answer of every beat in several countries and tiers. It
@@ -111,13 +132,20 @@ node game/test/monte-carlo.mjs      # what do the rules do at scale?
   topic reachable through an action or a summon. If a scene needs state to exist, build
   it in `prepare()` rather than making the scene defensive about a state the game never
   produces.
-- **mechanics** builds the exact state each system needs. 474 checks in 20 sections.
+- **mechanics** builds the exact state each system needs. 477 checks in 20 sections.
   This is where anything gated on high office gets tested, because no automated policy
   reaches the presidency reliably.
 - **monte-carlo** runs 1,000 seeded careers in two cohorts — `random` (a coin, the honest
   null hypothesis) and `directed` (the least clever competent player I could write). Any
   seed replays with `--replay <seed>`. `--strict` fails on a warning. It has found more
   real bugs than either of the others; treat its warnings as findings, not noise.
+- **career-sim** (from main) plays whole careers in every country and asserts every
+  invariant after every turn — including that every feed entry has a title and a body,
+  which is what caught four kinds of event rendering a blank outcome sheet. When you add
+  an action that asks a question before it resolves (a ward, a bloc, a clause), teach its
+  `out.special` branch here or it will be counted as a missing outcome.
+- **page-smoke** (from main) is the only harness that loads `ui.js` and `main.js`. It
+  plays the origin scene, every pane, a year of months, a reload and the obituary.
 - **apk-smoke** plays a career end to end in the packaged Android app on an emulator.
   Rehearse it against desktop Chromium:
   `PAGE_ORIGIN=127.0.0.1 CDP_ENDPOINT=http://127.0.0.1:9222 node test/apk-smoke.mjs`
