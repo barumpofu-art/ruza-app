@@ -5,6 +5,11 @@
 
   var UI = { S: null, draft: {}, pane: 'desk' };
 
+  function L(en, pt) {
+    var id = (UI.S && UI.S.countryId) || (UI.draft && UI.draft.countryId) || '';
+    return RZ.L(id, en, pt);
+  }
+
   /* ---------------- screens ---------------- */
   function show(id) {
     els('.screen').forEach(function (s) { s.classList.toggle('is-active', s.id === 'screen-' + id); });
@@ -27,7 +32,13 @@
     m.dataset.dismissible = (opts && opts.dismissible) ? '1' : '';
     return inner;
   }
-  function closeModal() { el('#modal').hidden = true; el('#modal-inner').innerHTML = ''; }
+  function closeModal() {
+    el('#modal').hidden = true;
+    var inner = el('#modal-inner');
+    inner.innerHTML = '';
+    inner.classList.remove('talking');
+    inner.style.height = '';
+  }
 
   /* ---------------- country select ---------------- */
   function renderCountries() {
@@ -70,26 +81,27 @@
     el('#create-title').textContent = c.flag + ' ' + c.name;
 
     var html = '';
-    html += '<div><p class="field-label">Your name</p>' +
+    html += '<div><p class="field-label">' + L('Your name', 'O seu nome') + '</p>' +
       '<input class="text-input" id="in-name" maxlength="34" placeholder="' + esc(RZ.makeName(c)) + '" value="' + esc(d.name) + '">' +
-      '<p class="field-help">Leave it blank and one will be chosen for you.</p></div>';
+      '<p class="field-help">' + L('Leave it blank and one will be chosen for you.', 'Deixe em branco e será escolhido por si.') + '</p></div>';
 
-    html += '<div><p class="field-label">You are</p><div class="chip-row" id="row-gender">' +
-      [['f', 'A woman'], ['m', 'A man'], ['x', 'Neither']].map(function (g) {
+    html += '<div><p class="field-label">' + L('You are', 'É') + '</p><div class="chip-row" id="row-gender">' +
+      [['f', L('A woman', 'Uma mulher')], ['m', L('A man', 'Um homem')], ['x', L('Neither', 'Nem um nem outro')]].map(function (g) {
         return '<button class="chip' + (d.gender === g[0] ? ' is-on' : '') + '" data-g="' + g[0] + '">' + g[1] + '</button>';
       }).join('') + '</div></div>';
 
-    html += '<div><p class="field-label">Where you are from</p><div class="chip-row" id="row-region">' +
+    html += '<div><p class="field-label">' + L('Where you are from', 'De onde é') + '</p><div class="chip-row" id="row-region">' +
       c.regions.map(function (r) {
         return '<button class="chip' + (d.regionId === r.id ? ' is-on' : '') + '" data-r="' + r.id + '">' +
           esc(r.name) + ' <span style="opacity:.6;margin-left:5px">' + r.seats + '</span></button>';
       }).join('') + '</div>' +
-      '<p class="field-help">Seat counts shown. A big home region is a bigger base — and a bigger fight.</p></div>';
+      '<p class="field-help">' + L('Seat counts shown. A big home region is a bigger base — and a bigger fight.',
+        'Lugares indicados. Uma grande região de origem é uma base maior — e uma luta maior.') + '</p></div>';
 
     if (c.parties.length > 1) {
-      html += '<div><p class="field-label">Your party</p><div class="opt-grid" id="row-party">' +
+      html += '<div><p class="field-label">' + L('Your party', 'O seu partido') + '</p><div class="opt-grid" id="row-party">' +
         c.parties.map(function (p) {
-          var st = p.gov ? 'In government' : 'Opposition';
+          var st = p.gov ? L('In government', 'No governo') : L('Opposition', 'Oposição');
           return '<button class="opt' + (d.partyId === p.id ? ' is-on' : '') + '" data-p="' + p.id + '">' +
             '<div class="opt-name"><span class="row-dot" style="background:' + p.color + '"></span>' + esc(p.abbr) + '</div>' +
             '<div class="opt-desc">' + esc(p.name) + ' — ' + esc(p.ideo) + '.</div>' +
@@ -101,7 +113,7 @@
         'nominated at a ' + esc(c.terms.primary) + ', and every office above ' + esc(c.terms.mpShort) + ' is in the gift of the King.</p></div>';
     }
 
-    html += '<div><p class="field-label">What you did before politics</p><div class="opt-grid" id="row-bg">' +
+    html += '<div><p class="field-label">' + L('What you did before politics', 'O que fazia antes da política') + '</p><div class="opt-grid" id="row-bg">' +
       RZ.BACKGROUNDS.map(function (b) {
         var mods = [];
         Object.keys(b.stats || {}).forEach(function (k) { mods.push(RZ.signed(b.stats[k]) + ' ' + k); });
@@ -115,13 +127,19 @@
       }).join('') + '</div></div>';
 
     d.startAs = d.startAs || 'activist';
-    html += '<div><p class="field-label">Where you come in</p><div class="opt-grid" id="row-start">' +
-      [['activist', '🚩', 'Party activist',
-        'Start at the bottom in ' + c.regionById[d.regionId].name + ', unpaid and unknown. Twenty years, a month at a time.',
-        'The full climb · monthly turns'],
-       ['candidate', '🗳️', 'Parliamentary candidate',
-        'The branch years are behind you and your name is on the list. The ballot is in eight weeks.',
-        'Straight into the campaign · weekly turns']]
+    html += '<div><p class="field-label">' + L('Where you come in', 'Por onde entra') + '</p><div class="opt-grid" id="row-start">' +
+      [['activist', '🚩', L('Party activist', 'Activista do partido'),
+        L('Start at the bottom in ' + c.regionById[d.regionId].name + ', unpaid and unknown. Twenty years, a month at a time.',
+          'Começa em baixo em ' + c.regionById[d.regionId].name + ', sem salário e sem nome. Vinte anos, um mês de cada vez.'),
+        L('The full climb · monthly turns', 'A subida completa · turnos mensais')],
+       ['candidate', '🗳️', L('Parliamentary candidate', 'Candidato parlamentar'),
+        L('The branch years are behind you and your name is on the list. The ballot is in eight weeks.',
+          'Os anos de célula ficaram para trás e o nome está na lista. A votação é daqui a oito semanas.'),
+        L('Straight into the campaign · weekly turns', 'Directo para a campanha · turnos semanais')],
+       ['minister', '⚖️', L('Cabinet minister', 'Ministro de Estado'),
+        L('The climb is behind you. You have a portfolio, a director-general, and the question of whether you take the last step.',
+          'A subida ficou para trás. Tem uma pasta, um director-geral, e a pergunta de se dá o último passo.'),
+        L('Straight into cabinet · monthly turns', 'Directo para o conselho · turnos mensais')]]
       .map(function (o) {
         return '<button class="opt' + (d.startAs === o[0] ? ' is-on' : '') + '" data-s="' + o[0] + '">' +
           '<div class="opt-name">' + o[1] + ' ' + esc(o[2]) + '</div>' +
@@ -129,7 +147,7 @@
           '<div class="opt-stats">' + esc(o[4]) + '</div></button>';
       }).join('') + '</div></div>';
 
-    html += '<button class="btn btn-gold btn-lg btn-block" id="btn-begin">Begin the career</button>' +
+    html += '<button class="btn btn-gold btn-lg btn-block" id="btn-begin">' + L('Begin the career', 'Começar a carreira') + '</button>' +
             '<p class="note center"></p>';
 
     el('#create-body').innerHTML = html;
@@ -152,8 +170,13 @@
     var c = RZ.COUNTRIES[UI.draft.countryId];
     var region = c.regionById[UI.draft.regionId].name;
     note.textContent = UI.draft.startAs === 'candidate'
-      ? 'You are the candidate for ' + region + ', eight weeks out.'
-      : 'You start as an unpaid activist in ' + region + '.';
+      ? L('You are the candidate for ' + region + ', eight weeks out.',
+          'É o candidato por ' + region + ', a oito semanas da votação.')
+      : UI.draft.startAs === 'minister'
+        ? L('You take the oath as ' + (c.terms.minister || 'Minister') + ', from ' + region + '.',
+            'Presta juramento como ' + (c.terms.minister || 'Ministro') + ', de ' + region + '.')
+        : L('You start as an unpaid activist in ' + region + '.',
+            'Começa como activista sem salário em ' + region + '.');
   }
 
   function bindChips(sel, attr, key) {
@@ -180,15 +203,16 @@
         '<div class="hud-office">' + esc(rung.title) + (P.ministry ? ' · ' + esc(P.ministry) : '') + '</div></div>' +
         '<div class="hud-date">' +
           (S.sprint
-            ? '<div class="hud-month sprinting">' + S.sprint.weeksLeft + ' week' + (S.sprint.weeksLeft === 1 ? '' : 's') + ' left</div>'
+            ? '<div class="hud-month sprinting">' + S.sprint.weeksLeft + ' ' +
+              (S.sprint.weeksLeft === 1 ? L('week left', 'semana restante') : L('weeks left', 'semanas restantes')) + '</div>'
             : '<div class="hud-month">' + RZ.monthShort(S.date.month) + ' ' + S.date.year + '</div>') +
-        '<div class="hud-ap">' + S.actionsLeft + '/' + S.actionsPerTurn + ' actions</div></div>' +
+        '<div class="hud-ap">' + S.actionsLeft + '/' + S.actionsPerTurn + ' ' + L('actions', 'acções') + '</div></div>' +
       '</div>' +
       '<div class="hud-res">' +
-        res('Money', RZ.money(P.money, c.cur.sym), P.money < 0 ? 'down' : '') +
-        res('Capital', Math.round(P.capital), '') +
-        res('Fame', Math.round(P.fame), '') +
-        res('Health', Math.round(P.health), P.health < 45 ? 'down' : '') +
+        res(L('Money', 'Dinheiro'), RZ.money(P.money, c.cur.sym), P.money < 0 ? 'down' : '') +
+        res(L('Capital', 'Capital'), Math.round(P.capital), '') +
+        res(L('Fame', 'Fama'), Math.round(P.fame), '') +
+        res(L('Health', 'Saúde'), Math.round(P.health), P.health < 45 ? 'down' : '') +
       '</div>';
   }
   function res(k, v, cls) {
@@ -200,6 +224,49 @@
     var S = UI.S, c = RZ.COUNTRIES[S.countryId];
     var h = '';
 
+    if ((S.startAs || 'activist') === 'activist' && S.turn < 2 && !S.flags.taughtDesk) {
+      h += '<div class="paper tutorial" id="desk-tutorial">' +
+        '<div class="paper-src"><span>' + esc(L('The first month', 'O primeiro mês')) + '</span></div>' +
+        '<h3 class="paper-h">' + esc(L('The diary is already half spoken for', 'A agenda já está metade ocupada')) + '</h3>' +
+        '<p class="paper-b">' + esc(L(
+          'Two or three of these appointments were booked by somebody else. Keep them, or send word. Silence is the expensive option. Three actions a month. The branch secretary is the whole early game. Contest the next rung when the organisers give you a count.',
+          'Duas ou três destas marcações foram feitas por outra pessoa. Cumpra-as, ou avise. O silêncio é a opção cara. Três acções por mês. O secretário da célula é o jogo todo no início. Dispute o próximo degrau quando os organizadores lhe derem uma contagem.'
+        )) + '</p>' +
+        '<button class="btn btn-quiet btn-block" data-dismiss-tutorial type="button">' +
+          esc(L('I have it', 'Percebi')) + '</button></div>';
+    }
+
+    if (RZ.ward && RZ.ward.duty) {
+      var duty = RZ.ward.duty(S);
+      var did = S.flags.didDuty === S.turn || (duty.id === 'friday' && S.ward && S.ward.lastFriday === S.turn) ||
+                (duty.id === 'address' && S.flags.sonaYear === S.date.year) ||
+                (duty.id === 'tax' && S.flags.taxYear === S.date.year) ||
+                (duty.id === 'supply' && (S.flags.didSupply === S.turn || S.flags.supplyYear === S.date.year)) ||
+                (duty.id === 'partner' && (S.flags.didPartner === S.turn || S.flags.partnerYear === S.date.year)) ||
+                (duty.id === 'conference' && (S.flags.didConference === S.turn || S.flags.defendedConference === S.nextConference));
+      h += '<div class="paper duty">' +
+        '<div class="paper-src"><span>' + esc(L('This month the job is', 'Este mês o trabalho é')) + '</span></div>' +
+        '<h3 class="paper-h">' + (duty.ico ? duty.ico + ' ' : '') + esc(L(duty.title, duty.title)) + '</h3>' +
+        '<p class="paper-b">' + esc(L(duty.blurb, duty.blurb)) +
+          (did ? ' ' + esc(L('You have sat it.', 'Já o cumpriu.')) : '') + '</p></div>';
+    }
+
+    if (S.player.isPresident && RZ.state && RZ.state.houseFile) {
+      var file = RZ.state.houseFile(S);
+      h += '<div class="paper duty file-paper">' +
+        '<div class="paper-src"><span>' + esc(L('The file', 'O dossiê')) + '</span></div>' +
+        '<h3 class="paper-h">' + esc(file.worst.label) + ' · ' + esc(file.worst.shown) + '</h3>' +
+        '<p class="paper-b">' + esc(file.hot.name) + ' ' +
+          esc(L('is the province that has been calling. ', 'é a província que tem ligado. ')) +
+          (file.plotter
+            ? esc(file.plotter.name) + ' ' + esc(L('is already writing a different minute.', 'já está a escrever outra acta.'))
+            : esc(L('The table is still a table.', 'A mesa ainda é uma mesa.'))) +
+          (file.opp
+            ? ' ' + esc(file.opp.name) + ' ' + esc(L('is the Opposition.', 'é a Oposição.'))
+            : '') +
+        '</p></div>';
+    }
+
     if (S.bill) {
       h += billBoard(S, c);
     }
@@ -210,9 +277,11 @@
     }
     if (!S.sprint && S.campaign.season) {
       h += '<div class="card" style="border-color:#54452a;background:linear-gradient(180deg,#241f14,#161c25)">' +
-        '<div class="block-h" style="margin:0 0 6px">Campaign season</div>' +
-        '<p class="note">The general election is in ' + RZ.monthName(RZ.engine.ELECTION_MONTH[c.id]) + ' ' + S.nextElection +
-        '. Everything you do now is worth more, and costs more.</p></div>';
+        '<div class="block-h" style="margin:0 0 6px">' + L('Campaign season', 'Época de campanha') + '</div>' +
+        '<p class="note">' + L('The general election is in ' + RZ.monthName(RZ.engine.ELECTION_MONTH[c.id]) + ' ' + S.nextElection +
+        '. Everything you do now is worth more, and costs more.',
+        'As eleições gerais são em ' + RZ.monthName(RZ.engine.ELECTION_MONTH[c.id]) + ' ' + S.nextElection +
+        '. Tudo o que fizer agora vale mais, e custa mais.') + '</p></div>';
     }
 
     h += listCard(S);
@@ -231,30 +300,152 @@
     });
     var hasDiary = RZ.docket ? RZ.docket.entries(S).some(function (e) { return !e.declined; }) : false;
 
-    h += '<div class="block"><div class="block-h">' + (hasDiary ? 'The rest of the month' : 'This month') +
-         '<span class="sub">' + S.actionsLeft + ' of ' + S.actionsPerTurn + ' left</span></div>';
+    h += '<div class="block"><div class="block-h">' + (hasDiary
+         ? L('The rest of the month', 'O resto do mês')
+         : L('This month', 'Este mês')) +
+         '<span class="sub">' + S.actionsLeft + ' ' + L('of', 'de') + ' ' + S.actionsPerTurn + ' ' + L('left', 'restantes') + '</span></div>';
     var acts = RZ.engine.availableActions(S).filter(function (a) { return !booked[a.id]; });
-    h += '<div class="acts">' + acts.map(function (a) {
-      return '<button class="act" data-action="' + a.id + '"' + (S.actionsLeft <= 0 ? ' disabled' : '') + '>' +
+    var dutyId = (RZ.ward && RZ.ward.duty(S) && RZ.ward.duty(S).id) || '';
+    h += '<div class="acts rest">' + acts.map(function (a) {
+      return '<button class="act' + (dutyId && a.id === dutyId ? ' is-duty' : '') + '" data-action="' + a.id + '"' + (S.actionsLeft <= 0 ? ' disabled' : '') + '>' +
         '<span class="act-ico">' + a.ico + '</span>' +
         '<span class="act-txt"><span class="act-n">' + esc(a.name) + (a.risky ? ' <span style="color:#e08a86">◆</span>' : '') + '</span>' +
         '<span class="act-d">' + esc(a.desc) + '</span></span>' +
         '</button>';
     }).join('') + '</div></div>';
 
-    var unit = S.tempo === 'week' ? 'week' : 'month';
+    var unit = S.tempo === 'week' ? L('week', 'semana') : L('month', 'mês');
     h += '<div class="block"><button class="btn ' + (S.actionsLeft <= 0 ? 'btn-gold' : 'btn-ghost') +
          ' btn-lg btn-block" data-act="end-turn">' +
-         (S.actionsLeft <= 0 ? 'Next ' + unit + ' →' : 'Skip to next ' + unit + ' →') + '</button></div>';
+         (S.actionsLeft <= 0
+           ? L('Next ' + unit + ' →', 'Próximo ' + unit + ' →')
+           : L('Skip to next ' + unit + ' →', 'Saltar para o próximo ' + unit + ' →')) + '</button></div>';
 
-    h += '<div class="block"><div class="block-h">The record</div>' +
+    h += '<div class="block"><div class="block-h">' + L('The record', 'O registo') + '</div>' +
       S.feed.slice(0, 22).map(paperCard).join('') + '</div>';
 
-    el('#pane-desk').innerHTML = h;
+    el('#pane-desk').innerHTML = '<div class="desk-wide"><div class="desk-main">' + h + '</div>' +
+      deskSide(S) + '</div>';
     el('#pane-desk').querySelectorAll('[data-ward]').forEach(function (b) {
       b.addEventListener('click', function () { RZ.main.act('blitz'); });
     });
     bindDesk();
+  }
+
+  function deskSide(S) {
+    if (!S.player.isPresident || !RZ.state || !RZ.state.houseFile) return '<aside class="desk-side" hidden></aside>';
+    var file = RZ.state.houseFile(S);
+    var h = '<aside class="desk-side">';
+    h += '<div class="paper duty">' +
+      '<div class="paper-src"><span>' + esc(L('The file', 'O dossiê')) + '</span></div>' +
+      '<h3 class="paper-h">' + esc(file.worst.label) + ' · ' + esc(file.worst.shown) + '</h3>' +
+      '<p class="paper-b">' + esc(file.hot.name) + ' · ' +
+        esc(L('approval', 'aprovação')) + ' ' + file.approval + '%</p></div>';
+    if (file.project) {
+      var lab = (RZ.state.PROJECT_LABEL && RZ.state.PROJECT_LABEL[file.project.kind]) || file.project.kind;
+      var r = RZ.COUNTRIES[S.countryId].regionById[file.project.regionId];
+      h += '<div class="paper">' +
+        '<div class="paper-src"><span>' + esc(L('Under construction', 'Em obra')) + '</span></div>' +
+        '<h3 class="paper-h">' + esc(lab) + '</h3>' +
+        '<p class="paper-b">' + esc(r ? r.name : '') + ' · ' +
+          Math.ceil(file.project.left || file.project.months) + ' ' +
+          esc(L('months left', 'meses restantes')) + '</p></div>';
+    }
+    if (file.opp) {
+      h += '<div class="paper">' +
+        '<div class="paper-src"><span>' + esc(L('The Opposition', 'A Oposição')) + '</span></div>' +
+        '<h3 class="paper-h">' + esc(file.opp.name) + '</h3>' +
+        '<p class="paper-b">' + esc(L('standing', 'posição')) + ' ' + Math.round(file.opp.standing) +
+          ' · ' + esc(L('caucus', 'bancada')) + ' ' + Math.round(file.opp.unity || 0) +
+          ' · ' + esc(L('file', 'dossiê')) + ' ' + Math.round(file.opp.file) +
+          (file.other ? ' · ' + esc(L('and', 'e')) + ' ' + esc(file.other.abbr) : '') +
+        '</p></div>';
+    }
+    if (file.partner) {
+      var pChair = file.partner.chair && RZ.state.ministryName
+        ? RZ.state.ministryName(S, file.partner.chair) : '';
+      var pParty = RZ.COUNTRIES[S.countryId].partyById[file.partner.partyId];
+      h += '<div class="paper">' +
+        '<div class="paper-src"><span>' + esc(L('The partner', 'O parceiro')) + '</span></div>' +
+        '<h3 class="paper-h">' + esc(file.partner.name) + '</h3>' +
+        '<p class="paper-b">' +
+          (pParty ? esc(pParty.abbr) + ' · ' : '') +
+          (pChair ? esc(pChair) + ' · ' : '') +
+          esc(L('standing', 'posição')) + ' ' + Math.round(file.partner.standing || 0) +
+          (S.flags.partnerYear === S.date.year
+            ? ' · ' + esc(L('a paper this year', 'um papel este ano'))
+            : ' · ' + esc(L('no paper', 'sem papel'))) +
+          (file.quote && file.quote.name
+            ? ' · ' + esc(L('quoting', 'citando')) + ' ' + esc(file.quote.name)
+            : '') +
+        '</p></div>';
+    }
+    if (file.quote && file.quote.kind === 'bill') {
+      h += '<div class="paper">' +
+        '<div class="paper-src"><span>' + esc(L('The quote', 'A citação')) + '</span></div>' +
+        '<h3 class="paper-h">' + esc(file.quote.name) + '</h3>' +
+        '<p class="paper-b">' + esc(L('They have the paper in the bag.', 'Têm o papel no saco.')) + '</p></div>';
+    }
+    if (file.twoCentre) {
+      h += '<div class="paper">' +
+        '<div class="paper-src"><span>' + esc(L('Two centres', 'Dois centros')) + '</span></div>' +
+        '<h3 class="paper-h">' + esc(L('You have the country', 'Tem o país')) + '</h3>' +
+        '<p class="paper-b">' + esc(L('They have the party. Saturday already happened.',
+          'Eles têm o partido. O sábado já aconteceu.')) + '</p></div>';
+    } else if (file.challenger) {
+      h += '<div class="paper">' +
+        '<div class="paper-src"><span>' + esc(L('The hall', 'O salão')) + '</span></div>' +
+        '<h3 class="paper-h">' + esc(file.challenger.name) + '</h3>' +
+        '<p class="paper-b">' + esc(L('wants the job', 'quer o cargo')) +
+          ' · ' + esc(L('standing', 'posição')) + ' ' + Math.round(file.challenger.standing || 0) +
+        '</p></div>';
+    }
+    if (file.coalition && file.coalition.pending) {
+      var gnuA = file.coalition.gnu && file.coalition.gnu.abbr;
+      var kingA = file.coalition.king && file.coalition.king.abbr;
+      h += '<div class="paper">' +
+        '<div class="paper-src"><span>' + esc(L('Talks', 'Negociações')) + '</span></div>' +
+        '<h3 class="paper-h">' + esc(L('Talks begin Monday', 'As negociações começam segunda')) + '</h3>' +
+        '<p class="paper-b">' +
+          (gnuA ? esc(gnuA) + ' · ' : '') +
+          (kingA && kingA !== gnuA ? esc(kingA) + ' · ' : '') +
+          esc(L('or alone', 'ou sozinho')) +
+        '</p></div>';
+    } else if (file.coalition && (file.coalition.minority || (file.coalition.parties && file.coalition.parties.length > 1))) {
+      var ctry = RZ.COUNTRIES[S.countryId];
+      var names = file.coalition.minority
+        ? ((ctry.partyById[file.coalition.parties[0]] && ctry.partyById[file.coalition.parties[0]].abbr) || '') +
+          ' ' + L('alone', 'sozinho')
+        : file.coalition.parties.map(function (id) {
+            return (ctry.partyById[id] && ctry.partyById[id].abbr) || id;
+          }).join(' + ');
+      var kindLab = file.coalition.kind === 'gnu' ? L('national unity', 'unidade nacional')
+        : file.coalition.kind === 'king' ? L('a chair', 'uma cadeira')
+        : file.coalition.minority ? L('a minority', 'uma minoria')
+        : L('the government', 'o governo');
+      var arith = (file.coalition.seats != null && file.coalition.need)
+        ? file.coalition.seats + ' ' + L('of', 'de') + ' ' + file.coalition.need
+        : '';
+      var paperLab = file.coalition.paper ? L('a paper this year', 'um papel este ano')
+        : (file.coalition.minority ? L('no paper', 'sem papel') : '');
+      h += '<div class="paper">' +
+        '<div class="paper-src"><span>' + esc(L('The government', 'O governo')) + '</span></div>' +
+        '<h3 class="paper-h">' + esc(names) + '</h3>' +
+        '<p class="paper-b">' + esc(kindLab) +
+          (arith ? ' · ' + esc(arith) : '') +
+          (paperLab ? ' · ' + esc(paperLab) : '') +
+        '</p></div>';
+    }
+    if (file.power) {
+      h += '<div class="paper">' +
+        '<div class="paper-src"><span>' + esc(L('At the door', 'À porta')) + '</span></div>' +
+        '<h3 class="paper-h">' + esc(file.power.short) + '</h3>' +
+        '<p class="paper-b">' + esc(file.power.want) + '</p></div>';
+    }
+    h += '<p class="desk-keys note">' +
+      esc(L('1 / 2 / 3 answer · Enter leaves the room · N next month',
+            '1 / 2 / 3 responde · Enter sai da sala · N próximo mês')) + '</p>';
+    return h + '</aside>';
   }
 
   // The diary. Two or three of these were arranged by somebody else, for a
@@ -270,13 +461,15 @@
     if (!live.length && !stood) return '';
 
     var kept = live.filter(function (e) { return e.kept; }).length;
-    var h = '<div class="block"><div class="block-h">In the diary' +
-      '<span class="sub">' + (live.length - kept) + ' still to keep</span></div>';
+    var dutyId = (RZ.ward && RZ.ward.duty(S) && RZ.ward.duty(S).id) || '';
+    var h = '<div class="block"><div class="block-h">' + L('In the diary', 'Na agenda') +
+      '<span class="sub">' + (live.length - kept) + ' ' + L('still to keep', 'ainda por cumprir') + '</span></div>';
 
     h += '<div class="acts">' + live.map(function (e) {
       var who = e.who ? '<strong>' + esc(e.who.name) + ', ' + esc(e.who.role) + '</strong><br>' : '';
+      var job = dutyId && e.actionId === dutyId;
       if (e.kept) {
-        return '<div class="act dk done">' +
+        return '<div class="act dk done' + (job ? ' is-duty' : '') + '">' +
           '<span class="act-ico">\u2713</span>' +
           '<span class="act-txt">' +
             '<span class="dk-head"><span class="act-n">' + esc(e.name) + '</span>' +
@@ -285,7 +478,7 @@
           '</span></div>';
       }
       return '<div class="dk-row">' +
-        '<button class="act dk" data-action="' + e.actionId + '"' + (S.actionsLeft <= 0 ? ' disabled' : '') + '>' +
+        '<button class="act dk' + (job ? ' is-duty' : '') + '" data-action="' + e.actionId + '"' + (S.actionsLeft <= 0 ? ' disabled' : '') + '>' +
           '<span class="act-ico">' + e.ico + '</span>' +
           '<span class="act-txt">' +
             '<span class="dk-head"><span class="act-n">' + esc(e.name) + '</span>' +
@@ -415,7 +608,8 @@
       '<div class="consty-top">' +
         '<div><div class="sprint-k">' + esc(c.regionById[S.player.regionId].name) + '</div>' +
         '<div class="consty-mood">' + esc(sum.mood) + '</div></div>' +
-        '<div class="consty-t ' + cls + '">' + sum.trust + '<small>trust</small></div>' +
+        '<div class="consty-t ' + cls + '">' + sum.trust + '<small>' +
+          L('incumbent', 'titular') + '</small></div>' +
       '</div>' +
       '<div class="sprint-bar"><span class="' + cls + '" style="width:' + Math.max(2, sum.trust) + '%"></span></div>';
 
@@ -604,6 +798,13 @@
     host.querySelectorAll('[data-act="contest"]').forEach(function (b) {
       b.addEventListener('click', RZ.main.contest);
     });
+    host.querySelectorAll('[data-dismiss-tutorial]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        if (UI.S) UI.S.flags.taughtDesk = true;
+        RZ.engine.save(UI.S);
+        renderDesk();
+      });
+    });
   }
 
   /* ---------------- nation pane ---------------- */
@@ -622,6 +823,7 @@
         sbox('Reserves', RZ.round(n.economy.reserves, 1), 'months of imports') +
       '</div></div>';
 
+    h += houseFileBoard(S);
     h += blocBoard(S);
 
     h += '<div class="block"><div class="block-h">Condition of the state</div><div class="card"><div class="bars">' +
@@ -635,6 +837,9 @@
       (c.inst.security > 45 ? plainBar('Coup risk', n.society.coup, 'r') : '') +
       '</div></div></div>';
 
+    h += cabinetBoard(S);
+    h += ledgerBoard(S);
+
     var totalSeats = RZ.sum(c.parties, function (p) { return S.parties[p.id].seats; });
     h += '<div class="block"><div class="block-h">' + esc(c.house.name) +
       '<span class="sub">' + totalSeats + ' seats · next election ' + S.nextElection + '</span></div><div class="card"><div class="rows">' +
@@ -646,7 +851,11 @@
           '<span class="row-v">' + st.seats + ' · ' + RZ.round(st.vote, 1) + '%</span></div>';
       }).join('') + '</div></div></div>';
 
-    h += '<div class="block"><div class="block-h">Your strength by ' + esc(c.terms.region) + '</div><div class="card"><div class="bars">' +
+    h += '<div class="block"><div class="block-h">Your strength by ' + esc(c.terms.region) +
+      (RZ.state && RZ.state.hottestRegion && S.player.isPresident
+        ? '<span class="sub">' + L('hottest: ', 'mais quente: ') + esc(RZ.state.hottestRegion(S).name) + '</span>'
+        : '') +
+      '</div><div class="card"><div class="bars">' +
       c.regions.map(function (r) {
         return plainBar(r.name, S.player.regionSupport[r.id] || 0, r.id === S.player.regionId ? '' : 'b');
       }).join('') + '</div></div></div>';
@@ -687,6 +896,136 @@
       '<p class="note" style="margin:12px 0 0">Weighted for who actually goes to the polling station: ' +
       '<strong class="' + cls + '">' + sm.weighted + '</strong> out of a hundred.</p>' +
       '</div></div>';
+  }
+
+  function cabinetBoard(S) {
+    if (!RZ.state || !RZ.state.sitsInCabinet(S)) return '';
+    RZ.state.fillCabinet(S);
+    var rows = RZ.state.cabinetSummary(S);
+    if (!rows.length) return '';
+    var RISK = {
+      positioning: L('positioning', 'a posicionar-se'),
+      expensive: L('expensive', 'caro'),
+      'the one who works': L('the one who works', 'o que trabalha'),
+      holding: L('holding', 'segura'),
+      you: L('you', 'você')
+    };
+    return '<div class="block"><div class="block-h">' + L('The cabinet', 'O conselho') +
+      '<span class="sub">' + rows.length + ' ' + L('around the table', 'à mesa') + '</span></div>' +
+      '<div class="card"><p class="note" style="margin:0 0 12px">' +
+        L('These are the people who sit with you. The word on the right is what they are actually doing.',
+          'São as pessoas que se sentam consigo. A palavra à direita é o que estão realmente a fazer.') + '</p>' +
+      '<div class="rows">' + rows.map(function (r) {
+        var cls = r.you ? 'is-you' : r.risk === 'positioning' ? 'is-pos' :
+                  r.risk === 'expensive' ? 'is-exp' : r.risk === 'the one who works' ? 'is-work' : '';
+        var col = r.you ? 'var(--gold)' : r.risk === 'positioning' ? 'var(--red)' :
+                  r.risk === 'expensive' ? 'var(--gold)' : r.risk === 'the one who works' ? 'var(--green)' : 'var(--text-faint)';
+        return '<div class="row"><span class="row-dot" style="background:' + col + '"></span>' +
+          '<span class="row-n">' + esc(r.name) + '<small>' + esc(r.ministry) + '</small></span>' +
+          '<span class="row-v cab-risk ' + cls + '">' + esc(RISK[r.risk] || r.risk) + '</span></div>';
+      }).join('') + '</div></div></div>';
+  }
+
+  function houseFileBoard(S) {
+    if (!S.player.isPresident || !RZ.state || !RZ.state.houseFile) return '';
+    var file = RZ.state.houseFile(S);
+    if (!file || !file.worst) return '';
+    var plot = file.plotter
+      ? esc(file.plotter.name) + ', ' + esc(RZ.state.ministryName(S, file.plotter.ministryId))
+      : L('none of them, yet', 'nenhum, ainda');
+    return '<div class="block"><div class="block-h">' + L('The file this month', 'O dossiê deste mês') +
+      '<span class="sub">' + L('approval', 'aprovação') + ' ' + file.approval + '%</span></div>' +
+      '<div class="card">' +
+        '<p class="note" style="margin:0 0 12px">' +
+          L('A president does not need six hundred numbers. They need the worst one, the province that is hottest, and the minister who is already writing a different minute.',
+            'Um presidente não precisa de seiscentos números. Precisa do pior, da província mais quente, e do ministro que já está a escrever outra acta.') +
+        '</p>' +
+        '<div class="sgrid">' +
+          sbox(file.worst.label, file.worst.shown, L('the number on top', 'o número de cima')) +
+          sbox(L('Hottest', 'Mais quente'), file.hot.name, L('support', 'apoio') + ' ' + file.hot.support) +
+          sbox(L('Positioning', 'A posicionar-se'), plot, L('lowest loyalty', 'menor lealdade')) +
+          sbox(L('Growth', 'Crescimento'), RZ.round(file.growth, 1) + '%', L('GDP, annual', 'PIB, anual')) +
+          (file.opp ? sbox(L('Opposition', 'Oposição'), file.opp.name,
+            L('standing', 'posição') + ' ' + Math.round(file.opp.standing) +
+            ' · ' + L('caucus', 'bancada') + ' ' + Math.round(file.opp.unity || 0)) : '') +
+          (file.other ? sbox(L('The other', 'A outra'), file.other.abbr,
+            L('wants the title', 'quer o título')) : '') +
+          (file.partner ? sbox(L('The partner', 'O parceiro'), file.partner.name,
+            ((function () {
+              var p = RZ.COUNTRIES[S.countryId].partyById[file.partner.partyId];
+              return (p ? p.abbr + ' · ' : '') +
+                (file.partner.chair && RZ.state.ministryName
+                  ? RZ.state.ministryName(S, file.partner.chair)
+                  : L('a chair', 'uma cadeira'));
+            })())) : '') +
+          (file.quote ? sbox(L('The quote', 'A citação'), file.quote.name || L('the paper', 'o papel'),
+            L('they have it in the bag', 'têm-no no saco')) : '') +
+          (file.twoCentre ? sbox(L('Two centres', 'Dois centros'),
+            L('the country', 'o país'), L('They have the party', 'Eles têm o partido')) : '') +
+          (file.challenger && !file.twoCentre ? sbox(L('The hall', 'O salão'), file.challenger.name,
+            L('wants the job', 'quer o cargo')) : '') +
+          (file.coalition && file.coalition.pending
+            ? sbox(L('Talks', 'Negociações'), L('Monday', 'Segunda'),
+                (file.coalition.gnu && file.coalition.gnu.abbr ? file.coalition.gnu.abbr : '') +
+                (file.coalition.king && file.coalition.king.abbr ? ' · ' + file.coalition.king.abbr : ''))
+            : (file.coalition && (file.coalition.minority || (file.coalition.parties && file.coalition.parties.length > 1))
+              ? sbox(L('The government', 'O governo'),
+                  file.coalition.minority
+                    ? ((function () {
+                        var p = RZ.COUNTRIES[S.countryId].partyById[file.coalition.parties[0]];
+                        return (p ? p.abbr : '') + ' ' + L('alone', 'sozinho');
+                      })())
+                    : file.coalition.parties.map(function (id) {
+                        var p = RZ.COUNTRIES[S.countryId].partyById[id];
+                        return p ? p.abbr : id;
+                      }).join(' + '),
+                  (file.coalition.seats != null && file.coalition.need
+                    ? file.coalition.seats + ' ' + L('of', 'de') + ' ' + file.coalition.need
+                    : (file.coalition.kind === 'gnu' ? L('national unity', 'unidade nacional')
+                      : file.coalition.kind === 'king' ? L('a chair', 'uma cadeira')
+                      : L('partners', 'parceiros'))) +
+                  (file.coalition.paper ? ' · ' + L('a paper', 'um papel')
+                    : file.coalition.minority ? ' · ' + L('no paper', 'sem papel') : ''))
+              : '')) +
+          (file.project ? sbox(L('Building', 'A construir'),
+            (RZ.state.PROJECT_LABEL && RZ.state.PROJECT_LABEL[file.project.kind]) || file.project.kind,
+            Math.ceil(file.project.left || file.project.months) + ' ' + L('months left', 'meses')) : '') +
+        '</div>' +
+      '</div></div>';
+  }
+
+  function ledgerBoard(S) {
+    if (!RZ.ward) return '';
+    var led = RZ.ward.ledger(S);
+    if (!led.items.length && RZ.engine.mkApi(S).tier() < 4) return '';
+    var STAMP = {
+      open: L('open', 'em aberto'),
+      kept: L('kept', 'cumprida'),
+      late: L('late', 'atrasada'),
+      broken: L('broken', 'quebrada')
+    };
+    var h = '<div class="block"><div class="block-h">' + L('The ledger', 'O livro') +
+      '<span class="sub">' + L('what you said you would do', 'o que disse que faria') + '</span></div>' +
+      '<div class="card">';
+    if (!led.items.length) {
+      h += '<p class="note" style="margin:0">' +
+        L('Three lines, when the campaign starts. Election night reads the stamps.',
+          'Três linhas, quando a campanha começar. A noite eleitoral lê os carimbos.') + '</p>';
+    } else {
+      h += '<div class="rows">' + led.items.map(function (it) {
+        return '<div class="row"><span class="row-dot stamp-' + it.status + '"></span>' +
+          '<span class="row-n">' + esc(it.text) + '</span>' +
+          '<span class="row-v stamp-' + it.status + '">' + esc(STAMP[it.status] || it.status) + '</span></div>';
+      }).join('') + '</div>';
+      h += '<p class="note" style="margin:12px 0 0">' +
+        L('The ward’s opinion of you is ' + led.trust + '. That is the incumbent’s score.',
+          'A opinião da circunscrição é ' + led.trust + '. É a nota do titular.') +
+        (led.delivered || led.abandoned
+          ? ' ' + led.delivered + ' ' + L('delivered', 'entregues') +
+            (led.abandoned ? ', ' + led.abandoned + ' ' + L('abandoned', 'abandonados') : '') + '.'
+          : '') + '</p>';
+    }
+    return h + '</div></div>';
   }
 
   function sbox(k, v, n) {
@@ -962,11 +1301,62 @@
     }
 
     h += '<div class="block"><button class="btn btn-danger btn-block" data-act="abandon">Abandon this career</button></div>';
+    h += '<div class="block"><div class="block-h">' + L('This career', 'Esta carreira') + '</div>' +
+      '<div class="card save-row">' +
+        '<p class="note" style="margin:0 0 12px">' +
+          L('The seed is the whole career. Export it as a file, or load one back. Nothing leaves the device.',
+            'A semente é a carreira toda. Exporte-a como ficheiro, ou carregue uma. Nada sai do aparelho.') +
+        '</p>' +
+        '<button class="btn btn-ghost btn-block" type="button" data-act="export">' +
+          L('Export this career', 'Exportar esta carreira') + '</button>' +
+        '<label class="btn btn-quiet btn-block" style="margin-top:8px">' +
+          L('Load a career file', 'Carregar um ficheiro') +
+          '<input type="file" accept="application/json,.json" data-act="import" hidden>' +
+        '</label>' +
+      '</div></div>';
 
     el('#pane-self').innerHTML = h;
     el('#pane-self').querySelectorAll('[data-act="abandon"]').forEach(function (b) {
       b.addEventListener('click', RZ.main.abandon);
     });
+    el('#pane-self').querySelectorAll('[data-act="export"]').forEach(function (b) {
+      b.addEventListener('click', exportCareer);
+    });
+    el('#pane-self').querySelectorAll('[data-act="import"]').forEach(function (b) {
+      b.addEventListener('change', function () {
+        var f = b.files && b.files[0];
+        if (f) importCareer(f);
+      });
+    });
+  }
+
+  function exportCareer() {
+    if (!UI.S || !RZ.engine.exportSave) return;
+    var raw = RZ.engine.exportSave(UI.S);
+    if (!raw) { toast('Could not export', 'n'); return; }
+    var seedHex = (UI.S.seed >>> 0).toString(16).padStart(8, '0');
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([raw], { type: 'application/json' }));
+    a.download = 'kgosi-' + seedHex + '.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1500);
+    toast(L('Career exported', 'Carreira exportada'), 'g');
+  }
+
+  function importCareer(file) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      var S = RZ.engine.importSave(String(reader.result || ''));
+      if (!S) { toast(L('That file is not a career', 'Esse ficheiro não é uma carreira'), 'n'); return; }
+      UI.S = S;
+      UI.pane = 'desk';
+      renderGame();
+      show('game');
+      toast(L('Career loaded', 'Carreira carregada'), 'g');
+    };
+    reader.readAsText(file);
   }
 
   /* ---------------- event modal ---------------- */
@@ -1004,7 +1394,7 @@
   // conversation styles, because that is what it is.
   function showOrigin(startAs, draft, onDone) {
     var c = RZ.COUNTRIES[draft.countryId];
-    var o = RZ.ORIGINS[startAs === 'candidate' ? 'candidate' : 'activist'];
+    var o = RZ.ORIGINS[startAs] || RZ.ORIGINS.activist;
     var kingmaker = RZ.makeName(c);
     var priceLine = RZ.money(RZ.engine.WAGE_BASE[c.id] * 0.5, c.cur.sym);
     var inner = modal('');
@@ -1115,57 +1505,6 @@
       b.addEventListener('click', function () { closeModal(); onDone(b.dataset.w); });
     });
     inner.querySelector('[data-cancel]').addEventListener('click', function () { closeModal(); onDone(null); });
-  }
-
-  /* ---------------- constitutional amendment ---------------- */
-  // The arithmetic is shown before the decision, because a president who tries
-  // this and misses should have been able to count first.
-  function showAmend(onDone) {
-    var S = UI.S, c = RZ.COUNTRIES[S.countryId];
-    var api = RZ.engine.mkApi(S);
-    var sup = RZ.gov.assemblySupport(S);
-    var list = RZ.gov.amendmentsFor(api);
-    var pickId = list[0] && list[0].id;
-    var spend = 0;
-    var inner = modal('');
-
-    paint();
-
-    function paint() {
-      var gap = Math.max(0, sup.needed - sup.gov);
-      var h = '<div class="modal-kicker">The ' + esc(c.house.name) + '</div>' +
-        '<h2 class="modal-h">Amend the constitution</h2>' +
-        '<p class="modal-b">An amendment needs <strong>' + sup.needed + ' of ' + sup.total + '</strong> — two-thirds. ' +
-        'The government benches carry <strong>' + sup.gov + '</strong>' +
-        (gap ? ', which leaves you <strong>' + gap + '</strong> short before anybody on your own side abstains.'
-             : ', which is enough on paper. Your own side is the risk.') + '</p>' +
-        '<div class="choices" style="margin-bottom:16px">' + list.map(function (am) {
-          return '<button class="choice' + (am.id === pickId ? ' is-on' : '') + '" data-am="' + esc(am.id) + '">' +
-            '<div class="choice-t">' + esc(am.name) + '</div>' +
-            '<div class="choice-d">' + esc(am.blurb) + '</div></button>';
-        }).join('') + '</div>' +
-        '<div class="block-h">The whipping operation<span class="sub">' +
-          (spend ? RZ.money(api.wage(spend), c.cur.sym) : 'nothing yet') + '</span></div>' +
-        '<input id="amend-spend" type="range" min="0" max="40" step="2" value="' + spend + '" ' +
-          'style="width:100%;accent-color:#d9a441">' +
-        '<p class="note" style="margin:6px 0 16px">Constituency offices, provincial conferences, and a great many ' +
-        'flights. It buys crossbenchers. It is also the thing that gets written about afterwards.</p>' +
-        '<button class="btn btn-gold btn-block" data-go>Put it to the House</button>' +
-        '<button class="btn btn-ghost btn-block" style="margin-top:8px" data-cancel>Not yet</button>';
-      inner.innerHTML = h;
-
-      inner.querySelectorAll('[data-am]').forEach(function (b) {
-        b.addEventListener('click', function () { pickId = b.dataset.am; paint(); });
-      });
-      var sl = inner.querySelector('#amend-spend');
-      sl.addEventListener('input', function () { spend = parseInt(sl.value, 10); paint(); });
-      inner.querySelector('[data-cancel]').addEventListener('click', function () { closeModal(); });
-      inner.querySelector('[data-go]').addEventListener('click', function () {
-        var res = RZ.gov.attemptAmendment(api, pickId, spend);
-        closeModal();
-        onDone(res, api);
-      });
-    }
   }
 
   /* ---------------- the order paper ---------------- */
@@ -1389,10 +1728,11 @@
             '<span class="hold-dots"><i></i><i></i><i></i></span></div>';
         }
         html += '<div class="choices' + (holding ? ' veiled' : '') + '">' +
-          RZ.dialogue.options(convo).map(function (o) {
+          RZ.dialogue.options(convo).map(function (o, n) {
           var sided = o.side && convo.people && convo.people[o.side];
           return '<button class="choice' + (sided ? ' sided s' + slotOf(convo, o.side) : '') +
             '" data-i="' + o.i + '"' + (o.ok ? '' : ' disabled') + '>' +
+            '<span class="choice-key">' + (n + 1) + '</span>' +
             '<div class="choice-t">' + esc(o.t) + '</div>' +
             (sided ? '<div class="choice-d">Backs ' + esc(shortOf(sided)) + '</div>' : '') +
             (o.tag ? '<span class="choice-tag ' + (o.tag === 'risk' ? 'risk' : 'cost') + '">' + esc(o.tag) + '</span>' : '') +
@@ -1400,7 +1740,14 @@
         }).join('') + '</div>';
       }
 
+      inner.classList.add('talking');
+      inner.style.height = '';
       inner.innerHTML = html;
+      // max-height alone does not give the inner flex a definite size, so the
+      // transcript never shrinks and the last answer falls off the sheet.
+      if (inner.scrollHeight > inner.clientHeight + 1) {
+        inner.style.height = inner.clientHeight + 'px';
+      }
       if (convo.done) {
         inner.querySelector('[data-close]').addEventListener('click', function () {
           closeModal(); if (onDone) onDone(convo);
@@ -1431,12 +1778,14 @@
         if (held) held.classList.add('over');
         if (box && box.scrollIntoView) box.scrollIntoView({ block: 'nearest' });
       }
-      // Keep the newest exchange in view rather than the top of the meeting —
-      // and once it is over, what it cost you.
-      var focus = convo.done
-        ? inner.querySelector('.talk-delta') || inner.querySelector('[data-close]')
-        : inner.querySelector('.talk-l:last-child');
-      if (focus && focus.scrollIntoView) focus.scrollIntoView({ block: 'nearest' });
+      // The answers stay on the sheet; the transcript is what scrolls. Pin
+      // the latest line, not the top of the meeting.
+      var talk = inner.querySelector('.talk');
+      if (talk) talk.scrollTop = talk.scrollHeight;
+      if (convo.done) {
+        var focus = inner.querySelector('.talk-delta') || inner.querySelector('[data-close]');
+        if (focus && focus.scrollIntoView) focus.scrollIntoView({ block: 'nearest' });
+      }
     }
 
     // Everybody in the room except whoever's room it is, in a stable order so
@@ -1665,7 +2014,10 @@
     }
 
     h += '<hr class="hr"><p class="modal-b">';
-    if (r.gov.majority && r.gov.parties.length === 1) {
+    if (r.talks || (r.gov && r.gov.pending)) {
+      h += 'No overall majority. Talks begin Monday. <strong>' +
+        esc(c.partyById[r.gov.lead].abbr) + '</strong> is invited to form a government.';
+    } else if (r.gov.majority && r.gov.parties.length === 1) {
       h += '<strong>' + esc(c.partyById[r.gov.lead].abbr) + '</strong> has an outright majority (' +
         r.seats[r.gov.lead] + ' of ' + totalSeats + ').';
     } else {
@@ -1748,19 +2100,55 @@
   function showEnd() {
     var S = UI.S, c = RZ.COUNTRIES[S.countryId];
     var lg = RZ.gov.legacy(S);
+    var seedHex = (S.seed >>> 0).toString(16).padStart(8, '0');
+    var plain = RZ.gov.obituaryPlain(S, lg);
     var h = '<div class="end-wrap">' +
       '<div class="crest" style="width:56px;height:56px;margin:0 auto 8px"><svg viewBox="0 0 100 100"><use href="#crest-sym"/></svg></div>' +
       '<div class="modal-kicker" style="text-align:center">' + esc(c.name) + ' · ' + S.date.year + '</div>' +
       '<div class="end-rank">' + esc(lg.rank) + '</div>' +
-      '<div class="end-score">Legacy score ' + lg.score + '</div>' +
+      '<div class="end-score">' + L('Legacy score', 'Pontuação de legado') + ' ' + lg.score + '</div>' +
       '<div class="obit">' + RZ.gov.obituary(S, lg) + '</div>' +
-      '<button class="btn btn-gold btn-lg btn-block" data-act="restart">Begin another career</button>' +
+      '<div class="share-row">' +
+        '<button class="btn btn-ghost" type="button" data-copy-seed>' + L('Copy seed', 'Copiar a semente') + ' · #' + seedHex + '</button>' +
+        '<button class="btn btn-ghost" type="button" data-share-obit>' + L('Share this career', 'Partilhar esta carreira') + '</button>' +
+      '</div>' +
+      '<button class="btn btn-gold btn-lg btn-block" data-act="restart">' + L('Begin another career', 'Começar outra carreira') + '</button>' +
       '</div>';
     el('#screen-end').innerHTML = h;
     el('#screen-end').querySelector('[data-act="restart"]').addEventListener('click', function () {
       RZ.engine.clearSave(); location.reload();
     });
+    el('#screen-end').querySelector('[data-copy-seed]').addEventListener('click', function () {
+      copyText('#' + seedHex + ' · ' + c.name + ' · Kgosi & Cadre', L('Seed copied', 'Semente copiada'));
+    });
+    el('#screen-end').querySelector('[data-share-obit]').addEventListener('click', function () {
+      if (navigator.share) {
+        navigator.share({ title: S.player.name + ' — Kgosi & Cadre', text: plain }).catch(function () {
+          copyText(plain, L('Obituary copied', 'Obituário copiado'));
+        });
+      } else {
+        copyText(plain, L('Obituary copied', 'Obituário copiado'));
+      }
+    });
     show('end');
+  }
+
+  function copyText(text, okMsg) {
+    function done() { toast(okMsg || L('Copied', 'Copiado'), 'p'); }
+    function fallback() {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); done(); } catch (e) { toast(L('Could not copy', 'Não foi possível copiar'), 'n'); }
+      document.body.removeChild(ta);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(fallback);
+    } else fallback();
   }
 
   /* ---------------- about ---------------- */
@@ -1776,8 +2164,14 @@
       '<p class="modal-b">Every country runs its own constitution: first-past-the-post, closed-list PR, mixed-member, ' +
       'or a non-party ballot under a monarchy. That decides what your career actually looks like. In a list system the ' +
       'party can end you without a single voter being consulted.</p>' +
+      '<p class="modal-b">The presidency is not a prize for the clean. A career that keeps its hands clean ends short of ' +
+      'State House — as <em>the one who never took it</em>, or as the kingmaker who put somebody else in the chair. ' +
+      'That is a complete career. The last step is a set of files, a set of friends, and a set of things you would have ' +
+      'to become.</p>' +
       '<p class="modal-b">Corruption works. It also accumulates. Everything you do that would embarrass you goes into a ' +
-      'file, and files come out — sooner where the courts and the press are strong.</p>' +
+      'file, and files come out — sooner where the courts and the press are strong. The rooms remember what you said.</p>' +
+      '<p class="modal-b">You can start as an unpaid activist, a parliamentary candidate eight weeks from a ballot, or ' +
+      'a cabinet minister with the last question already on the desk.</p>' +
       '<p class="modal-b"><em>All characters are fictional. Countries, institutions, electoral systems and party names ' +
       'are real; the numbers are tuned for play, not reported as fact.</em></p>' +
       '<button class="btn btn-gold btn-block" data-close>Close</button>', { dismissible: true })
@@ -1785,7 +2179,21 @@
   }
 
   /* ---------------- top level ---------------- */
+  function applyChrome(S) {
+    var map = {
+      desk: L('Desk', 'Mesa'),
+      country: L('Nation', 'Nação'),
+      party: L('Party', 'Partido'),
+      self: L('You', 'Você')
+    };
+    els('#tabs .tab').forEach(function (t) {
+      var lab = t.querySelector('span:last-child');
+      if (lab && map[t.dataset.pane]) lab.textContent = map[t.dataset.pane];
+    });
+  }
+
   function renderGame() {
+    applyChrome(UI.S);
     renderHud();
     renderDesk(); renderCountry(); renderParty(); renderSelf();
     els('.pane').forEach(function (p) { p.classList.toggle('is-active', p.id === 'pane-' + UI.pane); });
@@ -1795,11 +2203,44 @@
   function setPause(ms) { PAUSE_MS = Math.max(0, ms | 0); return PAUSE_MS; }
   function setCount(ms) { COUNT_MS = Math.max(0, ms | 0); return COUNT_MS; }
 
+  function bindKeys() {
+    if (bindKeys.done) return;
+    bindKeys.done = true;
+    document.addEventListener('keydown', function (e) {
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+      var tag = (e.target && e.target.tagName) || '';
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target && e.target.isContentEditable)) return;
+      var modalEl = el('#modal');
+      var open = modalEl && !modalEl.hidden;
+      if (open) {
+        if (e.key === 'Enter' || e.key === 'Escape') {
+          var close = el('#modal-inner [data-close], #modal-inner [data-done]');
+          if (close && !close.disabled) { close.click(); e.preventDefault(); }
+          return;
+        }
+        if (e.key >= '1' && e.key <= '9') {
+          var btns = els('#modal-inner .choice:not([disabled])');
+          var i = parseInt(e.key, 10) - 1;
+          if (btns[i]) { btns[i].click(); e.preventDefault(); }
+        }
+        return;
+      }
+      if ((e.key === 'n' || e.key === 'N') && UI.S && !UI.S.over && RZ.main && RZ.main.endTurn) {
+        var game = el('#screen-game');
+        if (game && game.classList.contains('is-active')) {
+          e.preventDefault();
+          RZ.main.endTurn();
+        }
+      }
+    });
+  }
+  bindKeys();
+
   RZ.ui = {
     UI: UI, show: show, toast: toast, modal: modal, closeModal: closeModal,
     renderCountries: renderCountries, renderCreate: renderCreate, renderGame: renderGame, renderHud: renderHud,
     showEvent: showEvent, showOutcome: showOutcome, showDialogue: showDialogue, showElection: showElection,
-    showAmend: showAmend, showBlitz: showBlitz, showOrigin: showOrigin,
+    showBlitz: showBlitz, showOrigin: showOrigin,
     showDraft: showDraft, showBloc: showBloc, showConcede: showConcede,
     showRigOffer: showRigOffer, showBudget: showBudget, showEnd: showEnd, showAbout: showAbout,
     paperCard: paperCard, setPause: setPause, setCount: setCount,

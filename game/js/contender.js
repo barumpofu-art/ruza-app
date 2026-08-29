@@ -196,7 +196,10 @@
       // The last rung gets one card, not two: the swearing-in says everything
       // the promotion card would have said and says it much louder.
       if (ct.rungIdx >= lad.length - 1) ascend(S, ct, out);
-      else announceClimb(S, ct, res.rung);
+      else {
+        announceClimb(S, ct, res.rung);
+        maybeNearMiss(S, ct, res.rung);
+      }
     } else if (RZ.chance(0.16 * span) && S.turn - ct.lastMoveTurn > 5) {
       res.move = doMove(S, ct);
     }
@@ -218,6 +221,26 @@
           'They are not as far behind you as they were.'),
       tone: behind ? 'bad' : 'flat'
     });
+  }
+
+  // A rival who never wins is not a story. One near-miss, named, so the throne
+  // ending is foreshadowed even when it does not fire.
+  function maybeNearMiss(S, ct, rung) {
+    if (S.flags.contenderNearMiss) return;
+    if (!rung || rung.tier < 9) return;
+    if (Math.abs(ct.rungIdx - S.player.rungIdx) > 3) return;
+    S.flags.contenderNearMiss = true;
+    var c = RZ.COUNTRIES[S.countryId];
+    RZ.engine.pushFeed(S, {
+      kind: 'big', src: c.terms.conference,
+      title: ct.name + ' came within a province of the slate',
+      body: 'The ' + c.terms.region + ' conference in ' + c.regionById[ct.regionId].name +
+            ' instructed its delegates. The instruction was not followed, quite. ' +
+            'Somebody leaked the count at two in the morning and by breakfast the country ' +
+            'knew the name. They did not take it. They will be back.',
+      tone: 'flat'
+    });
+    if (RZ.dialogue) RZ.dialogue.summon(S, 'contender-slate');
   }
 
   // Something visible that is not a promotion. This is most of what they do:
@@ -385,7 +408,7 @@
   }
 
   // Scenes this module sends somebody to find you with.
-  var SUMMONS = ['contender-throne'];
+  var SUMMONS = ['contender-throne', 'contender-slate'];
 
   RZ.contender = {
     COUNTER: COUNTER, STYLES: STYLES, SUMMONS: SUMMONS,

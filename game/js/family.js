@@ -99,6 +99,10 @@
       F.patience = clamp(F.patience - toll + RZ.noise(0.4) * span, 0, 100);
 
       if (F.patience <= 0 && !F.left) leave(S, api, out);
+      else if (!F.left && F.patience < 38 && !S.flags.kitchenTable && !S.pendingScene && RZ.dialogue && RZ.dialogue.byId('kitchen-table')) {
+        S.flags.kitchenTable = true;
+        RZ.dialogue.summon(S, 'kitchen-table');
+      }
     }
     return { patience: F.patience, kin: F.kin.length, left: F.left };
   }
@@ -252,6 +256,7 @@
     monthly: monthly, mend: mend, leave: leave,
     wantsAsk: wantsAsk, pickAsk: pickAsk, readAsk: readAsk, pay: pay, refuse: refuse,
     wantsTender: wantsTender, tenderKin: tenderKin, settleTender: settleTender,
-    summary: summary
+    summary: summary,
+    SUMMONS: ['kitchen-table']
   };
 })();

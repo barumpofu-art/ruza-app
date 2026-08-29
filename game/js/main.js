@@ -77,13 +77,14 @@
       UI.S = RZ.engine.newGame({
         countryId: d.countryId, name: name, gender: d.gender || 'f',
         regionId: d.regionId, bgId: d.bgId, partyId: d.partyId,
-        age: d.startAs === 'candidate' ? 41 : 34,
+        age: d.startAs === 'minister' ? 48 : (d.startAs === 'candidate' ? 41 : 34),
         startAs: d.startAs || 'activist',
         origin: originId
       });
       UI.pane = 'desk';
       RZ.ui.renderGame();
       RZ.ui.show('game');
+      if (UI.S.pendingScene) resumePendingScene();
     });
   }
 
@@ -108,24 +109,7 @@
     var S = UI.S;
     if (S.actionsLeft <= 0) { RZ.ui.toast('No actions left this month', 'n'); return; }
 
-    if (id === 'amend') {
-      RZ.ui.showAmend(function (res, api) {
-        if (res.fail) { RZ.ui.toast(res.title || 'Not possible', 'n'); return; }
-        S.actionsLeft--;
-        S.actionsThisMonth = (S.actionsThisMonth || 0) + 1;
-        var entry = {
-          kind: res.passed ? 'big' : 'bad', alert: !res.passed,
-          src: 'The ' + c().house.name, title: res.title, body: res.body,
-          deltas: api.deltas.slice(), tone: res.tone
-        };
-        RZ.engine.pushFeed(S, entry);
-        RZ.engine.save(S);
-        RZ.ui.showOutcome(entry, afterAction);
-      });
-      return;
-    }
-
-    if (id === 'budget') {
+    if (id === 'budget' && S.player.isPresident) {
       RZ.ui.showBudget(function (b) {
         RZ.gov.applyBudget(S, b);
         S.actionsLeft--;
@@ -140,6 +124,19 @@
 
     var out = RZ.engine.doAction(S, id);
     if (!out) return;
+
+    if (out.special === 'budget') {
+      RZ.ui.showBudget(function (b) {
+        RZ.gov.applyBudget(S, b);
+        S.actionsLeft--;
+        RZ.engine.pushFeed(S, { kind: 'big', src: 'The estimates', title: 'The budget was tabled',
+          body: 'Read to the House over four hours. Every line in it is somebody’s livelihood and somebody else’s grievance.',
+          tone: 'good' });
+        RZ.engine.save(S);
+        RZ.ui.renderGame();
+      });
+      return;
+    }
 
     // Tabling a bill, working a bloc and dropping a clause all need a choice
     // made in a modal before there is anything to resolve.
@@ -295,6 +292,7 @@
   // the regional office there and then. Present it as soon as the outcome
   // sheet closes rather than leaving it for the end of the month.
   function afterAction() {
+    if (UI.S.over) { RZ.ui.showEnd(); return; }
     if (UI.S.pendingScene) { resumePendingScene(); return; }
     if (UI.S.pendingEvent) { resumePendingEvent(); return; }
     RZ.ui.renderGame();
@@ -468,6 +466,7 @@
           RZ.engine.save(S);
         }
         if (S.over) { RZ.ui.showEnd(); return; }
+        if (S.pendingScene) { resumePendingScene(); return; }
         RZ.ui.renderGame();
       });
       return;
@@ -481,6 +480,7 @@
       });
       RZ.ui.showElection(r, function () {
         if (S.over) { RZ.ui.showEnd(); return; }
+        if (S.pendingScene) { resumePendingScene(); return; }
         RZ.ui.renderGame();
       });
     };
@@ -492,6 +492,7 @@
     var c = r.country;
     if (r.personal && r.personal.becamePresident) return S.player.name + ' wins the ' + c.terms.hos + 'cy';
     if (r.personal && r.personal.lostPresidency) return 'Defeated — ' + S.nation.presidentName + ' takes over';
+    if (r.talks || (r.gov && r.gov.pending)) return 'Talks begin Monday';
     var lead = c.partyById[r.gov.lead];
     return lead.abbr + (r.gov.majority && r.gov.parties.length === 1 ? ' returned with a majority' : ' leads a coalition government');
   }

@@ -42,7 +42,12 @@
   function bookable(S, a) {
     if ((a.ap || 1) > 1) return false;
     var act = RZ.actionById[a.id] || (RZ.gov && RZ.gov.actionById(a.id));
-    return !act || !act.special;
+    if (!act) return true;
+    if (act.special) return false;
+    // The palace actions without vpOk are his, not yours, even if a previous
+    // month's book still names them.
+    if (RZ.gov && RZ.gov.allowed && !RZ.gov.allowed(S, act)) return false;
+    return true;
   }
 
   function candidates(S) {
@@ -117,10 +122,38 @@
     var pool = candidates(S);
     if (!pool.length) return S.docket;
 
+    // First month, activist: the branch secretary is the whole early game.
+    // Pin them in the diary so a player who mashes the grid still meets them.
+    if (S.turn <= 1 && (S.startAs || 'activist') === 'activist' && RZ.trenches) {
+      var sec = RZ.trenches.keeper && RZ.trenches.keeper(S);
+      var pin = pool.filter(function (cd) {
+        return cd.act && (cd.act.id === 'chairs' || cd.act.id === 'hustle' || cd.act.id === 'walkabout');
+      })[0];
+      if (pin && sec) {
+        pin.person = sec;
+        // Move to front by weighting later; we'll unshift after pick.
+        pool = [pin].concat(pool.filter(function (cd) { return cd !== pin; }));
+      }
+    }
+
     // A diary is made of people. The first slot goes to somebody with a name
     // if anybody in the deck has one; the rest can be the office.
     var picked = [], used = {};
-    for (var i = 0; i < want; i++) {
+
+    // The office has a job. Put it first so the month does not open as a
+    // walkabout with a better car.
+    if (RZ.ward && RZ.ward.duty) {
+      var job = RZ.ward.duty(S);
+      if (job && (job.id === 'ministry' || job.id === 'friday' || job.id === 'budget' || job.id === 'address' || job.id === 'brief' || job.id === 'tax' || job.id === 'supply' || job.id === 'partner' || job.id === 'conference')) {
+        var pinJob = pool.filter(function (cd) { return cd.act && cd.act.id === job.id; })[0];
+        if (pinJob) {
+          picked.push(pinJob);
+          used[pinJob.act.id] = true;
+        }
+      }
+    }
+
+    for (var i = picked.length; i < want; i++) {
       var open = pool.filter(function (cd) { return !used[cd.act.id]; });
       if (!open.length) break;
       var named = open.filter(function (cd) { return !!cd.person; });
@@ -146,7 +179,7 @@
     return S.docket;
   }
 
-  function entries(S) { init(S); return S.docket.entries; }
+  function entries(S) { init(S); prune(S); return S.docket.entries; }
   function entryFor(S, actionId) {
     return entries(S).filter(function (e) {
       return e.actionId === actionId && !e.kept && !e.declined;
@@ -244,8 +277,24 @@
     return n;
   }
 
+  // An appointment for an office you no longer hold is not a stand-up: the
+  // meeting was never yours to keep. Drop it quietly so the diary cannot
+  // offer a speech only the President can give.
+  function prune(S) {
+    init(S);
+    if (!S.docket.entries.length || !RZ.engine) return S.docket;
+    var can = {};
+    RZ.engine.availableActions(S).forEach(function (a) { can[a.id] = true; });
+    S.docket.entries = S.docket.entries.filter(function (e) {
+      if (e.kept || e.declined) return true;
+      return !!can[e.actionId];
+    });
+    return S.docket;
+  }
+
   function summary(S) {
     init(S);
+    prune(S);
     return {
       total: S.docket.entries.length,
       open: open(S).length,
@@ -258,6 +307,7 @@
     SLOTS: SLOTS,
     init: init, build: build, entries: entries, entryFor: entryFor, open: open,
     sceneFor: sceneFor, keep: keep, decline: decline, close: close, suspend: suspend,
-    summary: summary, slotsFor: slotsFor, weightFor: weightFor, bookable: bookable
+    summary: summary, slotsFor: slotsFor, weightFor: weightFor, bookable: bookable,
+    prune: prune
   };
 })();

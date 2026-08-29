@@ -229,6 +229,22 @@ function climbPick(S, avail) {
 
 const shares = [];
 
+function playPending(at, S) {
+  if (!S.pendingScene || !RZ.dialogue) return;
+  const id = S.pendingScene;
+  const convo = RZ.dialogue.beginById(S, id);
+  S.pendingScene = null;
+  if (!convo) return;
+  let beats = 0;
+  while (!convo.done && beats++ < 12) {
+    const opts = RZ.dialogue.options(convo).filter((o) => o.ok);
+    if (!opts.length) { fail(at, `no answerable option in summoned ${id}`); break; }
+    RZ.dialogue.choose(convo, RZ.pick(opts).i);
+  }
+  if (!convo.done) fail(at, `summoned scene ${id} never closed`);
+  else checkEntry(at, RZ.engine.finishDialogue(S, convo));
+}
+
 function playCareer(countryId, seed, strategy) {
   const c = RZ.COUNTRIES[countryId];
   RZ.seed(seed);
@@ -268,8 +284,8 @@ function playCareer(countryId, seed, strategy) {
       const avail = RZ.engine.availableActions(S);
       if (!avail.length) break;
       const pickAct = strategy === 'climb' ? climbPick(S, avail) : RZ.pick(avail);
-      if (pickAct.id === 'budget') {
-        // the budget screen hands back a set of lines; approximate it
+      if (pickAct.id === 'budget' && S.player.isPresident) {
+        // the president's budget screen hands back a set of lines; approximate it
         const b = {};
         RZ.gov.BUDGET_LINES.forEach((l) => { b[l.k] = S.nation.budget[l.k]; });
         RZ.gov.applyBudget(S, b);
@@ -320,6 +336,7 @@ function playCareer(countryId, seed, strategy) {
         }
         if (!convo.done) fail(at, `scene ${convo.sceneId} never closed`);
         checkEntry(at, RZ.engine.finishDialogue(S, convo));
+        if (pickAct.id === 'budget') stats.budgets++;
       } else {
         stats.actions++;
         checkEntry(at, out.entry);
@@ -351,6 +368,7 @@ function playCareer(countryId, seed, strategy) {
     checkState(`${at} after endTurn`, S);
     if (S.over) break;
     if (out.promo && out.promo.promoted) stats.appointments++;
+    playPending(at, S);
 
     if (out.election) {
       stats.elections++;
@@ -364,6 +382,7 @@ function playCareer(countryId, seed, strategy) {
       });
       checkState(`${at} after election`, S);
       if (S.over) break;
+      playPending(at, S);
     }
 
     if (S.pendingEvent) {
