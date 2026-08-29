@@ -1,5 +1,5 @@
 /* sw.js — offline shell. Bump CACHE on every release. */
-var CACHE = 'kgosi-cadre-v20';
+var CACHE = 'kgosi-cadre-v36';
 var ASSETS = [
   './', './index.html', './app.css', './manifest.webmanifest',
   './icon.svg', './icon-maskable.svg', './icon-192.png', './icon-512.png', './icon-maskable-512.png',

@@ -56,6 +56,7 @@ const JSON_OUT = arg('json', null);
 // both (default) runs each cohort at half the total, so --runs 1000 is 1000.
 const POLICY = arg('policy', 'both');
 const FAIL_ON_WARN = argv.includes('--strict');
+const START_AS = arg('startAs', 'activist');
 
 const RZ = loadGame();
 
@@ -172,6 +173,14 @@ function chooseAction(RZ, S, acts, policy) {
     }
   }
 
+  // The constitution is a room now, and cabinet can sit it. A competent
+  // player who sees the clause on the desk sits it, otherwise this module
+  // still never fires.
+  if (RZ.rnd() < 0.22) {
+    const am = acts.filter((a) => a.id === 'amend');
+    if (am.length) return am[0];
+  }
+
   // A member with capital and a majority in reach puts their own name on
   // something. It is the only way the record ever says what you were for.
   if (RZ.bill && RZ.bill.canDraft(S) && S.player.capital >= 30 && RZ.rnd() < 0.35) {
@@ -240,7 +249,8 @@ function playCareer(seed, { trace = false, policy = 'random' } = {}) {
     gender: seed % 2 ? 'm' : 'f',
     regionId: c.regions[seed % c.regions.length].id,
     bgId: RZ.BACKGROUNDS[seed % RZ.BACKGROUNDS.length].id,
-    partyId: c.parties[seed % Math.min(2, c.parties.length)].id
+    partyId: c.parties[seed % Math.min(2, c.parties.length)].id,
+    startAs: (START_AS === 'minister' || START_AS === 'candidate') ? START_AS : 'activist'
   });
 
   const r = {
@@ -370,7 +380,7 @@ function playCareer(seed, { trace = false, policy = 'random' } = {}) {
         S.actionsLeft--; S.actionsThisMonth = (S.actionsThisMonth || 0) + 1;
         continue;
       }
-      if (pick.id === 'budget') {
+      if (pick.id === 'budget' && S.player.isPresident) {
         const b = { health: 14, education: 16, infra: 14, security: 13, social: 13, debtsvc: 14, admin: 16 };
         RZ.gov.applyBudget(S, b);
         S.actionsLeft--; S.actionsThisMonth = (S.actionsThisMonth || 0) + 1;
@@ -434,6 +444,26 @@ function playCareer(seed, { trace = false, policy = 'random' } = {}) {
     if (turnOut.collapsed) { r.collapses++; say('medical collapse'); }
     if (turnOut.purge && turnOut.purge.purged) { r.purges++; say('purged from the slate'); }
 
+    // A summoned room is not optional. Play it through so later summons are
+    // not blocked by a collapse or a kitchen table sitting on the save.
+    if (S.pendingScene && RZ.dialogue) {
+      try {
+        const convo = RZ.dialogue.beginById(S, S.pendingScene);
+        S.pendingScene = null;
+        if (convo) {
+          let guard = 0;
+          while (!convo.done && guard++ < 12) {
+            const opts = RZ.dialogue.options(convo).filter((o) => o.ok);
+            if (!opts.length) break;
+            RZ.dialogue.choose(convo, opts[Math.floor(RZ.rnd() * opts.length)].i);
+          }
+          if (convo.done) RZ.engine.finishDialogue(S, convo);
+        }
+      } catch (e) {
+        S.pendingScene = null;
+      }
+    }
+
     // ---- whatever is on the table ----
     if (S.pendingEvent) {
       const ev = S.pendingEvent;
@@ -455,6 +485,23 @@ function playCareer(seed, { trace = false, policy = 'random' } = {}) {
       try {
         RZ.gov.runElection(S, { rig: false });
       } catch (e) { throw new Error(`election threw in ${cid}: ${e.message}`); }
+      if (S.pendingScene && RZ.dialogue) {
+        try {
+          const convo = RZ.dialogue.beginById(S, S.pendingScene);
+          S.pendingScene = null;
+          if (convo) {
+            let guard = 0;
+            while (!convo.done && guard++ < 12) {
+              const opts = RZ.dialogue.options(convo).filter((o) => o.ok);
+              if (!opts.length) break;
+              RZ.dialogue.choose(convo, opts[Math.floor(RZ.rnd() * opts.length)].i);
+            }
+            if (convo.done) RZ.engine.finishDialogue(S, convo);
+          }
+        } catch (e) {
+          S.pendingScene = null;
+        }
+      }
     }
 
     // ---- a random player contests whenever it is offered ----
@@ -476,6 +523,8 @@ function playCareer(seed, { trace = false, policy = 'random' } = {}) {
 
   const P = S.player;
   r.ending = S.ending || (r.turns >= MAX_TURNS ? 'ranout' : 'unknown');
+  r.neverTookIt = !!(S.legacyMarks && S.legacyMarks.neverTookIt);
+  r.kingmaker = !!(S.legacyMarks && S.legacyMarks.kingmaker);
   r.sadcTurn = S.flags.sadcTurn ?? null;
   r.shocks = S.flags.shocks || 0;
   r.collapses = Math.max(r.collapses, S.flags.collapses || 0);
@@ -587,7 +636,7 @@ for (const policy of cohorts) report(policy, all[policy]);
     allWarnings.push('[all] no career in any cohort reached the top office — the ladder may still be capped');
   }
   if (!any((r) => r.amendmentsTried > 0)) {
-    allWarnings.push('[all] no amendment attempted in any cohort — president-only, see mechanics.mjs');
+    allWarnings.push('[all] no amendment attempted in any cohort — cabinet sits the clause, see mechanics.mjs');
   }
   // Reaching the warning is the reachability question. Whether the brigade
   // then crosses is up to the player, and mechanics.mjs proves both endings.

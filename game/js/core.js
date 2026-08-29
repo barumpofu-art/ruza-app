@@ -3,7 +3,7 @@ var RZ = (function () {
   'use strict';
 
   // Kept in step with game/VERSION, which CI also stamps into the APK.
-  var VERSION = '1.7.3';
+  var VERSION = '1.19.0';
 
   var _seed = 1;
   function seed(n) { _seed = (n >>> 0) || 1; }
@@ -72,12 +72,20 @@ var RZ = (function () {
     return n + (s[(v - 20) % 10] || s[v] || s[0]);
   }
 
+  // Chrome strings for Angola and Mozambique. Dialogue stays in English;
+  // the institutions already speak Portuguese through T().
+  function L(cid, en, pt) {
+    if (cid === 'AO' || cid === 'MZ') return pt;
+    return en;
+  }
+
   return {
     VERSION: VERSION,
     seed: seed, getSeed: getSeed, rnd: rnd, range: range, irange: irange, pick: pick,
     shuffle: shuffle, chance: chance, weighted: weighted, noise: noise,
     clamp: clamp, c100: c100, round: round, lerp: lerp, sum: sum,
     monthName: monthName, monthShort: monthShort, dateLabel: dateLabel, MONTHS: MONTHS,
-    money: money, pct: pct, signed: signed, esc: esc, el: el, els: els, ordinal: ordinal
+    money: money, pct: pct, signed: signed, esc: esc, el: el, els: els, ordinal: ordinal,
+    L: L
   };
 })();

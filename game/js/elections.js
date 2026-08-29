@@ -195,6 +195,134 @@
              hung: coalition.length > 1, seatsHeld: have };
   }
 
+  function partySeats(S, seats) {
+    var c = RZ.COUNTRIES[S.countryId];
+    var out = {}, src = seats || {};
+    (c.parties || []).forEach(function (p) {
+      out[p.id] = src[p.id] != null ? src[p.id]
+        : ((S.parties[p.id] && S.parties[p.id].seats) || 0);
+    });
+    return out;
+  }
+
+  function packParty(p, seats) {
+    if (!p) return null;
+    return { id: p.id, abbr: p.abbr, name: p.name, seats: seats[p.id] || 0, kind: p.kind };
+  }
+
+  // Three ways to sit a hung House. Not a spreadsheet: GNU is the runner-up,
+  // a kingmaker is the smallest paper that is not them, alone is a minority.
+  // Deterministic — houseFile and the night copy may read this.
+  function coalitionOptions(S, seats) {
+    var c = RZ.COUNTRIES[S.countryId];
+    seats = partySeats(S, seats);
+    var total = RZ.sum(c.parties, function (p) { return seats[p.id] || 0; });
+    var need = Math.floor(total / 2) + 1;
+    var order = c.parties.slice().sort(function (a, b) { return (seats[b.id] || 0) - (seats[a.id] || 0); });
+    var lead = order[0] || c.parties[0];
+    var leadSeats = seats[lead.id] || 0;
+    var runner = order[1] || null;
+    var runnerId = runner ? runner.id : null;
+    var ranked = c.parties.filter(function (p) { return p.id !== lead.id; }).slice().sort(function (a, b) {
+      var pa = (a.id === runnerId ? -60 : 0) + (seats[a.id] || 0) * 0.6 + (a.kind === 'coalition' ? 25 : 0);
+      var pb = (b.id === runnerId ? -60 : 0) + (seats[b.id] || 0) * 0.6 + (b.kind === 'coalition' ? 25 : 0);
+      return pb - pa;
+    });
+    var kingNamed = null, i;
+    for (i = 0; i < ranked.length; i++) {
+      if (ranked[i].id !== runnerId) { kingNamed = ranked[i]; break; }
+    }
+    if (!kingNamed) kingNamed = ranked[0] || runner;
+    var kingSlate = [lead.id], have = leadSeats;
+    for (i = 0; i < ranked.length && have < need; i++) {
+      if (ranked[i].id === runnerId) continue;
+      kingSlate.push(ranked[i].id);
+      have += seats[ranked[i].id] || 0;
+    }
+    if (kingSlate.length === 1 && kingNamed && kingNamed.id !== lead.id) kingSlate.push(kingNamed.id);
+    var gnuSlate = [lead.id];
+    if (runner && runner.id !== lead.id) gnuSlate.push(runner.id);
+    return {
+      lead: lead.id,
+      leadSeats: leadSeats,
+      need: need,
+      total: total,
+      hung: leadSeats < need,
+      gnu: packParty(runner, seats),
+      king: packParty(kingNamed, seats),
+      gnuSlate: gnuSlate,
+      kingSlate: kingSlate
+    };
+  }
+
+  function talksLive(S, gov) {
+    var c = RZ.COUNTRIES[S.countryId];
+    if (!c || c.system !== 'parl') return false;
+    if (!S.player || !S.player.isLeader) return false;
+    if (!gov || !gov.hung) return false;
+    return gov.lead === S.player.partyId;
+  }
+
+  function seatGovernment(S, parties) {
+    var c = RZ.COUNTRIES[S.countryId];
+    parties = parties || [];
+    (c.parties || []).forEach(function (p) {
+      if (S.parties[p.id]) S.parties[p.id].gov = parties.indexOf(p.id) >= 0;
+    });
+    S.nation.govParties = parties.slice();
+    if (S.opposition && parties.indexOf(S.opposition.partyId) >= 0) S.opposition = null;
+  }
+
+  function parkTalks(S, seats) {
+    var opts = coalitionOptions(S, seats);
+    S.flags.coalitionTalks = opts;
+    S.flags.coalitionKind = null;
+    if (RZ.dialogue) RZ.dialogue.summon(S, 'coalition-talks');
+    return opts;
+  }
+
+  function applyCoalition(a, quality) {
+    var S = a.S;
+    var talks = (S.flags && S.flags.coalitionTalks) || coalitionOptions(S);
+    S.flags.coalitionKind = quality;
+    S.flags.coalitionYear = S.date.year;
+    var parties;
+    if (quality === 'gnu') {
+      parties = (talks.gnuSlate && talks.gnuSlate.length) ? talks.gnuSlate.slice() : [talks.lead];
+      if (talks.gnu && parties.indexOf(talks.gnu.id) < 0) parties.push(talks.gnu.id);
+      a.add('party', -a.rng(4, 10));
+      a.add('media', a.rng(3, 8));
+      a.add('intl', a.rng(2, 6));
+      a.add('leader', a.rng(1, 4));
+      S.nation.society.stability = clamp(S.nation.society.stability + a.rng(4, 10), 3, 95);
+      S.nation.govApproval = clamp(S.nation.govApproval + a.rng(1, 4), 3, 95);
+      a.legacyMark('formedGnu');
+    } else if (quality === 'king') {
+      parties = (talks.kingSlate && talks.kingSlate.length) ? talks.kingSlate.slice() : [talks.lead];
+      if (talks.king && parties.indexOf(talks.king.id) < 0) parties.push(talks.king.id);
+      a.add('party', -a.rng(1, 4));
+      a.add('media', a.rng(0, 3));
+      a.add('leader', a.rng(1, 3));
+      S.nation.society.stability = clamp(S.nation.society.stability + a.rng(-1, 3), 3, 95);
+      a.legacyMark('formedKing');
+    } else {
+      parties = [talks.lead || S.player.partyId];
+      a.add('party', a.rng(2, 6));
+      a.add('media', -a.rng(2, 6));
+      a.add('leader', a.rng(2, 5));
+      S.nation.society.stability = clamp(S.nation.society.stability - a.rng(4, 10), 3, 95);
+      a.legacyMark('formedMinority');
+    }
+    seatGovernment(S, parties);
+    S.flags.coalitionTalks = null;
+    S.flags.coalitionPartner = quality === 'minor' ? null
+      : (quality === 'gnu' && talks.gnu ? talks.gnu.id
+        : (talks.king ? talks.king.id : null));
+    if (RZ.state && RZ.state.seatPartner) RZ.state.seatPartner(S, quality, talks);
+    return quality;
+  }
+
+
   /* ---------- presidential ballot (direct-election countries) ---------- */
   function presidentialRace(S, vote) {
     var c = RZ.COUNTRIES[S.countryId];
@@ -267,6 +395,7 @@
         ? RZ.field.conferencePull(RZ.field.figureSide(S, opp.fig, r.id, opp.incumbent, opp.targetIdx))
         : 46;                                   // an open field still has a floor
       if (!quiet) { pPull += RZ.noise(7); oPull += RZ.noise(7); }
+      if (opts && opts.bonus) pPull += opts.bonus;
       pPull = Math.max(1, pPull); oPull = Math.max(1, oPull);
       var frac = clamp(pPull / (pPull + oPull), 0.02, 0.98);
       var got = Math.round(d * frac);
@@ -305,6 +434,9 @@
     // "Grassroots" is an average of six electorates who want different things.
     // On the day, what counts is who among them actually goes and votes.
     if (RZ.blocs) mine += RZ.blocs.swing(S);
+    // The incumbent's score is the ward's, not the rally's. A clinic that
+    // exists is worth more on the day than a loud-hailer.
+    if (RZ.ward && S.ward) mine += RZ.ward.incumbentSwing(S);
     var best = 0, bestId = null;
     Object.keys(shares).forEach(function (k) {
       if (k === P.partyId) return;
@@ -318,6 +450,9 @@
 
   RZ.elections = {
     projectVote: projectVote, allocateSeats: allocateSeats, formGovernment: formGovernment,
+    coalitionOptions: coalitionOptions, talksLive: talksLive, parkTalks: parkTalks,
+    applyCoalition: applyCoalition, seatGovernment: seatGovernment,
+    SUMMONS: ['coalition-talks'],
     presidentialRace: presidentialRace, rigElection: rigElection,
     conferenceVote: conferenceVote, primaryContest: primaryContest, seatContest: seatContest,
     leaderQuality: leaderQuality, dhondt: dhondt

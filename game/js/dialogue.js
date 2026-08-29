@@ -234,6 +234,11 @@
     convo.transcript.push({ who: 'me', text: text(ans.t, convo.api, convo) });
     convo.mood += (ans.mood || 0);
     if (ans.run) ans.run(convo.api, convo);
+    if (ans.memory && convo.api.remember) {
+      var mem = typeof ans.memory === 'function' ? ans.memory(convo.api, convo) : ans.memory;
+      var tone = ans.memoryTone || (ans.mood >= 1 ? 'good' : (ans.mood <= -1 ? 'bad' : 'flat'));
+      convo.api.remember(mem, tone);
+    }
 
     // Coming down on one side of an argument is not free: the person you
     // backed remembers it, and so does the one you did not.

@@ -268,7 +268,7 @@ const played = await evaluate(`(function(){
         var avail = RZ.engine.availableActions(S);
         if (!avail.length) break;
         var a = avail[Math.floor(Math.random() * avail.length)];
-        if (a.id === 'budget') { S.actionsLeft--; continue; }
+        if (a.id === 'budget' && S.player.isPresident) { S.actionsLeft--; continue; }
         var out = RZ.engine.doAction(S, a.id);
         if (!out || out.fail) continue;
         if (out.dialogue) {
