@@ -189,6 +189,18 @@
     return entries(S).filter(function (e) { return !e.kept && !e.declined; });
   }
 
+  // What the diary should actually show: still open, and still possible.
+  //
+  // An appointment's reason can go away between the morning it was booked and
+  // the afternoon — you rehabilitate yourself, the file stops being exposed,
+  // and the meeting that was about it cannot happen. The diary renders its own
+  // buttons, so an entry left standing there is clickable and `doAction` runs
+  // it straight past its own `when`. prune() drops those; this is the read.
+  function live(S) {
+    prune(S);
+    return entries(S).filter(function (e) { return !e.declined; });
+  }
+
   // The scene this appointment was booked against, if it is still a scene that
   // could happen. A month is short, but a promotion inside one can invalidate
   // a room, and then it is better to fall back than to force it.
@@ -233,6 +245,10 @@
   // express: the meeting existed, somebody arranged it, and you were not there.
   // It costs more than cancelling, it is remembered, and it is in the record.
   function close(S) {
+    // Anything that stopped being possible is dropped before anybody is
+    // charged for it. Standing somebody up means choosing not to go; it does
+    // not mean the meeting stopped existing while your back was turned.
+    prune(S);
     var missed = open(S), out = [], names = [];
     if (!missed.length) return out;
     var api = RZ.engine.mkApi(S);
@@ -306,7 +322,8 @@
   RZ.docket = {
     SLOTS: SLOTS,
     init: init, build: build, entries: entries, entryFor: entryFor, open: open,
-    sceneFor: sceneFor, keep: keep, decline: decline, close: close, suspend: suspend,
+    sceneFor: sceneFor, live: live,
+    keep: keep, decline: decline, close: close, suspend: suspend,
     summary: summary, slotsFor: slotsFor, weightFor: weightFor, bookable: bookable,
     prune: prune
   };

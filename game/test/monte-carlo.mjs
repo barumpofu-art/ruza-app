@@ -749,7 +749,8 @@ console.log(`  the other one            ends on rung ${fmt(mean((r) => r.contend
   fmt(mean((r) => r.contenderGap), 1)} rungs from you; ahead of you in ${fmt(pct((r) => r.contenderGap > 0))}% of careers`);
 console.log(`  they reached the top     ${fmt(pct((r) => r.contenderThrone))}% of careers${
   mean((r) => r.contenderAllied) ? ', allied with you in ' + fmt(pct((r) => r.contenderAllied)) + '%' : ''}`);
-console.log(`  amendments  tried ${fmt(mean((r) => r.amendmentsTried), 2)}/career, carried ${
+console.log(`  amendments  ${sum((r) => r.amendmentsTried)} tried by ${
+  fmt(pct((r) => r.amendmentsTried > 0))}% of careers, ${fmt(mean((r) => r.amendmentsTried), 2)}/career, carried ${
   sum((r) => r.amendmentsTried) ? fmt((100 * sum((r) => r.amendmentsPassed)) / sum((r) => r.amendmentsTried)) + '%' : 'n/a'}`);
 console.log(`  promises made ${fmt(mean((r) => r.promisesMade), 2)}, broken ${fmt(mean((r) => r.promisesBroken), 2)} per career`);
 console.log(`  tenders  granted ${fmt(mean((r) => r.tendersGranted), 2)}  refused ${fmt(mean((r) => r.tendersRefused), 2)} per career`);
