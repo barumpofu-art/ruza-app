@@ -3,7 +3,7 @@
 State of the build, the conventions it is written to, and what is next. Written so a
 fresh session can pick the work up without re-reading the whole tree.
 
-Last updated for 1.19.0.
+Last updated for 1.20.0.
 
 ---
 
@@ -18,6 +18,35 @@ and try to reach the highest office your country's constitution allows. The meet
 are real conversations: a named person asks you something and you pick one of about
 three answers, each with a price. A career that keeps its hands clean ends short of
 State House. That is a complete career, not a failed one.
+
+## 1.20.0 — the merge
+
+Two sessions had this tree open at once. 1.8.0 (this branch) and 1.19.0 (main) had
+independently solved three of the same problems, and the merge is the record of how
+that was settled. **Two implementations of one fix is a smell**: wherever both sides
+had a mechanism, main's was taken and this branch's tests were kept as behaviour
+tests, so the assertions survive without a second code path behind them.
+
+| both sides fixed | kept | dropped |
+|---|---|---|
+| reaching the amendment room | main's "Sit the clause" — `vpOk`/`cabOk`, an `allowed()` helper | this branch's tier check |
+| an appointment you can no longer keep | main's `prune()`, which deletes the entry | this branch's `lapsed()`, which marked it |
+| routing presidential actions | main's `isPresident` guards in `engine.js` | this branch's tier comparison |
+
+Three things from this branch were *not* duplicates and layer on top of main's work:
+the universal `amended_` guard (no amendment carries twice, whatever its own `when`
+says), the `resist` term in `attemptAmendment`, and `ui-sim`.
+
+`mechanics.mjs` kept both sides verbatim — the branches had added disjoint sections,
+so they concatenate. Watch the seam when merging that file again: the "keep both"
+resolution left an unbalanced brace the first time, because each side's last section
+closes a block the other side's first section reopens.
+
+**The method, if this happens again.** Resolve for behaviour, not for lines. For each
+conflicted hunk ask which problem it solves, and only then which side solves it
+better; a hunk that is two answers to one question gets one answer, not both. Run all
+six harnesses on the merged tree before committing — mechanics alone passed while
+`career-sim` would still have caught a routing difference.
 
 ## 1.19.0 — what landed
 
@@ -704,7 +733,7 @@ councillor's unbuilt borehole destabilising the republic about 126 times.
 - **The contender rarely reaches the top** (0% in short runs). The throne ending is
   covered by mechanics.mjs but may be too rare to matter at scale.
 
-## After 1.19.0 — what is left
+## After 1.20.0 — what is left
 
 The clause met. The PC wrap that remains is a window around this tree, not a rewrite:
 
