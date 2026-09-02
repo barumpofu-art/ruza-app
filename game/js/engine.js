@@ -9,6 +9,7 @@
   var ELECTION_MONTH = { BW: 10, ZA: 5, ZW: 8, ZM: 8, NA: 11, MW: 9, MZ: 10, LS: 10, SZ: 9, AO: 8 };
 
   var SAVE_KEY = 'kgosi_cadre_save_v2';
+  var LAST_KEY = 'kgosi_cadre_last_v1';
 
   /* =======================================================================
      NEW GAME
@@ -72,6 +73,24 @@
       S.player.record = [{ year: c.startYear - RZ.irange(6, 12), text: 'Elected to the branch, and then the region.' }];
     }
 
+    // A minister has already made every compromise the climb demands, except
+    // the last one. The governing rooms are the game; State House is the question.
+    if (cfg.startAs === 'minister') {
+      var minIdx = 0;
+      ladder.forEach(function (r, i) { if (r.tier <= 6) minIdx = i; });
+      S.player.rungIdx = minIdx;
+      S.player.age = cfg.age || 48;
+      S.player.standing = { grassroots: 58, party: 62, leader: 54, media: 42, business: 48, security: 28, intl: 22 };
+      S.player.stats = { oratory: 54, charisma: 52, intellect: 56, cunning: 58, grit: 55, integrity: 48 };
+      S.player.fame = 48; S.player.capital = 22; S.player.health = 76;
+      S.player.ministry = (c.ministries && c.ministries[0]) ? c.ministries[0].name : 'Cabinet';
+      S.player.record = [
+        { year: c.startYear - RZ.irange(14, 22), text: 'Elected to the branch.' },
+        { year: c.startYear - RZ.irange(8, 12), text: 'Took a seat in the ' + c.terms.assembly + '.' },
+        { year: c.startYear - 1, text: 'Sworn in as ' + (c.terms.minister || 'Minister') + '.' }
+      ];
+    }
+
     // apply background
     Object.keys(bg.stats || {}).forEach(function (k) { S.player.stats[k] = C100(S.player.stats[k] + bg.stats[k]); });
     Object.keys(bg.standing || {}).forEach(function (k) { S.player.standing[k] = C100(S.player.standing[k] + bg.standing[k]); });
@@ -81,6 +100,7 @@
     // Eleven years of branch meetings bought a name in the constituency. The
     // campaign opens close, not hopeless — the eight weeks are the argument.
     if (cfg.startAs === 'candidate') S.player.regionSupport[cfg.regionId] = 52;
+    if (cfg.startAs === 'minister') S.player.regionSupport[cfg.regionId] = 64;
 
     // parties
     c.parties.forEach(function (p) {
@@ -122,6 +142,13 @@
     S.nation.presidentParty = g0.lead;
     S.nation.presidentName = S.parties[g0.lead].leaderName;
     S.nation.presidentPartyPrev = g0.lead;
+
+    // A cabinet start is a government job. If they picked the other side, they
+    // crossed the floor the week they were sworn — which is how it actually happens.
+    if (cfg.startAs === 'minister') {
+      S.player.partyId = g0.lead;
+      if (S.nation.govParties.indexOf(S.player.partyId) < 0) S.nation.govParties = [g0.lead];
+    }
 
     S.nextElection = c.nextElection;
     S.nextConference = c.startYear + RZ.irange(1, 4);
@@ -189,6 +216,17 @@
       });
     }
 
+    var last = readLast(c.id);
+    if (last) {
+      S.flags.inheritance = last;
+      pushFeed(S, {
+        kind: 'flat', src: c.terms.ward,
+        title: 'They still talk about ' + last.name,
+        body: rumourLine(last),
+        tone: 'flat'
+      });
+    }
+
     if (cfg.startAs === 'candidate') {
       pushFeed(S, {
         kind: 'big', src: 'The nomination',
@@ -201,6 +239,17 @@
       // into it.
       if (RZ.sprint) RZ.sprint.begin(S);
       S.actionsPerTurn = 2; S.actionsLeft = 2;
+    } else if (cfg.startAs === 'minister') {
+      pushFeed(S, {
+        kind: 'big', src: c.capital,
+        title: cfg.name + ' takes the oath as ' + (c.terms.minister || 'Minister'),
+        body: 'The motorcade is smaller than it looked from outside, and the director-general has already ' +
+              'put three folders on the desk. The climb is behind you. The question now is whether you take ' +
+              'the last step — and what you are willing to become to do it.',
+        tone: 'good'
+      });
+      S.actionsPerTurn = 4; S.actionsLeft = 4;
+      S.flags.taughtDocket = true;
     } else {
       pushFeed(S, {
         kind: 'big', src: 'Your first entry in the register',
@@ -617,9 +666,13 @@
       return true;
     });
     if (S.player.isPresident) list = list.concat(RZ.gov.presidentialActions(S));
-    // Not everything in the governance deck is the head of state's to do. What
-    // is moved in the House belongs to whoever can carry the House.
-    else if (RZ.gov.houseActions) list = list.concat(RZ.gov.houseActions(S));
+    else if (api.tier() >= 11 && RZ.gov) {
+      // Vice-president still chairs the estimates. The clause is also theirs.
+      list = list.concat(RZ.gov.presidentialActions(S));
+    } else if (api.inGov() && api.tier() >= 6 && RZ.gov) {
+      // Cabinet sits the clause. The rest of the palace deck stays his.
+      list = list.concat(RZ.gov.presidentialActions(S));
+    }
     // In the sprint the tactical deck comes first: a week is spent in a ward,
     // not on a five-year plan.
     if (S.tempo === 'week' && RZ.sprint) list = RZ.sprint.weekActions(S).concat(list);
@@ -642,6 +695,182 @@
               (S.tempo === 'week' && S.bill && RZ.bill && RZ.bill.weekActionById(id)) ||
               RZ.actionById[id] || RZ.gov.actionById(id);
     if (!act) return null;
+    // A deputy clicking a leftover "Address the nation" must not give the
+    // speech. The desk is supposed to have filtered it; this is the lock on
+    // the door in case the diary, a save, or a test still has the key.
+    if (RZ.gov && RZ.gov.actionById(id) && RZ.gov.allowed && !RZ.gov.allowed(S, act)) return null;
+    // The vice-president chairs the estimates: a room, not a slider. The
+    // president keeps the pen, and the pen is the slider. Always this room,
+    // not sceneFor — a budget is annual and the thirty-turn skip would
+    // make the chair a once-a-career event.
+    if (id === 'budget' && !S.player.isPresident && RZ.dialogue) {
+      var estimates = RZ.dialogue.byId('estimates-chair');
+      if (estimates) {
+        S.actionsLeft -= (act.ap || 1);
+        S.actionsThisMonth = (S.actionsThisMonth || 0) + (act.ap || 1);
+        if (RZ.docket) RZ.docket.keep(S, id);
+        return { dialogue: RZ.dialogue.begin(S, estimates, act) };
+      }
+    }
+    if (id === 'reshuffle' && S.player.isPresident && RZ.dialogue) {
+      if (RZ.state) {
+        RZ.state.fillCabinet(S);
+        RZ.state.choppingBlock(S);
+      }
+      var cut = RZ.dialogue.byId('cabinet-cut');
+      if (cut) {
+        S.actionsLeft -= (act.ap || 1);
+        S.actionsThisMonth = (S.actionsThisMonth || 0) + (act.ap || 1);
+        if (RZ.docket) RZ.docket.keep(S, id);
+        return { dialogue: RZ.dialogue.begin(S, cut, act) };
+      }
+    }
+    if (id === 'address' && S.player.isPresident && RZ.dialogue) {
+      var sona = RZ.dialogue.byId('nation-address');
+      if (sona) {
+        S.actionsLeft -= (act.ap || 1);
+        S.actionsThisMonth = (S.actionsThisMonth || 0) + (act.ap || 1);
+        if (RZ.docket) RZ.docket.keep(S, id);
+        return { dialogue: RZ.dialogue.begin(S, sona, act) };
+      }
+    }
+    if (id === 'brief' && S.player.isPresident && RZ.dialogue) {
+      if (RZ.state) {
+        RZ.state.fillCabinet(S);
+        RZ.state.pickBrief(S);
+      }
+      var briefing = RZ.dialogue.byId('cabinet-brief');
+      if (briefing) {
+        S.actionsLeft -= (act.ap || 1);
+        S.actionsThisMonth = (S.actionsThisMonth || 0) + (act.ap || 1);
+        if (RZ.docket) RZ.docket.keep(S, id);
+        return { dialogue: RZ.dialogue.begin(S, briefing, act) };
+      }
+    }
+    if (id === 'summit' && S.player.isPresident && RZ.dialogue) {
+      var summit = RZ.dialogue.byId('sadc-summit');
+      if (summit) {
+        S.actionsLeft -= (act.ap || 1);
+        S.actionsThisMonth = (S.actionsThisMonth || 0) + (act.ap || 1);
+        if (RZ.docket) RZ.docket.keep(S, id);
+        return { dialogue: RZ.dialogue.begin(S, summit, act) };
+      }
+    }
+    if (id === 'province' && S.player.isPresident && RZ.dialogue) {
+      if (RZ.state) {
+        RZ.state.fillCabinet(S);
+        RZ.state.pickProject(S);
+      }
+      var proj = RZ.dialogue.byId('house-project');
+      if (proj) {
+        S.actionsLeft -= (act.ap || 1);
+        S.actionsThisMonth = (S.actionsThisMonth || 0) + (act.ap || 1);
+        if (RZ.docket) RZ.docket.keep(S, id);
+        return { dialogue: RZ.dialogue.begin(S, proj, act) };
+      }
+    }
+    if ((id === 'embassy' || id === 'resourcedeal') && S.player.isPresident && RZ.dialogue) {
+      if (RZ.state) {
+        RZ.state.fillCabinet(S);
+        RZ.state.pickPower(S, id === 'resourcedeal' ? 'china' : null);
+      }
+      var gp = RZ.dialogue.byId('great-power');
+      if (gp) {
+        S.actionsLeft -= (act.ap || 1);
+        S.actionsThisMonth = (S.actionsThisMonth || 0) + (act.ap || 1);
+        if (RZ.docket) RZ.docket.keep(S, id);
+        return { dialogue: RZ.dialogue.begin(S, gp, act) };
+      }
+    }
+    if (id === 'opposition' && S.player.isPresident && RZ.dialogue) {
+      if (RZ.state) RZ.state.opposition(S);
+      var om = RZ.dialogue.byId('opp-meet');
+      if (om) {
+        S.actionsLeft -= (act.ap || 1);
+        S.actionsThisMonth = (S.actionsThisMonth || 0) + (act.ap || 1);
+        if (RZ.docket) RZ.docket.keep(S, id);
+        return { dialogue: RZ.dialogue.begin(S, om, act) };
+      }
+    }
+    if (id === 'oppother' && S.player.isPresident && RZ.dialogue) {
+      if (RZ.state) RZ.state.opposition(S);
+      var ot = RZ.dialogue.byId('opp-other');
+      if (ot) {
+        S.actionsLeft -= (act.ap || 1);
+        S.actionsThisMonth = (S.actionsThisMonth || 0) + (act.ap || 1);
+        if (RZ.docket) RZ.docket.keep(S, id);
+        return { dialogue: RZ.dialogue.begin(S, ot, act) };
+      }
+    }
+    if (id === 'supply' && S.player.isPresident && RZ.dialogue) {
+      if (RZ.state) RZ.state.opposition(S);
+      var su = RZ.dialogue.byId('opp-supply');
+      if (su) {
+        S.actionsLeft -= (act.ap || 1);
+        S.actionsThisMonth = (S.actionsThisMonth || 0) + (act.ap || 1);
+        if (RZ.docket) RZ.docket.keep(S, id);
+        return { dialogue: RZ.dialogue.begin(S, su, act) };
+      }
+    }
+    if (id === 'partner' && S.player.isPresident && RZ.dialogue) {
+      if (RZ.state && RZ.state.partner) RZ.state.partner(S);
+      var gp = RZ.dialogue.byId('gnu-meet');
+      if (gp) {
+        S.actionsLeft -= (act.ap || 1);
+        S.actionsThisMonth = (S.actionsThisMonth || 0) + (act.ap || 1);
+        if (RZ.docket) RZ.docket.keep(S, id);
+        return { dialogue: RZ.dialogue.begin(S, gp, act) };
+      }
+    }
+    if (id === 'conference' && S.player.isPresident && RZ.dialogue) {
+      if (RZ.state && RZ.state.plantChallenger) RZ.state.plantChallenger(S);
+      var cf = RZ.dialogue.byId('conference-floor');
+      if (cf) {
+        S.actionsLeft -= (act.ap || 1);
+        S.actionsThisMonth = (S.actionsThisMonth || 0) + (act.ap || 1);
+        if (RZ.docket) RZ.docket.keep(S, id);
+        return { dialogue: RZ.dialogue.begin(S, cf, act) };
+      }
+    }
+    if (id === 'tax' && S.player.isPresident && RZ.dialogue) {
+      if (RZ.gov && RZ.gov.beginTax) RZ.gov.beginTax(S);
+      var tx = RZ.dialogue.byId('tax-package');
+      if (tx) {
+        S.actionsLeft -= (act.ap || 1);
+        S.actionsThisMonth = (S.actionsThisMonth || 0) + (act.ap || 1);
+        if (RZ.docket) RZ.docket.keep(S, id);
+        return { dialogue: RZ.dialogue.begin(S, tx, act) };
+      }
+    }
+    if (id === 'amend' && RZ.dialogue) {
+      var bag = RZ.gov && RZ.gov.beginAmend ? RZ.gov.beginAmend(S) : null;
+      var ams = RZ.dialogue.byId('amend-table');
+      if (bag && ams) {
+        S.actionsLeft -= (act.ap || 1);
+        S.actionsThisMonth = (S.actionsThisMonth || 0) + (act.ap || 1);
+        if (RZ.docket) RZ.docket.keep(S, id);
+        return { dialogue: RZ.dialogue.begin(S, ams, act) };
+      }
+    }
+    if (id === 'ministry' && RZ.dialogue && RZ.state) {
+      var dutyId = RZ.state.dutySceneId(S);
+      var dutySc = RZ.dialogue.byId(dutyId);
+      if (dutySc) {
+        S.actionsLeft -= (act.ap || 1);
+        S.actionsThisMonth = (S.actionsThisMonth || 0) + (act.ap || 1);
+        if (RZ.docket) RZ.docket.keep(S, id);
+        return { dialogue: RZ.dialogue.begin(S, dutySc, act) };
+      }
+    }
+    if (id === 'friday' && RZ.dialogue) {
+      var fr = RZ.dialogue.byId('friday-ward');
+      if (fr) {
+        S.actionsLeft -= (act.ap || 1);
+        S.actionsThisMonth = (S.actionsThisMonth || 0) + (act.ap || 1);
+        if (RZ.docket) RZ.docket.keep(S, id);
+        return { dialogue: RZ.dialogue.begin(S, fr, act) };
+      }
+    }
     // A ward blitz needs to know which ward; main.js asks, then calls back.
     if (act.special) return { special: act.special, act: act };
 
@@ -761,6 +990,10 @@
 
     S.campaign.season = isCampaignSeason(S);
     if (!S.campaign.season) { S.campaign.effort *= Math.pow(0.9, span); S.campaign.delegateSpend *= Math.pow(0.85, span); }
+    if (S.campaign.season && mkApi(S).tier() >= 4 && RZ.ward && !RZ.ward.hasManifesto(S) &&
+        !S.pendingScene && !S.pendingEvent && RZ.dialogue && RZ.dialogue.byId('manifesto-desk')) {
+      RZ.dialogue.summon(S, 'manifesto-desk');
+    }
 
     // ---- gear change ----
     // A bill on the order paper owns the weekly clock until it is voted on —
@@ -1475,23 +1708,6 @@
       }
     }
 
-    // no confidence: coalition governments fall between elections
-    if (P.isPresident && c.system === 'parl' && S.nation.govParties.length > 1) {
-      var fragility = (100 - S.nation.society.stability) * 0.0012 +
-                      (S.nation.govApproval < 35 ? 0.010 : 0) +
-                      (S.nation.govParties.length - 1) * 0.004;
-      if (RZ.chance(fragility)) {
-        S.flags.wasPresident = true;
-        P.record.push({ year: S.date.year, text: 'Removed by a motion of no confidence.' });
-        pushFeed(S, { kind: 'bad', src: 'The ' + c.terms.assembly, title: 'The motion carried',
-          body: 'A partner walked, eleven of your own crossed the floor with them, and the Speaker read the result at ten past four. ' +
-                'You are no longer ' + c.terms.hos + '.', tone: 'bad' });
-        endGame(S, 'noconfidence');
-        return;
-      }
-      S.nation.society.stability = C100(S.nation.society.stability - RZ.range(-0.4, 0.7));
-    }
-
     // debt: the money you owe is the leverage somebody else holds
     if (P.money < -WAGE_BASE[c.id] * 8) {
       if (RZ.chance(0.11)) {
@@ -1523,6 +1739,54 @@
   function endGame(S, reason) {
     S.over = true;
     S.ending = reason;
+    var lad = RZ.ladderFor(S.countryId);
+    var rung = lad[S.player.rungIdx];
+    // The clean path ends here on purpose. A career that never took State House
+    // is not a failed one — it is the other ending the game is built around.
+    if (!S.player.isPresident && rung && rung.tier >= 10) {
+      var dirty = S.player.dirt.filter(function (d) { return d.exposed; }).length;
+      if (S.player.stats.integrity >= 62 && dirty === 0) S.legacyMarks.neverTookIt = true;
+      else if (S.legacyMarks.madeWay || (S.contender && S.contender.relation === 'allied')) S.legacyMarks.kingmaker = true;
+    }
+    recordLast(S);
+  }
+
+  function recordLast(S) {
+    try {
+      var lad = RZ.ladderFor(S.countryId);
+      var rung = lad[S.player.rungIdx] || {};
+      localStorage.setItem(LAST_KEY, JSON.stringify({
+        countryId: S.countryId,
+        name: S.player.name,
+        ending: S.ending,
+        year: S.date.year,
+        title: rung.title || '',
+        neverTookIt: !!(S.legacyMarks && S.legacyMarks.neverTookIt),
+        madeWay: !!(S.legacyMarks && S.legacyMarks.madeWay),
+        wasHead: !!(S.player.isPresident || (S.flags && S.flags.wasPresident))
+      }));
+    } catch (e) { /* private mode */ }
+  }
+
+  function readLast(countryId) {
+    try {
+      var raw = localStorage.getItem(LAST_KEY);
+      if (!raw) return null;
+      var last = JSON.parse(raw);
+      if (!last || last.countryId !== countryId) return null;
+      return last;
+    } catch (e) { return null; }
+  }
+
+  function rumourLine(last) {
+    if (!last) return '';
+    if (last.neverTookIt) return last.name + ' kept their hands clean, and the palace noticed. That is still a kind of fame.';
+    if (last.ending === 'recall') return last.name + ': the hall had the names.';
+    if (last.ending === 'noconfidence') return last.name + ' lost a Thursday. Tuesday had been coming for months.';
+    if (last.madeWay) return last.name + ' made way, and kept the motorcade. People here have a word for that.';
+    if (last.ending === 'retire') return last.name + ' walked, while they still could.';
+    if (last.wasHead) return last.name + ' held the office. The rest is an argument this place has not finished.';
+    return last.name + ' got as far as ' + (last.title || 'the branch') + '. They still use the name as a warning and a dare.';
   }
 
   /* =======================================================================
@@ -1587,14 +1851,28 @@
   function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) {} }
   function hasSave() { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; } }
 
+  function exportSave(S) {
+    try { return JSON.stringify(S); } catch (e) { return null; }
+  }
+  function importSave(raw) {
+    try {
+      var S = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (!S || S.v !== 2 || !S.player || !S.countryId) return null;
+      RZ.seed(S.seed + S.turn * 7919);
+      save(S);
+      return S;
+    } catch (e) { return null; }
+  }
+
   RZ.engine = {
     newGame: newGame, mkApi: mkApi, availableActions: availableActions, doAction: doAction,
     endTurn: endTurn, rollEvent: rollEvent, resolveEvent: resolveEvent,
     contestStatus: contestStatus, contest: contest, whipCount: whipCount, promote: promote, nextRung: nextRung,
     meetsRequirements: meetsRequirements, considerAppointment: considerAppointment,
-    pushFeed: pushFeed, endGame: endGame,
+    pushFeed: pushFeed, endGame: endGame, recordLast: recordLast, readLast: readLast, rumourLine: rumourLine,
     finishDialogue: finishDialogue, finishEventDialogue: finishEventDialogue,
     save: save, load: load, clearSave: clearSave, hasSave: hasSave,
+    exportSave: exportSave, importSave: importSave,
     WAGE_BASE: WAGE_BASE, ELECTION_MONTH: ELECTION_MONTH, isCampaignSeason: isCampaignSeason
   };
 })();

@@ -3,7 +3,7 @@
 State of the build, the conventions it is written to, and what is next. Written so a
 fresh session can pick the work up without re-reading the whole tree.
 
-Last updated for 1.4.0.
+Last updated for 1.19.0.
 
 ---
 
@@ -13,10 +13,224 @@ A mobile, text-based, conversation-driven political career simulator set in ten
 southern African countries. Static vanilla JS, plain `<script>` tags (no ES modules,
 so it runs from `file://`), a PWA, and an Android WebView shell.
 
-You start as an unpaid ward activist or a parliamentary candidate and try to reach the
-highest office your country's constitution allows. The meetings are real conversations:
-a named person asks you something and you pick one of about three answers, each with a
-price.
+You start as an unpaid ward activist, a parliamentary candidate, or a cabinet minister,
+and try to reach the highest office your country's constitution allows. The meetings
+are real conversations: a named person asks you something and you pick one of about
+three answers, each with a price. A career that keeps its hands clean ends short of
+State House. That is a complete career, not a failed one.
+
+## 1.19.0 — what landed
+
+The clause is a room. The slider was GPS. Cabinet can sit it.
+
+1. **Open it at minister.** `amendLive`: in government, tier ≥ 6. Term limits, term length and the courts stay palace paper. Devolve is what a minister can actually table. Once a year, like the package.
+2. **The Whip already has a number.** `amend-table`: Justice, the Whip, the Leader of the Opposition. The clause, the count, the verb. Whip it, count what you have, or bury it. No range input.
+3. **The palace still has a pen.** A president sees the same room with different paper on the folder. A vice-president still chairs the estimates; a minister is not offered the budget.
+4. **A miss is a ceiling.** `applyAmend` calls the count you already had. Burying is not a carry. The regions that get a share cannot have it taken back.
+
+Helpers live on `RZ.gov` (`amendLive`, `pickAmend`, `beginAmend`, `applyAmend`). One scene. No new JS file.
+
+## 1.18.0 — what landed
+
+The rest of the house meets. The recommendations, as meetings, not as a new game.
+
+1. **Wire.** A hostile bill they quoted, carried, is a renege (`partnerSeesCarried`). Honouring a friendly one pledges the opposition bloc. Two centres walk into `gnu-meet`: *who am I actually in government with?*
+2. **Own the clean path.** `sg-ceiling`, once. The SG says how far clean hands go. Integrity is a design, not an accident in the Monte Carlo.
+3. **Friday is a country.** `fridayMatter` — kgotla and the public wage, a hostel and a metro, mealie meal at the party price. Not a borehole with different nouns.
+4. **The year has a room.** `the-year`: a funeral, a list, a by-election, a commission. Summoned once a year in the climb. The middle is no longer only the diary.
+5. **The next career hears a rumour.** `recordLast` / `readLast`. Same country, a name, an ending. Not a save.
+
+Helpers live on `RZ.state.partnerSeesCarried`, `RZ.ward.fridayMatter` / `yearLive` / `pickYearKind`, `RZ.engine.recordLast` / `readLast` / `rumourLine`. Two scenes. No new JS file.
+
+## 1.17.0 — what landed
+
+The partner quotes the paper you signed. GPS would simulate the annexures. This tree already had the rooms.
+
+1. **The cheque is still a date.** Signing the Statement stamps the year. The next time they sit down they do not ask for a date again.
+2. **The annexure is on the folder.** `partnerQuote` is whatever is live: a bill on the order paper, October's package, or a hole in the books. Pure. The file may read it. Hostile bills (land, mines, wages) they want pulled; the rest they will own.
+3. **Honour, renege, or walk.** Same room (`gnu-meet`). Honouring a hostile bill withdraws it. Honouring the package sits a holiday. Reneging sours them; if they are already on the floor they walk, and Tuesday starts.
+4. **Not a tracker.** No NHI flag. No twelve clauses. The photograph and the order paper now know each other because the same person is in a second doorway.
+
+Helpers live on `RZ.state` (`partnerQuote`) and `RZ.bill.withdraw`. `houseFile` still does not create people on render. No new scene.
+
+## 1.16.0 — what landed
+
+Saturday is the vote. Conference year was a toast. The incumbent is now in the hall.
+
+1. **The diary pins it.** A president who still leads the party, from June of `nextConference`, pins `Sit the conference` the way February pins the speech. After Tuesday, before the photograph.
+2. **The last beat is a count.** `conference-floor`: the SG, a provincial chair, the person who wants the job. Stand and keep the photograph, stand and dump them (the hawk's buses), or make way. `conferenceHolds` reads the delegate map you already had. Not a roll.
+3. **A lost hall takes the chair.** `applyConference` on a parliamentary republic that does not hold ends the career (`recall`). A presidential republic splits: you keep the country, they have the party (`twoCentre`). Anointing is that split on purpose.
+4. **The GNU walks in with the buses.** Dumping the partner is a beat in the same room. Walking is 1.15. The hall is 1.16.
+
+Helpers live on `RZ.state` (`conferenceDefenceLive`, `plantChallenger`, `challenger`, `conferenceHolds`, `applyConference`, `splitLeadership`). `houseFile` still does not create people on render. No new JS file.
+
+## 1.15.0 — what landed
+
+A GNU is a person. `formGovernment` still sorts the nights you are not in it; the partner now stays in the building.
+
+1. **They sit down.** `S.partner` is the runner-up (GNU) or the smaller paper (a kingmaker) — name, party, standing, a chair. Finance for a GNU. The chair they were given, for a kingmaker. The briefing can bring them when that number is on the folder.
+2. **The GNU is a meeting.** `Sit the partner` (`gnu-meet`): a paper (Statement of Intent, stamps the year), the chair stays theirs, or they walk. Walking unseats them. You are a minority. Tuesday starts, which 1.14 already knew how to count.
+3. **Your hawk.** When the caucus is on the floor, `gnu-caucus` is summoned. Keep them, dump them, or a statement. Dumping is a walk with a party bonus.
+4. **Pin it like tax, until you sit it.** A parl president with a live partner and no paper this year pins `partner` after Tuesday and before October. Missing it sours them and summons the room. Not a silent walk.
+
+Helpers live on `RZ.state` (`partner`, `partnerLive`, `plantPartner`, `seatPartner`, `applyPartner`, `walkPartner`). `houseFile` still does not create people on render. Ministers can carry a `partyId`.
+
+## 1.14.0 — what landed
+
+A minority lives on Tuesday. Forming alone was the safest parliamentary government in the tree, because the silent no-confidence only looked at partner-count. That roll is gone. The room is the vote.
+
+1. **Tuesday is the job.** A parl president short of the House pins supply the way February pins the speech. A paper stamps the year and the pin goes away. Missing it is counted (`missedSupply`) and makes the censure likelier. Not an optional corridor.
+2. **The count is a count.** `houseHolds` reads seats, two names from the Whip, two from leadership, and whether there is a paper this year. Leadership cannot invent a majority. A paper means they do not vote you out; your own benches still can (`party < 22`).
+3. **A lost whip takes the chair.** `applyCensure` on a parliamentary House that does not hold ends the career (`noconfidence`). A presidential House still only makes the rest of the term a trial. Same meeting.
+4. **Fragility is the form of government.** Minority without a paper is live every month. A paper buys Tuesdays. A kingmaker is medium. GNU is the most stable to the country.
+
+Helpers live on `RZ.state` (`govSeats`, `houseNeed`, `minorityLive`, `houseHolds`, `applyCensure`). `houseFile` still does not create people on render. No new scene.
+
+## 1.13.0 — what landed
+
+A hung House is a room. `formGovernment` still sorts the nights you are not in it.
+
+1. **GNU.** Sit with the runner-up (`coalition-talks`). The country looks whole. Your caucus hates it. The Leader of the Opposition walks into government and a new one is named later.
+2. **A kingmaker.** Sit with the smallest paper that is not them — IFP after DA, AD after DC, AP after BDP. They take a chair. Fragile, which 1.12 already knew how to count.
+3. **Alone.** A minority. The House lives on supply. Tuesday is the whole mechanic.
+
+After a parliamentary count the player is invited to form, the night copy says talks begin Monday, a caretaker (the lead, alone) sits until the room writes the paper. NPC nights and `newGame` still auto-form.
+
+Helpers live on `RZ.elections` (`coalitionOptions`, `talksLive`, `parkTalks`, `applyCoalition`, `seatGovernment`). `RZ.elections.SUMMONS` is `coalition-talks`. `houseFile` still does not create people on render.
+
+## 1.12.0 — what landed
+
+The opposition is a party. The Leader is still a person; the caucus is now a number, a hawk, and a second party that wants the title.
+
+1. **A deal is a split.** Sitting a corridor with the Leader (`opp-meet`) drops caucus unity and sets their line to `corridor`. When unity is on the floor, the hawk walks into your office (`opp-split`, summoned). Take them (they cross, seats move), send them back, or let them fight. GPS floor-crossing, written as a room.
+2. **The other party.** `Call in the other party` (`opp-other`) is the second-largest out of government. Name them, freeze them, or play them against the Leader. BCP after BDP, EFF after DA, PODEMOS after RENAMO. Not a vote share.
+3. **Supply.** Parliamentary systems with a thin majority or a coalition sit `opp-supply`: a chair, a paper, or the door. A paper stamps the year and makes a no-confidence harder. Not a coalition spreadsheet.
+
+`S.parties[id].unity` was stored and never read. It is now the same number as the Leader's caucus. `houseFile` still does not create people on render.
+
+Helpers live on `RZ.state` (`otherOppositionParty`, `hawk`, `applySplit`, `applyOther`, `applySupply`, `supplyLive`, `thinMajority`, `crossSeats`). `RZ.state.SUMMONS` now includes `opp-split`.
+
+## 1.11.0 — what landed
+
+A second year in office is a different job. Four rooms, all meetings:
+
+1. **The hottest province.** `Sit the hottest province` opens `house-project`: the premier, the minister who owns the kind of thing it needs, and Finance. One project at a time (`S.house.project`). A delivered date plants it; months later it opens and the province moves. GPS construction, written as a room.
+2. **A named great power.** `Receive the ambassador` (and the old resource deal) open `great-power`. China if the books are a hole, Washington if there is a listing, otherwise the neighbour. Summoned (`power-deal`) when a listing or a loan is live. Not a world map.
+3. **Opposition as a person.** `S.opposition` persists the Leader of the Opposition — the same person as the censure room. `Call them in` (`opp-meet`) is a corridor; a motion (`opp-table`) is summoned when they have a file or the floor. They table, they leak, they take a chair.
+4. **Taxes, once a year.** `Sit with Finance on the package` (`tax-package`) is VAT, a royalty, or a holiday. October without a package pins it, the way February pins the speech. Not thirty taxes.
+
+The desk at 900px is a desk: diary left, file / project / opposition right. 1 / 2 / 3 answers, Enter leaves the room, N turns the month. A career exports as a file from the You pane. That is the PC edition of this tree. Wrapping it in Tauri is the same `public/play` folder inside a window.
+
+Helpers live on `RZ.state` (`pickProject`, `applyProject`, `liveProject`, `pickPower`, `applyPower`, `opposition`, `applyOpp`) and `RZ.gov` (`beginTax`, `applyTax`). `RZ.state.SUMMONS` now includes `opp-table`. `RZ.engine.exportSave` / `importSave` are the save file.
+
+## 1.10.0 — what landed
+
+State House is a job. A president's month is a briefing, not a walkabout: two
+ministers of different kinds bring the worst number on the file, and the minute
+you sign moves the country (`applyHouse`, same shape as `applyDuty`). The diary
+pins `brief`. February without a speech is still State of the Nation.
+
+The Nation pane prints the file: the worst number, the hottest province, the
+minister already writing a different minute. A censure (`house-censure`) is a
+summoned room when approval is on the floor; a parliamentary system can actually
+lose the chair's stability, a presidential one can only make the rest of the
+term a trial. The regional summit is a corridor (`sadc-summit`), not a dice roll.
+
+This is the Rogue State lesson, written as meetings: the cabinet is the toolbox.
+It is not Geo-Political Simulator. GPS has a thousand actions and a spreadsheet
+for a soul. Do not add a thousand actions.
+
+Helpers live on `RZ.state` (`houseFile`, `hottestRegion`, `pickBrief`, `applyHouse`).
+`RZ.state.SUMMONS` now includes `house-censure`.
+
+## 1.9.0 — what landed
+
+The office has a job. A minister sits one of six rooms (`duty-clinic`,
+`duty-school`, `duty-road`, `duty-cluster`, `duty-shaft`, `duty-list`) mapped
+from the chair they actually hold, and the nation moves from that minute.
+`doAction('ministry')` always opens the mapped room; `scenesFor` only offers
+that room, so the diary cannot name the mines DG for a health minister.
+
+An MP drives home on Friday (`friday-ward`). Missing two months drains ward
+trust. A finished project summons `ribbon-day` instead of a feed card. Three
+manifesto lines (`manifesto-desk`, summoned once a campaign starts without
+one) are stamped kept / late / broken; `incumbentSwing` is what election
+night adds on top of the machine; the Nation pane prints the ledger.
+
+The desk carries a paper naming this month's duty, and the diary pins it
+first (ministry / Friday / estimates / briefing / State of the Nation). Walkabout is
+still there. It is no longer the thing the month is for.
+
+State of the Nation is a holding-room conversation (`nation-address`), not a
+dice roll. The speech is the last beat.
+
+Helpers live on `RZ.ward` (`duty`, `markFriday`, `stamp`, `ledger`,
+`incumbentSwing`, `pickManifesto`) and `RZ.state` (`dutySceneId`, `applyDuty`,
+`DUTY_SCENE`). Summoned rooms: `RZ.ward.SUMMONS` (`ribbon-day`,
+`manifesto-desk`).
+
+## 1.8.3 — what landed
+
+The deputy diary no longer offers the palace. A leftover `Address the nation`
+(or any president-only action) is pruned from the book, `doAction` refuses it,
+and `bookable` will not put it there. The Grok preview pill no longer sits on
+the last answer: when the game is framed, the sheet and the tab bar lift, and
+a meeting keeps its choices on the sheet while the transcript scrolls.
+
+## 1.8.2 — what landed
+
+The cabinet is people. Six named ministers sit on the Nation pane, the same
+people you meet in the estimates room and in a leak. A reshuffle is two names
+and a chair (`cabinet-cut`), not a dice roll: whoever you drop is gone, and
+the next meeting with that portfolio is somebody else. A leak is summoned
+(`cabinet-leak`) when loyalty is on the floor; two ministers of different
+kinds can be summoned to argue (`cabinet-row`) and the argument is assembled
+from what their ministry actually is. Loyalty finds a level (2% a month toward
+a target). The minister start skips the chair you already sit in. `cast.succeed`
+is what makes a drop a different person.
+
+## 1.8.1 — what landed
+
+The vice-president's budget is a room, not a slider. `Chair the estimates` opens
+`estimates-chair`: Finance and Health argue, you pick a package, a note arrives
+from the palace. Standing is what decides whether the minute you sent is the
+minute that is tabled. Yielding always lets him write his road in; leaking the
+original keeps the package and puts a file on you. The president still has the
+pen — `Table the national budget` is the slider it always was.
+
+Helpers live on `RZ.gov` (`beginEstimates`, `tiltEstimates`, `composeEstimates`,
+`palaceAmend`, `sealEstimates`). `doAction('budget')` for a deputy always opens
+this room, ignoring the thirty-turn scene skip, because a budget is annual.
+
+---
+
+## 1.8.0 — what landed
+
+Presidency thesis C: the clean path caps below the top office. `endGame` marks
+`neverTookIt` (integrity ≥ 62, no exposed dirt, tier ≥ 10) or `kingmaker` (made
+way, or allied the contender). Legacy ranks and the obituary name both.
+
+Three ways in. `startAs: 'minister'` is a new origin (mandarin / advocate / schemer),
+tier 6, four actions, a portfolio, and the governing rooms from month one.
+
+Eight rooms added to `data-dialogue.js` (not a new module): `kraal`, `sg-midnight`,
+`live-tv`, `deputy-sits`, `kitchen-table`, `miners-hall`, `collapse-bed`,
+`contender-slate`. Crisis scenes are summoned: `RZ.crisis.SUMMONS`, `RZ.family.SUMMONS`,
+`RZ.state.CRISES`, `RZ.contender.SUMMONS`. Answers can set `memory` / `memoryTone`;
+`dialogue.choose` writes them through `a.remember` so existing `run()` functions
+did not have to be rewritten.
+
+The first activist month pins the branch secretary into the diary, and a tutorial
+paper sits on the desk until it is dismissed. The obituary carries a seed hex and
+can be copied or shared. Angola and Mozambique speak Portuguese in `T()` and in
+HUD / tabs / create chrome via `RZ.L`. A vice-president (tier ≥ 11) is offered
+`amend` and `budget`; term limits, term length and the courts stay president-only.
+
+Medical collapse is a room now (`collapse-bed`), not a card that ends the run.
+A contender who climbs onto a high rung is a named near-miss once.
+
+Do not collapse `field.js` and `contender.js`. Do not add ES modules. Registering
+a new JS file is still five places.
 
 ## Where things live
 
@@ -27,8 +241,8 @@ price.
 | `js/data-ladder.js` | The 14-rung career ladder, `RZ.ladderFor(cid)` (memoised) |
 | `js/data-actions.js` | The monthly action deck |
 | `js/data-events.js` | The event cards |
-| `js/data-dialogue.js` | **39 scenes, ~936 lines of dialogue.** The bulk of the writing |
-| `js/data-origins.js` | Two origin scenes, six traits, per-country staples |
+| `js/data-dialogue.js` | **105 scenes.** Eight rooms in 1.8.0; estimates and cabinet rooms in 1.8.x; six ministry rooms, Friday, the ribbon, the manifesto desk and State of the Nation in 1.9.0; `cabinet-brief`, `house-censure`, `sadc-summit` in 1.10.0; `house-project`, `great-power`, `opp-meet`, `opp-table`, `tax-package` in 1.11.0; `opp-split`, `opp-other`, `opp-supply` in 1.12.0; `coalition-talks` in 1.13.0; `gnu-meet`, `gnu-caucus` in 1.15.0; `conference-floor` in 1.16.0; `sg-ceiling`, `the-year` in 1.18.0; `amend-table` in 1.19.0 |
+| `js/data-origins.js` | Three origin scenes, six traits, per-country staples |
 | `js/people.js` | `makeNpc`, `makeName`, backgrounds, factions |
 | `js/elections.js` | National vote, seat contests, primaries, conference votes |
 | `js/engine.js` | State, the action API (`mkApi`), `endTurn`, promotion, save/load |
@@ -224,7 +438,8 @@ engine rather than a dashboard with prose on it. Build order, highest leverage f
    in the room, and an argument with no answer that takes a side is a failure.
 
    **Adding one:** authored is the house style for pivotal rooms. Assembled-from-faction
-   arguments are possible on the same engine and nothing has been built that way yet.
+   arguments are possible on the same engine. `cabinet-cut` and `cabinet-leak` are
+   authored; `cabinet-row` is assembled from each minister's `kind`. That is the split.
 4. ~~**The Docket.**~~ **Done** (`js/docket.js`). The month no longer opens as an empty
    menu: `build(S)` writes two or three appointments into `S.docket.entries`, each one an
    action from the same deck, each with a time, a named person from the cast, and a reason
@@ -272,10 +487,9 @@ engine rather than a dashboard with prose on it. Build order, highest leverage f
 
    Mechanically it is nothing — no state, no cost, the same answers underneath.
 
-Decision still open on 3: whether cabinet arguments are authored (few, hand-written,
-Suzerain-quality) or assembled from each minister's faction and interests (infinite,
-blander). The suggestion on the table is authored for the six or seven pivotal rooms and
-assembled for the rest.
+Decision closed on 3: authored for the pivotal rooms (`cabinet-cut`, `cabinet-leak`,
+the estimates, the war room) and assembled for the rest (`cabinet-row`, from ministry
+kind). Do not invert that.
 
 ### The backlog, now cleared
 
@@ -394,62 +608,40 @@ Amending the constitution was gated on `P.isPresident`, and three players in a t
 ever became president — so across 1,000 Monte Carlo careers **zero amendments were ever
 attempted**. An entire module with four authored amendments ran in nobody's game.
 
-The gate was wrong on its own terms. `attemptAmendment` scores the vote on party standing,
-capital, patronage and the judiciary; there is not one term in it that asks whether you are
-head of state, because an amendment is a vote in the House. It is gated at **tier 8 in a
-governing party** now (`house: true` on the action, `gov.houseActions`, and the branch in
-`engine.availableActions`). The two amendments that are about the head of state's own tenure
-carry `needsOffice: true` and stay presidential — reading *"you may stand again"* to somebody
-who is not standing for anything makes no sense.
+The knock-on was a Monte Carlo warning: **no constitutional amendment is ever attempted
+in either cohort**, because amendments were president-only and nobody is president.
+**1.19 opened the clause at cabinet.** Term limits stay palace paper. Devolve is what a
+minister can table. The slider is gone. The coverage hole is a room.
 
-Opening it exposed two faults that had been sitting behind the gate:
+Two faults were sitting behind that gate and are fixed separately from the gating:
 
-- **`devolve` never retired.** Its `when` is simply `true` and its `pass()` set no flag, so it
-  could be carried again every month, paying out grassroots, media and stability each time.
-  `attemptAmendment` had always written `S.flags['amended_' + id]` and nothing had ever read
-  it; `amendmentsFor` reads it now, for every amendment.
-- **Two-thirds was the only obstacle.** Where the government already held a supermajority the
-  gap was zero and the whole thing came down to a handful of rebels: **97% of attempts
-  carried.** There is a `resist` term now — courts, commissions, the street, scaled by
+- **`devolve` never retired.** Its `when` was simply `true` and its `pass()` set no flag, so
+  it could be carried again every month for the same payout. `attemptAmendment` had always
+  written `S.flags['amended_' + id]` and nothing had ever read it; `amendmentsFor` reads it
+  now, for every amendment, and 1.19 added per-amendment guards on top.
+- **Two-thirds was the only obstacle.** Where the government already held a supermajority
+  the gap was zero and it came down to a handful of rebels: **97% of attempts carried.**
+  There is a `resist` term now — courts, commissions, the street, scaled by
   `inst.judiciary`, `inst.electoral`, how unpopular the government is and how angry the
   country is — and the roll is widened, because with the old narrow one the standing bands
   sat further apart than the noise and the vote was a step rather than a vote.
 
-Measured across governments all holding 75% of the House, so the arithmetic is not what is
-being measured:
-
-| | no whipping money | 40 wage units |
-|---|---|---|
-| strong government, calm country | 63% | 100% |
-| strong government, angry country | 30% | 94% |
-| middling government | 0% | 94% |
-| weak government | 0% | 3% |
-
-Money is the lever the mechanic was always built around — crossbenchers are bought — and it
-still cannot buy a majority that is not there.
-
-### Standing finding: the top office is rare everywhere
-
-Careers reaching the top office sit at about **3 in 1,000** across the Monte Carlo, and that
-is where the number has been all along — the 67 in 1,000 briefly seen at 1.7.2 was the
-Eswatini blackmail hole, not a gain. The genuine improvement from the purge fix is in the
-*mid* ladder, where career-sim's climb ceilings now spread to t10 and t12 instead of
-clustering at t3–t4.
-
-This no longer blocks any mechanic — amendments were the one thing gated behind it and they
-are not any more — so it is a question about the shape of the game rather than a coverage
-hole: should reaching head of state be a one-in-three-hundred career, or should the elected
-presidencies be more winnable? Nobody has decided that on purpose yet.
+Measured with every government holding 75% of the House, so the arithmetic is not what is
+being measured: with no whipping money, a strong government in a calm country carries a
+court capture 63% of the time, an angry one 30%, a middling one never. With 40 wage units
+of whipping those become 100%, 94% and 94% — and a weak government still only reaches 3%.
+Money is the lever the mechanic was built around, and it cannot buy a majority that is not
+there.
 
 ### An appointment whose reason went away
 
 `ui-sim` found this on its first run, in the shipped game. The diary renders its own
-buttons from `S.docket.entries` and never asked whether the action was still on offer.
-`rehab` is only available while a file of yours is exposed; clear the file and the meeting
-that was about it cannot happen — but the diary kept showing it, clickable, and `doAction`
-ran it straight past its own `when`. `RZ.docket.lapsed()` and `RZ.docket.live()` are what
-the UI reads now, and `close()` strikes lapsed entries out silently: you could not have
-gone, so nobody was stood up and nothing is charged to you.
+buttons and never asked whether the action was still on offer: `rehab` is only available
+while a file of yours is exposed, and once the file is gone the meeting about it cannot
+happen — but the entry sat there clickable and `doAction` ran it past its own `when`.
+`docket.prune()` drops those entries, `docket.live()` is what the UI reads, and `close()`
+prunes before charging anybody, so a lapsed appointment costs nothing: you could not have
+gone.
 
 ### A shape to watch for: the one-way ratchet
 
@@ -511,3 +703,19 @@ councillor's unbuilt borehole destabilising the republic about 126 times.
   recent work; the horizon may simply be longer than the threshold was calibrated for.
 - **The contender rarely reaches the top** (0% in short runs). The throne ending is
   covered by mechanics.mjs but may be too rare to matter at scale.
+
+## After 1.19.0 — what is left
+
+The clause met. The PC wrap that remains is a window around this tree, not a rewrite:
+
+- Tauri (preferred: small binary, no Chrome bundle) or Electron
+- Steam: one save directory, one window, one `.desktop`
+- the same `localStorage` seed, already exportable as a file
+
+Do not add ES modules. Do not add a new JS file unless the next system cannot
+live on `RZ.state` / `RZ.gov`. Registering a new file is still five places.
+
+The rule that holds all of this together: if it is not a meeting, it is not in
+this game. GPS already exists, and people do not love it. This one they can finish.
+
+

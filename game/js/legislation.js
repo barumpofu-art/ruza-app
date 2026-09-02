@@ -312,6 +312,20 @@
     return { name: b.name, spent: b.spent, concessions: b.concessions };
   }
 
+  // They asked you to pull it. The House is still sitting; the order paper is not.
+  function withdraw(S) {
+    var b = S.bill;
+    if (!b) return null;
+    var name = b.name;
+    S.flags.billCool = S.turn;
+    S.bill = null;
+    if (S.tempo === 'week') {
+      S.tempo = 'month';
+      S.date.week = 1;
+    }
+    return name;
+  }
+
   /* =======================================================================
      THE DIVISION
      ======================================================================= */
@@ -384,6 +398,7 @@
           ' clause' + (b.concessions === 1 ? '' : 's') + ' went out to get it through.'
         : ' Exactly as drafted, which almost never happens.');
       res.tone = 'good';
+      if (RZ.state && RZ.state.partnerSeesCarried) RZ.state.partnerSeesCarried(S, b);
     } else {
       api.add('leader', -RZ.range(4, 10));
       api.add('party', -RZ.range(3, 8));
@@ -418,7 +433,7 @@
   RZ.bill = {
     WEEKS: WEEKS, BILLS: BILLS, billById: billById,
     canDraft: canDraft, table: table, count: count, tickWeek: tickWeek, division: division,
-    lapse: lapse, VISITS: VISITS,
+    lapse: lapse, withdraw: withdraw, VISITS: VISITS,
     weekActions: weekActions, weekActionById: weekActionById,
     workBloc: workBloc, concede: concede, houseTotal: houseTotal
   };

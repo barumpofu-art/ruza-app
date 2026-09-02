@@ -5,8 +5,13 @@
 
   /* ================= presidential action deck ================= */
   var PRES = [
+    { id: 'brief', ico: '📁', ap: 1, name: 'Take the briefing',
+      desc: 'The cabinet has already decided. You have the minute.',
+      when: function (a) { return a.P.isPresident; },
+      run: function (a) { return { title: '', body: '', special: 'brief' }; } },
+
     { id: 'address', ico: '📺', ap: 1, name: 'Address the nation',
-      desc: 'Prime time, all channels, one message.',
+      desc: 'The holding room first. The speech is the last beat.',
       run: function (a) {
         var ok = a.roll('oratory', 50);
         a.add('fame', a.rng(1, 3));
@@ -17,7 +22,7 @@
       } },
 
     { id: 'reshuffle', ico: '🔀', ap: 1, name: 'Reshuffle the cabinet',
-      desc: 'Remove the dead weight and the disloyal, in that order.',
+      desc: 'Two names. One chair. The province will have a view.',
       run: function (a) {
         var ok = a.roll('cunning', 48);
         a.add('capital', -6);
@@ -41,13 +46,64 @@
       } },
 
     { id: 'summit', ico: '🌍', ap: 1, name: 'Attend the regional summit',
-      desc: 'SADC, the AU, and a corridor conversation that matters more than the communiqué.',
+      desc: 'The communiqué is already written. The corridor is not.',
       run: function (a) {
         a.add('intl', a.rng(3, 8)); a.add('fame', a.rng(1, 3)); a.add('grassroots', -a.rng(0, 2));
         if (a.S.nation.intl.sanctions > 20 && a.roll('charisma', 50)) { a.S.nation.intl.sanctions = Math.max(0, a.S.nation.intl.sanctions - a.rng(4, 12));
           return { title: 'Movement on the listings', body: 'A quiet conversation on a balcony did more than three years of communiqués. Two names came off the list.', tone: 'good' }; }
         return { title: 'A communiqué was issued', body: 'Solidarity was expressed, concern was noted, and nothing binding was signed. Regional diplomacy in one sentence.', tone: 'flat' };
       } },
+
+    { id: 'province', ico: '🗺️', ap: 1, name: 'Sit the hottest province',
+      desc: 'A road, a clinic, a shaft. The province that has been calling.',
+      when: function (a) { return a.P.isPresident; },
+      run: function (a) { return { title: '', body: '', special: 'province' }; } },
+
+    { id: 'embassy', ico: '🏛️', ap: 1, name: 'Receive the ambassador',
+      desc: 'China, Washington, or the neighbour. One at a time.',
+      when: function (a) { return a.P.isPresident; },
+      run: function (a) { return { title: '', body: '', special: 'embassy' }; } },
+
+    { id: 'opposition', ico: '🪑', ap: 1, name: 'Call in the Leader of the Opposition',
+      desc: 'They table, they leak, they primary. They have a name.',
+      when: function (a) { return a.P.isPresident; },
+      run: function (a) { return { title: '', body: '', special: 'opposition' }; } },
+
+    { id: 'oppother', ico: '🚩', ap: 1, name: 'Call in the other party',
+      desc: 'The one that wants the title. They hate the Leader more than they hate you.',
+      when: function (a) {
+        return a.P.isPresident && RZ.state && !!RZ.state.otherOppositionParty(a.S);
+      },
+      run: function (a) { return { title: '', body: '', special: 'oppother' }; } },
+
+    { id: 'supply', ico: '🤝', ap: 1, name: 'Sit a supply meeting',
+      desc: 'A chair, a paper, or the arithmetic as it is. Parliamentary only.',
+      when: function (a) {
+        return a.P.isPresident && RZ.state && RZ.state.supplyLive(a.S) &&
+               a.S.flags.supplyYear !== a.S.date.year;
+      },
+      run: function (a) { return { title: '', body: '', special: 'supply' }; } },
+
+    { id: 'partner', ico: '✒️', ap: 1, name: 'Sit the partner',
+      desc: 'A paper, a quote, or they walk. The photograph is a meeting.',
+      when: function (a) {
+        if (!a.P.isPresident || !RZ.state || !RZ.state.partnerLive(a.S)) return false;
+        if (a.S.flags.partnerYear !== a.S.date.year) return true;
+        return !!(RZ.state.partnerQuote && RZ.state.partnerQuote(a.S));
+      },
+      run: function (a) { return { title: '', body: '', special: 'partner' }; } },
+
+    { id: 'conference', ico: '🎤', ap: 1, name: 'Sit the conference',
+      desc: 'The hall is the vote. Keep it, make way, or the buses take it.',
+      when: function (a) {
+        return a.P.isPresident && RZ.state && RZ.state.conferenceDefenceLive(a.S);
+      },
+      run: function (a) { return { title: '', body: '', special: 'conference' }; } },
+
+    { id: 'tax', ico: '📑', ap: 1, name: 'Sit with Finance on the package',
+      desc: 'One conversation a year. Not thirty taxes.',
+      when: function (a) { return a.P.isPresident && a.S.flags.taxYear !== a.S.date.year; },
+      run: function (a) { return { title: '', body: '', special: 'tax' }; } },
 
     { id: 'resourcedeal', ico: '⛏️', ap: 1, name: 'Sign a resource deal',
       desc: 'Lithium, gas, uranium, copper — whoever is offering.',
@@ -94,45 +150,53 @@
         return { title: 'Parliament dissolved', body: 'The proclamation was signed this morning. Everybody in the country now has one job and about five months to do it.', tone: 'flat' };
       } },
 
-    // The one thing on this list that is not an executive act. Amending the
-    // constitution is a vote in the House, and attemptAmendment has always
-    // scored it that way — on party standing, capital and patronage, with not
-    // one term that asks whether you are head of state. Gating it on the
-    // presidency meant an entire module ran in nobody's career: across a
-    // thousand simulated careers, zero amendments were ever attempted, because
-    // three players in a thousand ever became president.
-    //
-    // Anybody senior enough to whip a two-thirds majority can move one. Trying
-    // without the numbers is not free — it costs capital and it fails — so the
-    // mechanic polices itself without needing the office to do it.
-    { id: 'amend', ico: '📜', ap: 1, name: 'Amend the constitution', special: 'amend',
-      house: true,
-      desc: 'Two-thirds of the House. Nothing less will do it.',
-      risky: true,
-      when: function (a) {
-        if (!amendmentsFor(a).length) return false;
-        if (a.P.isPresident) return a.S.nation.termNumber >= 1;
-        return a.tier() >= 8 && a.inGov();
-      },
+    { id: 'amend', ico: '📜', ap: 1, name: 'Sit the clause',
+      desc: 'Justice, the Whip, two-thirds. The Whip already has a number.',
+      risky: true, vpOk: true, cabOk: true,
+      when: function (a) { return amendLive(a); },
       run: function (a) { return { title: '', body: '', special: 'amend' }; } },
 
-    { id: 'budget', ico: '💰', ap: 1, name: 'Table the national budget', special: 'budget',
-      desc: 'Divide a fixed amount between things that all matter.',
+    { id: 'budget', ico: '💰', ap: 1, special: 'budget', vpOk: true,
+      name: function (a) {
+        return a.P.isPresident ? 'Table the national budget' : 'Chair the estimates';
+      },
+      desc: function (a) {
+        return a.P.isPresident
+          ? 'Divide a fixed amount between things that all matter.'
+          : 'The ministers have already decided. You have the chair. He has the pen.';
+      },
       run: function (a) { return { title: '', body: '', special: 'budget' }; } }
   ];
 
   function presidentialActions(S) { 
     var api = RZ.engine.mkApi(S);
-    return PRES.filter(function (x) { return !x.when || x.when(api); });
+    var list = PRES.filter(function (x) { return !x.when || x.when(api); });
+    if (S.player && S.player.isPresident) return list;
+    var t = api.tier();
+    var gov = api.inGov();
+    return list.filter(function (x) {
+      if (t >= 11 && x.vpOk) return true;
+      if (t >= 6 && gov && x.cabOk) return true;
+      return false;
+    });
   }
 
-  // The subset that is moved in the House rather than signed at a desk, for
-  // somebody senior who does not hold the top office.
-  function houseActions(S) {
-    var api = RZ.engine.mkApi(S);
-    return PRES.filter(function (x) { return x.house && (!x.when || x.when(api)); });
-  }
   function actionById(id) { return PRES.filter(function (x) { return x.id === id; })[0]; }
+
+  // The palace desk is not the deputy's. Budget stays the vice-president's
+  // chair; the clause is a cabinet meeting. A stale diary entry must not
+  // hand a minister the speech only he can give.
+  function allowed(S, act) {
+    if (!act) return false;
+    var pres = actionById(act.id);
+    if (!pres) return true;
+    if (S.player && S.player.isPresident) return true;
+    var api = RZ.engine.mkApi(S);
+    var t = api.tier();
+    if (pres.vpOk && t >= 11) return true;
+    if (pres.cabOk && t >= 6 && api.inGov()) return true;
+    return false;
+  }
 
   /* ================= budget ================= */
   var BUDGET_LINES = [
@@ -173,6 +237,138 @@
     }
   }
 
+  /* ================= the vice-president's estimates =================
+     The president has the pen: a slider. The deputy has the chair: a room.
+     Finance and a spending minister argue in front of you; you pick a
+     package; a note from the palace may still rewrite it. Standing is what
+     decides whether the minute you sent is the minute that is tabled.
+     ================================================================= */
+  var PALACE_BAR = 48;
+
+  function beginEstimates(S) {
+    S.flags.estimates = { tilt: {}, favored: null, stance: null };
+    S.flags.estimatesLast = null;
+    return S.flags.estimates;
+  }
+
+  function tiltEstimates(S, from, to, amt) {
+    var bag = S.flags.estimates || beginEstimates(S);
+    bag.tilt[from] = (bag.tilt[from] || 0) - amt;
+    bag.tilt[to] = (bag.tilt[to] || 0) + amt;
+    bag.favored = to;
+    return bag;
+  }
+
+  function composeEstimates(S) {
+    var b = {};
+    BUDGET_LINES.forEach(function (l) { b[l.k] = (S.nation.budget && S.nation.budget[l.k]) || 0; });
+    var tilt = (S.flags.estimates && S.flags.estimates.tilt) || {};
+    BUDGET_LINES.forEach(function (l) {
+      b[l.k] = Math.max(2, (b[l.k] || 0) + (tilt[l.k] || 0));
+    });
+    var tot = 0;
+    BUDGET_LINES.forEach(function (l) { tot += b[l.k]; });
+    if (tot <= 0) tot = 100;
+    var acc = 0;
+    BUDGET_LINES.forEach(function (l, i) {
+      if (i === BUDGET_LINES.length - 1) b[l.k] = 100 - acc;
+      else {
+        b[l.k] = Math.round(b[l.k] * 100 / tot);
+        acc += b[l.k];
+      }
+    });
+    return b;
+  }
+
+  function stealFrom(pack, amount, src, dest) {
+    if (!src || src === dest || pack[src] === undefined) {
+      var best = null, bestV = -1;
+      BUDGET_LINES.forEach(function (l) {
+        if (l.k !== dest && pack[l.k] > bestV) { best = l.k; bestV = pack[l.k]; }
+      });
+      src = best;
+    }
+    if (!src) return pack;
+    var take = Math.min(amount, Math.max(0, pack[src] - 4));
+    pack[src] -= take;
+    pack[dest] = (pack[dest] || 0) + take;
+    return pack;
+  }
+
+  function palaceStrength(S) {
+    return S.player.standing.leader * 0.55 + S.player.standing.party * 0.45;
+  }
+
+  function palaceAmend(S, stance) {
+    var pack = composeEstimates(S);
+    var rewritten = false;
+    var bag = S.flags.estimates || {};
+    if (stance === 'yield' || (stance === 'defend' && palaceStrength(S) < PALACE_BAR)) {
+      stealFrom(pack, 5, bag.favored, 'admin');
+      rewritten = true;
+    }
+    return { lines: pack, rewritten: rewritten, stance: stance };
+  }
+
+  function sealEstimates(a, stance) {
+    var S = a.S;
+    S.flags.estimates = S.flags.estimates || beginEstimates(S);
+    S.flags.estimates.stance = stance;
+    var verdict = palaceAmend(S, stance);
+    applyBudget(S, verdict.lines);
+    S.flags.estimatesLast = {
+      lines: verdict.lines, rewritten: verdict.rewritten, stance: stance
+    };
+    S.flags.estimatesChaired = (S.flags.estimatesChaired || 0) + 1;
+    if (!verdict.rewritten && stance === 'defend') a.legacyMark('chairedEstimates');
+    S.flags.estimates = null;
+    return verdict;
+  }
+
+  /* ================= the annual tax package =================
+     GPS has thirty taxes. This game has one conversation a year.
+     Finance brings a package; you pick VAT, a royalty, or a holiday.
+     Same shape as the estimates: a room, not a slider.
+     ================================================================= */
+  function beginTax(S) {
+    S.flags.tax = { pack: null };
+    return S.flags.tax;
+  }
+
+  function applyTax(a, pack) {
+    var S = a.S;
+    S.flags.taxYear = S.date.year;
+    S.flags.taxPack = pack;
+    S.flags.tax = null;
+    if (pack === 'vat') {
+      a.nation('inflation', a.rng(0.3, 0.8));
+      a.nation('debt', -a.rng(0.6, 1.6));
+      a.nation('reserves', a.rng(0.1, 0.4));
+      a.blocs({ youth: -a.rng(3, 7), traders: -a.rng(3, 8), middle: -a.rng(1, 4), rural: -a.rng(2, 5) });
+      a.add('grassroots', -a.rng(2, 6)); a.add('intl', a.rng(1, 4));
+      S.nation.govApproval = clamp(S.nation.govApproval - a.rng(1, 4), 3, 95);
+    } else if (pack === 'royalty') {
+      a.nation('growth', -a.rng(0.1, 0.35));
+      a.nation('reserves', a.rng(0.3, 0.8));
+      a.nation('debt', -a.rng(0.3, 1.0));
+      a.blocs({ labour: a.rng(2, 6), traders: -a.rng(3, 7), chiefs: a.rng(1, 4) });
+      a.add('business', -a.rng(3, 8)); a.add('grassroots', a.rng(1, 4));
+      a.add('intl', a.rng(-2, 3));
+    } else if (pack === 'holiday') {
+      a.nation('inflation', -a.rng(0.1, 0.4));
+      a.nation('growth', a.rng(0.15, 0.45));
+      a.nation('debt', a.rng(0.2, 0.8));
+      a.blocs({ traders: a.rng(3, 8), labour: -a.rng(3, 7), middle: a.rng(1, 4), youth: -a.rng(1, 4) });
+      a.add('business', a.rng(4, 9)); a.add('grassroots', -a.rng(2, 6));
+      a.add('party', -a.rng(1, 4));
+    } else {
+      a.add('leader', -a.rng(1, 3));
+      a.add('media', -a.rng(1, 3));
+    }
+    a.legacyMark('wroteThePackage');
+    return pack;
+  }
+
   /* ================= constitutional engineering ================= */
   // How many votes you actually have in the House, as opposed to how many
   // people say they are with you.
@@ -189,9 +385,9 @@
   }
 
   var AMENDMENTS = [
-    { id: 'termlimit', needsOffice: true, name: 'Abolish the term limit',
+    { id: 'termlimit', name: 'Abolish the term limit',
       blurb: 'Strike the two-term clause. Everything else in the document stays as it is.',
-      when: function (a) { return !!a.C.termLimit && !a.S.flags.termLimitRemoved; },
+      when: function (a) { return a.P.isPresident && !!a.C.termLimit && !a.S.flags.termLimitRemoved; },
       pass: function (a) {
         a.S.flags.termLimitRemoved = true;
         a.add('intl', -RZ.range(10, 22)); a.add('media', -RZ.range(8, 18));
@@ -200,9 +396,9 @@
         a.legacyMark('removedTermLimit');
         return 'You may stand again, for as long as you can keep winning. Something has been spent that cannot be earned back.';
       } },
-    { id: 'termlength', needsOffice: true, name: 'Extend the presidential term to seven years',
+    { id: 'termlength', name: 'Extend the presidential term to seven years',
       blurb: 'Not a third term. Simply a longer first one, and a longer second.',
-      when: function (a) { return !a.S.flags.termExtended; },
+      when: function (a) { return a.P.isPresident && !a.S.flags.termExtended; },
       pass: function (a) {
         a.S.flags.termExtended = true;
         a.S.nextElection += 2;
@@ -213,7 +409,10 @@
       } },
     { id: 'courts', name: 'Give the executive the power to appoint the Chief Justice alone',
       blurb: 'Remove the commission from the process. It was only ever advisory.',
-      when: function (a) { return a.C.inst.judiciary > 35; },
+      when: function (a) {
+        return a.P.isPresident && a.C.inst.judiciary > 35 &&
+               !a.S.flags.amended_courts && !a.S.legacyMarks.capturedCourts;
+      },
       pass: function (a) {
         a.nation('judiciary', -RZ.range(10, 22));
         a.add('capital', RZ.range(6, 14));
@@ -225,29 +424,29 @@
       } },
     { id: 'devolve', name: 'Entrench the provinces and devolve the budget',
       blurb: 'Give the regions a constitutional share. It cannot be taken back by a later president.',
-      when: function (a) { return true; },
+      when: function (a) { return !a.S.flags.amended_devolve && !a.S.legacyMarks.devolved; },
       pass: function (a) {
         a.add('grassroots', RZ.range(6, 14)); a.add('intl', RZ.range(4, 10));
         a.add('media', RZ.range(3, 9)); a.add('capital', -RZ.range(8, 16));
         a.nation('stability', RZ.range(3, 9)); a.nation('unrest', -RZ.range(3, 8));
         a.add('stats.integrity', RZ.range(2, 5));
         a.legacyMark('devolved');
-        return 'You have permanently reduced the power of your own office, which is the rarest thing a president ever does.';
+        return a.P.isPresident
+          ? 'You have permanently reduced the power of your own office, which is the rarest thing a president ever does.'
+          : 'The regions have a share that a later president cannot take back. Your own chair did not get bigger.';
       } }
   ];
 
-  // Two of these are about the head of state's own tenure, and reading "you may
-  // stand again" to somebody who is not standing for anything makes no sense.
-  // The rest are ordinary constitutional politics and belong to whoever can
-  // carry the House.
+  // Which amendments are live. Each one says for itself who may move it — the
+  // three that are about the head of state's own powers carry `isPresident`,
+  // and what a cabinet can table is devolution.
   function amendmentsFor(a) {
     return AMENDMENTS.filter(function (x) {
-      if (x.needsOffice && !a.P.isPresident) return false;
-      // Carried once is carried. attemptAmendment has always written this flag
-      // and nothing has ever read it, so `devolve` — whose `when` is simply
-      // `true` — could be passed again every month, paying out grassroots,
-      // media and stability each time. A constitution is not a renewable
-      // resource.
+      // Carried once is carried, whatever else an amendment's own `when` says.
+      // attemptAmendment has always written this flag and nothing ever read it,
+      // so `devolve` — whose `when` was simply `true` — could be passed again
+      // every month, paying out grassroots, media and stability each time. The
+      // per-amendment guards cover today's four; this covers the next one too.
       if (a.S.flags['amended_' + x.id]) return false;
       return !x.when || x.when(a);
     });
@@ -316,9 +515,64 @@
     res.title = 'It failed on the floor, ' + (need - won) + ' short';
     res.body = 'You needed ' + sup.needed + ' of ' + sup.total + ' and the government benches carry ' + sup.gov + '. ' +
                (rebels ? rebels + ' of your own abstained rather than be recorded voting for it. ' : '') +
-               'A president who tries this and misses is a president everybody now knows the ceiling of.';
+               (a.P.isPresident
+                 ? 'A president who tries this and misses is a president everybody now knows the ceiling of.'
+                 : 'A cabinet that tries this and misses is a cabinet everybody now knows the ceiling of.');
     res.tone = 'bad';
     return res;
+  }
+
+  /* ================= the clause, as a room =================
+     GPS has a slider and thirty clauses. This game has one meeting.
+     Cabinet can sit it. Term limits, term length and the courts stay
+     palace paper. Devolve is what a minister can actually table.
+     Once a year, like the package. The Whip already has a number.
+     ================================================================= */
+  function amendLive(a) {
+    if (!a || !a.inGov || !a.inGov()) return false;
+    if (a.tier() < 6) return false;
+    if (a.S.flags.amendYear === a.S.date.year) return false;
+    return amendmentsFor(a).length > 0;
+  }
+
+  function pickAmend(S) {
+    var api = RZ.engine.mkApi(S);
+    var list = amendmentsFor(api);
+    if (!list.length) return null;
+    if (S.player.isPresident) {
+      var palace = list.filter(function (x) { return x.id !== 'devolve'; });
+      if (palace.length) return palace[0];
+    }
+    return list[0];
+  }
+
+  function beginAmend(S) {
+    var am = pickAmend(S);
+    S.flags.amend = am ? { id: am.id, name: am.name, blurb: am.blurb } : null;
+    S.flags.amendPick = am ? am.id : null;
+    S.flags.amendIntent = null;
+    return S.flags.amend;
+  }
+
+  function applyAmend(a, how) {
+    var S = a.S;
+    var bag = S.flags.amend || beginAmend(S);
+    var id = S.flags.amendPick || (bag && bag.id);
+    S.flags.amendYear = S.date.year;
+    S.flags.amendHow = how;
+    S.flags.amend = null;
+    if (!id || how === 'bury' || how === 'none') {
+      a.add('party', a.rng ? a.rng(1, 4) : RZ.range(1, 4));
+      a.add('leader', -(a.rng ? a.rng(0, 2) : RZ.range(0, 2)));
+      return {
+        buried: true, passed: false, id: id,
+        title: 'The clause stayed in the folder',
+        body: 'Justice dated a minute that says noted. The Whip did not have to count. The opposition did not have to walk.',
+        tone: 'flat'
+      };
+    }
+    var spend = how === 'whip' ? 24 : 0;
+    return attemptAmendment(a, id, spend);
   }
 
   /* ================= third term ================= */
@@ -374,6 +628,7 @@
     if (RZ.crisis) RZ.crisis.cabinetReckoning(S);
 
     out.vote = vote; out.seats = alloc.seats; out.regionSeats = alloc.regionSeats; out.gov = gov;
+    out.talks = null;
 
     c.parties.forEach(function (p) {
       S.parties[p.id].vote = vote.byParty[p.id];
@@ -381,6 +636,20 @@
       S.parties[p.id].gov = gov.parties.indexOf(p.id) >= 0;
     });
     S.nation.govParties = gov.parties.slice();
+
+    // A hung House the player is invited to form is a room, not a sort.
+    // Park a caretaker (the lead, alone) until coalition-talks writes the paper.
+    // NPC nights and newGame still use formGovernment as they always have.
+    if (RZ.elections.talksLive(S, gov) && RZ.dialogue && RZ.dialogue.byId('coalition-talks')) {
+      var talks = RZ.elections.parkTalks(S, alloc.seats);
+      RZ.elections.seatGovernment(S, [gov.lead]);
+      out.talks = talks;
+      out.gov = {
+        parties: [gov.lead], lead: gov.lead, majority: false,
+        need: gov.need, total: gov.total, hung: true,
+        seatsHeld: alloc.seats[gov.lead] || 0, pending: true
+      };
+    }
 
     // ---- head of state ----
     if (c.system === 'pres') {
@@ -466,6 +735,12 @@
         if (c.termLimit && S.nation.termNumber > c.termLimit && !S.flags.termLimitRemoved) {
           res.messages.push('This term is your last under the constitution.');
         }
+        if (RZ.ward && RZ.ward.hasManifesto(S)) {
+          var ledP = RZ.ward.ledger(S);
+          res.ledger = ledP;
+          if (ledP.kept) res.messages.push(ledP.kept + ' of the three things you promised exist.');
+          if (ledP.broken) res.messages.push(ledP.broken + ' were abandoned. The count still heard it.');
+        }
       } else {
         pl.electionsLost++;
         pl.isPresident = false;
@@ -536,6 +811,15 @@
           res.messages.push('You did not win the ballot.');
         }
       }
+      if (RZ.ward && RZ.ward.hasManifesto(S)) {
+        var led = RZ.ward.ledger(S);
+        res.ledger = led;
+        if (led.kept) res.messages.push(led.kept + ' of the three things you promised exist.');
+        if (led.broken) res.messages.push(led.broken + ' of them were abandoned, and the count heard it.');
+        if (!led.kept && !led.broken && led.items.length) {
+          res.messages.push('The manifesto was still a poster. The ward voted on that.');
+        }
+      }
     }
     return res;
   }
@@ -593,6 +877,8 @@
     if (S.legacyMarks.independentCourts) score += 25;
     if (S.legacyMarks.foughtCorruption) score += 25;
     if (S.legacyMarks.goodDeal) score += 18;
+    if (S.legacyMarks.neverTookIt) score += 38;
+    if (S.legacyMarks.kingmaker) score += 22;
     if (S.flags.defected) score -= S.flags.defected * 8;
 
     score = Math.round(score);
@@ -602,6 +888,8 @@
     if (!wasHead && rung.tier < 4) rank = 'A Footnote';
     else if (!wasHead && rung.tier < 6) rank = 'A Constituency Name';
     else if (!wasHead && rung.tier < 9) rank = 'A Serious Figure';
+    else if (!wasHead && S.legacyMarks.neverTookIt) rank = 'The One Who Never Took It';
+    else if (!wasHead && S.legacyMarks.kingmaker) rank = 'The Kingmaker';
     else if (!wasHead) rank = 'Nearly';
     else if (score > 470) rank = 'Founder of the Second Republic';
     else if (score > 395) rank = 'A Great ' + head;
@@ -626,6 +914,7 @@
       retire: 'You stood down at the end of the term, having said a year before that you would.',
       stepdown: 'You resigned, and handed over the instruments of state on a Tuesday morning.',
       noconfidence: 'The House removed you on a Thursday afternoon, by six votes.',
+      recall: 'The conference recalled you. The hall had the names. You did not.',
       dismissed: 'The King relieved you of your duties. No reason was given, and none was required.',
       termlimit: 'You served your terms, and then you left.',
       sadc: 'A regional standby brigade crossed the border at first light and the communiqué thanked you for your co-operation with the transition.'
@@ -657,6 +946,14 @@
         (pl.electionsLost > pl.electionsWon ? 'The ballots were rarely kind.'
           : 'The ladder simply ran out of time.') + '</p>');
 
+      if (S.legacyMarks.neverTookIt) {
+        out.push('<p>You could see the last office from where you sat, and you did not take it. In this region that is not a failure. It is the rarer career: the one that kept its hands, and so never quite fitted the chair.</p>');
+      } else if (S.legacyMarks.kingmaker) {
+        out.push('<p>Somebody else took the oath. Your name is in the second paragraph, which is where the people who actually decide things are written. That is a kind of power, and it is the one you chose.</p>');
+      } else if (lg.rung.tier >= 10) {
+        out.push('<p>The last step is not a contest. It is a set of files, a set of friends, and a set of things you would have to become. You reached the doorway. You did not go through.</p>');
+      }
+
       // The rung above you was never empty, and somebody is sitting in it now.
       var above = RZ.field.contender(S, Math.min(pl.rungIdx + 1, RZ.ladderFor(c.id).length - 1));
       if (above) {
@@ -684,16 +981,36 @@
     if (pl.record.length) {
       out.push('<p class="dim">' + pl.record.slice(-6).map(function (r) { return r.year + ' — ' + RZ.esc(r.text); }).join('<br>') + '</p>');
     }
+
+    var seedHex = (S.seed >>> 0).toString(16).padStart(8, '0');
+    out.push('<p class="obit-seed">Career #' + seedHex + ' · ' + RZ.esc(c.name) +
+      ' · ' + (S.date.year - (c.startYear || S.date.year)) + ' years. ' +
+      'The seed is the whole career. Anybody can replay it.</p>');
     return out.join('');
   }
 
+  function obituaryPlain(S, lg) {
+    var c = RZ.COUNTRIES[S.countryId];
+    var html = obituary(S, lg);
+    var text = html.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    var seedHex = (S.seed >>> 0).toString(16).padStart(8, '0');
+    return lg.rank + ' — ' + S.player.name + ' of ' + c.name +
+      '.\n\n' + text + '\n\nCareer #' + seedHex + ' in Kgosi & Cadre. Try to beat it in ' + c.name + '.';
+  }
+
   RZ.gov = {
-    presidentialActions: presidentialActions, houseActions: houseActions, actionById: actionById,
+    presidentialActions: presidentialActions, actionById: actionById, allowed: allowed,
     assemblySupport: assemblySupport, amendmentsFor: amendmentsFor,
     attemptAmendment: attemptAmendment, AMENDMENTS: AMENDMENTS,
     BUDGET_LINES: BUDGET_LINES, applyBudget: applyBudget,
+    beginEstimates: beginEstimates, tiltEstimates: tiltEstimates,
+    composeEstimates: composeEstimates, palaceAmend: palaceAmend,
+    palaceStrength: palaceStrength, sealEstimates: sealEstimates,
+    PALACE_BAR: PALACE_BAR,
+    beginTax: beginTax, applyTax: applyTax,
+    amendLive: amendLive, pickAmend: pickAmend, beginAmend: beginAmend, applyAmend: applyAmend,
     attemptThirdTerm: attemptThirdTerm, canRig: canRig, runElection: runElection,
     conferenceDue: conferenceDue, afterConference: afterConference,
-    legacy: legacy, obituary: obituary
+    legacy: legacy, obituary: obituary, obituaryPlain: obituaryPlain
   };
 })();

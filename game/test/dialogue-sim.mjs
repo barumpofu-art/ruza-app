@@ -73,7 +73,12 @@ for (const sc of RZ.DIALOGUE) {
     const summoned = (RZ.state?.CRISES || []).some((cr) => cr.scene === sc.id) ||
                      (RZ.bill?.VISITS || []).some((v) => v.id === sc.id) ||
                      (RZ.contender?.SUMMONS || []).includes(sc.id) ||
-                     (RZ.blocs?.SUMMONS || []).includes(sc.id);
+                     (RZ.blocs?.SUMMONS || []).includes(sc.id) ||
+                     (RZ.crisis?.SUMMONS || []).includes(sc.id) ||
+                     (RZ.family?.SUMMONS || []).includes(sc.id) ||
+                     (RZ.ward?.SUMMONS || []).includes(sc.id) ||
+                     (RZ.state?.SUMMONS || []).includes(sc.id) ||
+                     (RZ.elections?.SUMMONS || []).includes(sc.id);
     if (!summoned) fail(sc.id, 'a crisis scene that no trigger ever summons');
   } else if (!actionFor(sc.topic)) {
     fail(sc.id, `topic "${sc.topic}" is not an action id`);
@@ -177,6 +182,86 @@ function prepare(S, sc) {
     S.player.capital = 120;
     RZ.bill.table(S, RZ.engine.mkApi(S), RZ.bill.BILLS[0].id);
     S.player.capital = 120;
+  }
+  if (sc.id === 'cabinet-cut' || sc.id === 'cabinet-leak' || sc.id === 'cabinet-row' ||
+      sc.id === 'cabinet-brief' || sc.id === 'house-censure' || sc.id === 'sadc-summit' ||
+      sc.id === 'house-project' || sc.id === 'great-power' || sc.id === 'opp-meet' ||
+      sc.id === 'opp-table' || sc.id === 'tax-package' ||
+      sc.id === 'opp-split' || sc.id === 'opp-other' || sc.id === 'opp-supply' ||
+      sc.id === 'coalition-talks' || sc.id === 'gnu-meet' || sc.id === 'gnu-caucus' ||
+      sc.id === 'conference-floor' || sc.id === 'sg-ceiling' || sc.id === 'the-year') {
+    S.player.isPresident = true;
+    S.player.isLeader = true;
+    S.player.rungIdx = RZ.ladderFor(S.countryId).length - 1;
+    S.parties[S.player.partyId].gov = true;
+    if (RZ.state) {
+      RZ.state.fillCabinet(S);
+      if (sc.id === 'cabinet-cut') RZ.state.choppingBlock(S);
+      if (sc.id === 'cabinet-row') RZ.state.pairRow(S);
+      if (sc.id === 'cabinet-brief') RZ.state.pickBrief(S);
+      if (sc.id === 'house-project') RZ.state.pickProject(S);
+      if (sc.id === 'great-power') RZ.state.pickPower(S);
+      if (sc.id === 'opp-meet' || sc.id === 'opp-table' ||
+          sc.id === 'opp-split' || sc.id === 'opp-other' || sc.id === 'opp-supply') {
+        RZ.state.opposition(S);
+        if (sc.id === 'opp-split' && RZ.state.hawk) RZ.state.hawk(S);
+      }
+      if (sc.id === 'cabinet-leak' && S.cabinet.length) {
+        S.cabinet[0].loyalty = 10;
+        S.flags.leakerId = S.cabinet[0].ministryId;
+      }
+    }
+    if (sc.id === 'tax-package' && RZ.gov && RZ.gov.beginTax) RZ.gov.beginTax(S);
+    if (sc.id === 'coalition-talks' && RZ.elections && RZ.elections.coalitionOptions) {
+      S.flags.coalitionTalks = RZ.elections.coalitionOptions(S);
+    }
+    if ((sc.id === 'gnu-meet' || sc.id === 'gnu-caucus') && RZ.elections && RZ.state) {
+      const t = RZ.elections.coalitionOptions(S);
+      S.flags.coalitionKind = 'gnu';
+      S.flags.coalitionPartner = t.gnu && t.gnu.id;
+      S.nation.govParties = [S.player.partyId].concat(S.flags.coalitionPartner ? [S.flags.coalitionPartner] : []);
+      if (RZ.state.seatPartner) RZ.state.seatPartner(S, 'gnu', t);
+    }
+    if (sc.id === 'conference-floor' && RZ.state) {
+      S.nextConference = S.date.year;
+      S.date.month = 7;
+      if (RZ.state.plantChallenger) RZ.state.plantChallenger(S);
+    }
+    if (sc.id === 'sg-ceiling') {
+      S.player.stats.integrity = 70;
+      S.player.isPresident = false;
+      S.player.dirt = [];
+      S.flags.heardTheCeiling = null;
+    }
+    if (sc.id === 'the-year') {
+      S.player.isPresident = false;
+      S.date.month = 7;
+      S.flags.yearKind = 'funeral';
+      S.flags.yearRoom = null;
+    }
+  }
+  if (sc.id === 'amend-table') {
+    S.player.isPresident = false;
+    S.player.isLeader = false;
+    var lad = RZ.ladderFor(S.countryId);
+    var idx = 0;
+    lad.forEach(function (r, i) { if (r.tier <= 6) idx = i; });
+    S.player.rungIdx = idx;
+    S.parties[S.player.partyId].gov = true;
+    if (S.nation.govParties.indexOf(S.player.partyId) < 0) S.nation.govParties = [S.player.partyId];
+    if (RZ.gov && RZ.gov.beginAmend) RZ.gov.beginAmend(S);
+  }
+  if (sc.id === 'ribbon-day' && RZ.ward) {
+    RZ.ward.init(S);
+    S.flags.ribbon = { kind: 'clinic', name: 'a clinic', ico: '🏥', crony: false };
+  }
+  if (sc.id === 'manifesto-desk' && RZ.ward) RZ.ward.init(S);
+  if (sc.topic === 'ministry' && RZ.state) {
+    S.parties[S.player.partyId].gov = true;
+    var mid = { 'duty-clinic': 'health', 'duty-school': 'edu', 'duty-road': 'infra',
+                'duty-cluster': 'def', 'duty-shaft': 'mines', 'duty-list': 'local' }[sc.id];
+    var m = (RZ.COUNTRIES[S.countryId].ministries || []).filter(function (x) { return x.id === mid; })[0];
+    if (m) S.player.ministry = m.name;
   }
 }
 

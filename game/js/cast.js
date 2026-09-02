@@ -122,6 +122,27 @@
     return p;
   }
 
+  // A chair changes hands. The person who had it stays in the cast — you still
+  // know them — but they no longer occupy the role, so the next scene that
+  // asks for the Minister of Finance gets somebody else.
+  function succeed(S, c, role, org) {
+    init(S);
+    var key = keyFor(role, org);
+    var old = S.cast[key];
+    if (old) {
+      var n = 1, formerKey;
+      do {
+        formerKey = 'former ' + role + '|' + (org || '') + '|' + n;
+        n++;
+      } while (S.cast[formerKey]);
+      old.key = formerKey;
+      old.role = 'former ' + role;
+      S.cast[formerKey] = old;
+      delete S.cast[key];
+    }
+    return who(S, c, role, org);
+  }
+
   function get(S, key) { init(S); return S.cast[key] || null; }
   function byRole(S, role, org) { return get(S, keyFor(role, org)); }
   function all(S) {
@@ -307,7 +328,7 @@
 
   RZ.cast = {
     ANON: ANON, TEMPERS: TEMPERS, SWING: SWING,
-    init: init, who: who, freshName: freshName, shortOf: shortOf, get: get, byRole: byRole, all: all, keyFor: keyFor,
+    init: init, who: who, succeed: succeed, freshName: freshName, shortOf: shortOf, get: get, byRole: byRole, all: all, keyFor: keyFor,
     afterMeeting: afterMeeting, remember: remember, recalls: recalls, sideWith: sideWith,
     drift: drift, ding: ding, IDLE: IDLE,
     standing: standing, greeting: greeting, summary: summary

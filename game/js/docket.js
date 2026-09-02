@@ -42,7 +42,12 @@
   function bookable(S, a) {
     if ((a.ap || 1) > 1) return false;
     var act = RZ.actionById[a.id] || (RZ.gov && RZ.gov.actionById(a.id));
-    return !act || !act.special;
+    if (!act) return true;
+    if (act.special) return false;
+    // The palace actions without vpOk are his, not yours, even if a previous
+    // month's book still names them.
+    if (RZ.gov && RZ.gov.allowed && !RZ.gov.allowed(S, act)) return false;
+    return true;
   }
 
   function candidates(S) {
@@ -117,10 +122,38 @@
     var pool = candidates(S);
     if (!pool.length) return S.docket;
 
+    // First month, activist: the branch secretary is the whole early game.
+    // Pin them in the diary so a player who mashes the grid still meets them.
+    if (S.turn <= 1 && (S.startAs || 'activist') === 'activist' && RZ.trenches) {
+      var sec = RZ.trenches.keeper && RZ.trenches.keeper(S);
+      var pin = pool.filter(function (cd) {
+        return cd.act && (cd.act.id === 'chairs' || cd.act.id === 'hustle' || cd.act.id === 'walkabout');
+      })[0];
+      if (pin && sec) {
+        pin.person = sec;
+        // Move to front by weighting later; we'll unshift after pick.
+        pool = [pin].concat(pool.filter(function (cd) { return cd !== pin; }));
+      }
+    }
+
     // A diary is made of people. The first slot goes to somebody with a name
     // if anybody in the deck has one; the rest can be the office.
     var picked = [], used = {};
-    for (var i = 0; i < want; i++) {
+
+    // The office has a job. Put it first so the month does not open as a
+    // walkabout with a better car.
+    if (RZ.ward && RZ.ward.duty) {
+      var job = RZ.ward.duty(S);
+      if (job && (job.id === 'ministry' || job.id === 'friday' || job.id === 'budget' || job.id === 'address' || job.id === 'brief' || job.id === 'tax' || job.id === 'supply' || job.id === 'partner' || job.id === 'conference')) {
+        var pinJob = pool.filter(function (cd) { return cd.act && cd.act.id === job.id; })[0];
+        if (pinJob) {
+          picked.push(pinJob);
+          used[pinJob.act.id] = true;
+        }
+      }
+    }
+
+    for (var i = picked.length; i < want; i++) {
       var open = pool.filter(function (cd) { return !used[cd.act.id]; });
       if (!open.length) break;
       var named = open.filter(function (cd) { return !!cd.person; });
@@ -146,7 +179,7 @@
     return S.docket;
   }
 
-  function entries(S) { init(S); return S.docket.entries; }
+  function entries(S) { init(S); prune(S); return S.docket.entries; }
   function entryFor(S, actionId) {
     return entries(S).filter(function (e) {
       return e.actionId === actionId && !e.kept && !e.declined;
@@ -156,25 +189,16 @@
     return entries(S).filter(function (e) { return !e.kept && !e.declined; });
   }
 
-  // An appointment whose action is no longer on offer. Circumstances move
-  // between the morning the diary was drawn up and the afternoon: you rehabilitate
-  // yourself, the file stops being exposed, and the meeting that was about it is
-  // no longer a thing that can happen. Those entries are not yours to keep and
-  // not yours to be blamed for — and, crucially, they must not stay on the desk
-  // as a button, because the diary renders its own buttons and `doAction` would
-  // run the action past its own `when`.
-  function lapsed(S, e) {
-    if (!e || e.kept || e.declined) return false;
-    var acts = RZ.engine.availableActions(S);
-    for (var i = 0; i < acts.length; i++) if (acts[i].id === e.actionId) return false;
-    return true;
-  }
-
-  // What is still both open and possible — what the diary should actually show.
+  // What the diary should actually show: still open, and still possible.
+  //
+  // An appointment's reason can go away between the morning it was booked and
+  // the afternoon — you rehabilitate yourself, the file stops being exposed,
+  // and the meeting that was about it cannot happen. The diary renders its own
+  // buttons, so an entry left standing there is clickable and `doAction` runs
+  // it straight past its own `when`. prune() drops those; this is the read.
   function live(S) {
-    return entries(S).filter(function (e) {
-      return !e.declined && (e.kept || !lapsed(S, e));
-    });
+    prune(S);
+    return entries(S).filter(function (e) { return !e.declined; });
   }
 
   // The scene this appointment was booked against, if it is still a scene that
@@ -221,12 +245,10 @@
   // express: the meeting existed, somebody arranged it, and you were not there.
   // It costs more than cancelling, it is remembered, and it is in the record.
   function close(S) {
-    // Anything that stopped being possible is quietly struck out. Standing
-    // somebody up means choosing not to go; it does not mean the meeting
-    // stopped existing while your back was turned.
-    entries(S).forEach(function (e) {
-      if (lapsed(S, e)) { e.declined = true; e.lapsed = true; }
-    });
+    // Anything that stopped being possible is dropped before anybody is
+    // charged for it. Standing somebody up means choosing not to go; it does
+    // not mean the meeting stopped existing while your back was turned.
+    prune(S);
     var missed = open(S), out = [], names = [];
     if (!missed.length) return out;
     var api = RZ.engine.mkApi(S);
@@ -271,8 +293,24 @@
     return n;
   }
 
+  // An appointment for an office you no longer hold is not a stand-up: the
+  // meeting was never yours to keep. Drop it quietly so the diary cannot
+  // offer a speech only the President can give.
+  function prune(S) {
+    init(S);
+    if (!S.docket.entries.length || !RZ.engine) return S.docket;
+    var can = {};
+    RZ.engine.availableActions(S).forEach(function (a) { can[a.id] = true; });
+    S.docket.entries = S.docket.entries.filter(function (e) {
+      if (e.kept || e.declined) return true;
+      return !!can[e.actionId];
+    });
+    return S.docket;
+  }
+
   function summary(S) {
     init(S);
+    prune(S);
     return {
       total: S.docket.entries.length,
       open: open(S).length,
@@ -284,8 +322,9 @@
   RZ.docket = {
     SLOTS: SLOTS,
     init: init, build: build, entries: entries, entryFor: entryFor, open: open,
-    sceneFor: sceneFor, lapsed: lapsed, live: live,
+    sceneFor: sceneFor, live: live,
     keep: keep, decline: decline, close: close, suspend: suspend,
-    summary: summary, slotsFor: slotsFor, weightFor: weightFor, bookable: bookable
+    summary: summary, slotsFor: slotsFor, weightFor: weightFor, bookable: bookable,
+    prune: prune
   };
 })();

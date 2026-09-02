@@ -13,6 +13,11 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>Kgosi &amp; Cadre — Southern African Politics</title>
 <link rel="stylesheet" href="app.css">
+<script>
+/* The Grok preview frames the game and floats a pill over the bottom. Mark
+   that so CSS can lift the sheet and the tab bar; standalone has no pill. */
+(function(){try{if(window.self!==window.top)document.documentElement.classList.add('in-frame')}catch(e){document.documentElement.classList.add('in-frame')}})();
+</script>
 </head>
 <body>
 
@@ -28,8 +33,10 @@
       <p class="title-sub">A political career, from the ward to State House.</p>
       <p class="title-blurb">
         Ten southern African republics. Real institutions, real electoral systems,
-        real economies. Fictional people. Start as an unpaid party activist and see
-        how far the machine will carry you &mdash; and what it costs.
+        real economies. Fictional people. Start as an unpaid party activist, a
+        parliamentary candidate, or a cabinet minister, and see how far the machine
+        will carry you &mdash; and what it costs. A career that keeps its hands
+        clean ends short of State House. That is a complete career.
       </p>
       <div class="title-actions">
         <button class="btn btn-gold btn-lg" data-act="new-game">New Career</button>

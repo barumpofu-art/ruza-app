@@ -893,6 +893,41 @@
                    'You are hoarse, thirteen kilos lighter, and ahead where it matters.']),
           tone: 'good' };
       }
+    }),
+
+    /* ---------------- the office as a job ---------------- */
+    A({
+      id: 'ministry', ico: '🏛️', ap: 1, tier: [6, 8],
+      name: function (a) {
+        return a.P.ministry ? 'Sit ' + a.P.ministry : 'Sit the ministry';
+      },
+      desc: 'The director-general, a union, and a tender. This is the job the walkabout is not.',
+      when: function (a) {
+        return !!(a.P.ministry && a.inGov() && !a.P.isPresident);
+      },
+      run: function (a) {
+        return { title: 'The ministry', body: 'The room is waiting.', tone: 'flat' };
+      }
+    }),
+
+    A({
+      id: 'friday', ico: '🚗', ap: 1, tier: [4, 8],
+      name: 'Constituency Friday',
+      desc: function (a) {
+        return 'Drive to ' + a.homeName() + '. The borehole does not know you have a diary in the capital.';
+      },
+      when: function (a) { return !a.P.isPresident; },
+      run: function (a) {
+        if (RZ.ward && RZ.ward.markFriday) RZ.ward.markFriday(a.S);
+        a.add('grassroots', a.rng(2, 5));
+        a.add('health', -a.rng(1, 3));
+        a.add('money', -a.wage(0.2));
+        return {
+          title: 'Friday, and the tents',
+          body: 'You were there. That is the whole of the job, and it is not nothing.',
+          tone: 'good'
+        };
+      }
     })
   ];
 

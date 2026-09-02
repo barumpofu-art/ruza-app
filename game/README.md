@@ -1,7 +1,8 @@
 # Kgosi & Cadre
 
 A text-based political career simulator set in southern Africa. You start as an unpaid
-ward activist and try to reach the highest office your country's constitution allows.
+ward activist, a parliamentary candidate, or a cabinet minister, and try to reach the
+highest office your country's constitution allows — or to refuse it.
 
 Built as a single static, offline-capable web app. No build step, no dependencies, no
 network calls.
@@ -49,10 +50,13 @@ job is never yours to contest.
 One turn is one month. You get three to five actions, then the month turns: the economy
 moves, rivals move, and something happens to you.
 
-**Climbing.** Thirteen rungs, from ward activist to head of state. Each is won a different
+**Climbing.** Thirteen or fourteen rungs, depending on the constitution, from ward
+activist to head of state. Each is won a different
 way — a show of hands in a branch meeting, a delegate count at national conference, a
 public ballot, or a phone call from the principal on a Sunday evening that you can only
-make more likely, never demand.
+make more likely, never demand. The presidency is not a prize for the clean. A career
+that keeps its hands clean ends short of State House, as *the one who never took it*, or as
+the kingmaker who put somebody else in the chair. That is a complete career.
 
 **Contests.** A contest is a comparison, not a threshold. Both you and whoever is standing
 in the doorway are scored by the same arithmetic — local base, grassroots, party standing,
@@ -98,9 +102,12 @@ top-up; coalition formation when nobody wins; presidential run-offs with second-
 transfers. Where the count is riggable and you control enough of the machine, you will be
 offered the chance — with a real probability of being caught.
 
-**Governing.** As head of state you table a budget, appoint judges, reshuffle, negotiate
-with the Fund, and eventually face the question of whether to leave when the constitution
-says to. The answer is worth more to your legacy than anything else you do.
+**Governing.** As vice-president you chair the estimates: Finance and Health argue in
+front of you, you pick a package, and the President may still rewrite it. As head of
+state you have the pen — you table a budget, appoint judges, reshuffle, negotiate with the Fund, and eventually face the
+question of whether to leave when the constitution says to. The answer is worth more
+to your legacy than anything else you do. A vice-president can table devolution;
+term limits stay in the president's gift.
 
 ## Files
 
@@ -111,7 +118,7 @@ manifest.webmanifest  installable to a phone home screen
 sw.js                 offline cache (bump CACHE on release)
 js/core.js            seeded RNG (mulberry32) and helpers
 js/data-countries.js  the ten countries: regions, seats, parties, institutions, economies
-js/data-ladder.js     the thirteen rungs and their per-country titles
+js/data-ladder.js     the rungs and their per-country titles (13 or 14, by constitution)
 js/data-actions.js    the monthly action deck
 js/data-dialogue.js   the conversations: who is in the room and what they ask
 js/dialogue.js        the scene engine — beats, answers, mood, closing

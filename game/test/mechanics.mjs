@@ -103,6 +103,8 @@ section('1. Health & burnout');
   ok('and puts you back above the line', S3.player.health > 30, `health=${Math.round(S3.player.health)}`);
   const card = S3.feed[0];
   ok('it reaches the feed as a priority alert', card && card.alert === true && /collaps/i.test(card.title));
+  ok('and summons the ward rather than ending the career', S3.pendingScene === 'collapse-bed',
+    `pending=${S3.pendingScene}`);
 
   // The loop that made it a permanent condition: restore too close to the line.
   const S4 = career('ZA', 14, 6);
@@ -1418,9 +1420,15 @@ section('15. Holding the seat');
     const announced = RZ.ward.summary(S).trust;
 
     // Run it to completion with no corruption, so it cannot be abandoned.
+    // They still go home on Friday — this assertion is about the clinic, not
+    // about missing the ward.
     S.nation.society.corruption = 0;
     p.risk = 0;
-    for (let i = 0; i < 12 && p.status === 'building'; i++) { S.turn++; RZ.ward.tick(S, 1, {}); }
+    for (let i = 0; i < 12 && p.status === 'building'; i++) {
+      S.turn++;
+      S.ward.lastFriday = S.turn;
+      RZ.ward.tick(S, 1, {});
+    }
     ok('it eventually opens', p.status === 'done', p.status);
     ok('and opening it is worth far more than announcing it',
       RZ.ward.summary(S).trust > announced + 8,
@@ -1476,6 +1484,7 @@ section('15. Holding the seat');
   {
     const good = mp(960), bad = mp(961);
     good.ward.trust = 90; bad.ward.trust = 10;
+    good.ward.lastFriday = 1e9; bad.ward.lastFriday = 1e9;
     const g0 = good.player.regionSupport[good.player.regionId];
     const b0 = bad.player.regionSupport[bad.player.regionId];
     for (let i = 0; i < 12; i++) { good.turn++; bad.turn++; RZ.ward.tick(good, 1, {}); RZ.ward.tick(bad, 1, {}); }
@@ -1642,29 +1651,32 @@ section('16. Minister, deputy, President');
     ok('and a corrupt one rots the state',
       bad.nation.society.corruption - br0 > good.nation.society.corruption - gr0);
 
-    // A disloyal minister is not idle.
+    // A disloyal minister is not idle — the leak is a room, not a feed card.
     const leaky = pres(1123);
     RZ.state.fillCabinet(leaky);
-    leaky.cabinet.forEach((m) => { m.loyalty = 5; });
+    leaky.cabinet.forEach((m) => { m.loyalty = 5; m.corruption = 70; });
     let leaks = 0;
-    for (let i = 0; i < 200; i++) {
+    for (let i = 0; i < 80; i++) {
       leaky.date.month++; if (leaky.date.month > 12) { leaky.date.month = 1; leaky.date.year++; }
-      const before = leaky.feed.length;
-      RZ.state.cabinetTick(leaky, 1, {});
-      if (leaky.feed.length > before) leaks++;
+      leaky.pendingScene = null;
+      leaky.cabinet.forEach((m) => { m.loyalty = 5; });
+      const r = RZ.state.tick(leaky, 1, {});
+      if (r && r.scene === 'cabinet-leak') leaks++;
     }
-    ok('a disloyal cabinet leaks against you', leaks >= 3, `${leaks} leaks in 200 months`);
-    ok('and it raises the pressure on you', leaky.scandalRisk > 0);
+    ok('a disloyal cabinet leaks against you', leaks >= 2, `${leaks} leaks in 80 months`);
+    ok('and summons a room, not a feed card',
+      leaks >= 2 && leaky.feed.filter((e) => /leak/i.test((e.title || '') + (e.body || ''))).length === 0,
+      `leaks=${leaks}`);
 
     const loyal = pres(1124);
     RZ.state.fillCabinet(loyal);
     loyal.cabinet.forEach((m) => { m.loyalty = 95; });
     let loyalLeaks = 0;
-    for (let i = 0; i < 200; i++) {
+    for (let i = 0; i < 80; i++) {
       loyal.date.month++; if (loyal.date.month > 12) { loyal.date.month = 1; loyal.date.year++; }
-      const before = loyal.feed.length;
-      RZ.state.cabinetTick(loyal, 1, {});
-      if (loyal.feed.length > before) loyalLeaks++;
+      loyal.pendingScene = null;
+      const r = RZ.state.tick(loyal, 1, {});
+      if (r && r.scene === 'cabinet-leak') loyalLeaks++;
     }
     ok('a loyal one does not', loyalLeaks === 0, String(loyalLeaks));
   }
@@ -2762,17 +2774,27 @@ section('21. Multi-speaker rooms');
 
   // Most of a career is spent at the bottom of the ladder, so most of these
   // have to be openable from there. A room only a president can walk into is
-  // content almost nobody sees.
+  // content almost nobody sees. The six ministry rooms, Friday, the ribbon,
+  // the manifesto desk and State of the Nation are the job of an office —
+  // they are gated on purpose.
   {
     const S = career('ZA', 1999, 0);
     const api = RZ.engine.mkApi(S);
-    const open = rooms.filter((sc) => !sc.when || sc.when(api));
+    const officeId = {
+      'duty-clinic': 1, 'duty-school': 1, 'duty-road': 1,
+      'duty-cluster': 1, 'duty-shaft': 1, 'duty-list': 1,
+      'friday-ward': 1, 'nation-address': 1, 'ribbon-day': 1, 'manifesto-desk': 1,
+      'amend-table': 1
+    };
+    const ground = rooms.filter((sc) => !officeId[sc.id]);
+    const open = ground.filter((sc) => !sc.when || sc.when(api));
     ok('most of them open to somebody with no office at all',
-      open.length >= Math.ceil(rooms.length / 2),
-      open.map((sc) => sc.id).join(', ') + ' of ' + rooms.length);
+      open.length >= Math.ceil(ground.length / 2),
+      open.map((sc) => sc.id).join(', ') + ' of ' + ground.length);
 
     // And each of those is reachable through an action available down there.
-    open.forEach((sc) => {
+    // Crisis rooms are summoned, not chosen from the desk.
+    open.filter((sc) => sc.topic !== 'crisis').forEach((sc) => {
       const act = RZ.actionById[sc.topic] || RZ.gov.actionById(sc.topic);
       if (!act) throw new Error(sc.id + ' has no action behind it');
       const t = act.tier || [0, 13];
@@ -2784,6 +2806,42 @@ section('21. Multi-speaker rooms');
     const gated = rooms.filter((sc) => sc.when && !sc.when(api));
     gated.forEach((sc) => {
       const S2 = career('ZA', 1998, 12);
+      if (sc.topic === 'ministry') {
+        let idx = 0;
+        RZ.ladderFor('ZA').forEach((r, i) => { if (r.tier <= 6) idx = i; });
+        S2.player.rungIdx = idx;
+        S2.parties[S2.player.partyId].gov = true;
+        const mid = { 'duty-clinic': 'health', 'duty-school': 'edu', 'duty-road': 'infra',
+                      'duty-cluster': 'def', 'duty-shaft': 'mines', 'duty-list': 'local' }[sc.id];
+        const m = (RZ.COUNTRIES.ZA.ministries || []).find((x) => x.id === mid);
+        if (m) S2.player.ministry = m.name;
+      } else if (sc.id === 'friday-ward') {
+        S2.player.rungIdx = 4;
+        S2.player.isPresident = false;
+      } else if (sc.id === 'nation-address' || sc.id === 'cabinet-brief' || sc.id === 'sadc-summit' ||
+                 sc.id === 'house-project' || sc.id === 'great-power' || sc.id === 'opp-meet' || sc.id === 'tax-package' ||
+                 sc.id === 'opp-other' || sc.id === 'opp-supply' || sc.id === 'coalition-talks' ||
+                 sc.id === 'gnu-meet' || sc.id === 'conference-floor') {
+        makePresident(S2);
+      } else if (sc.id === 'sg-ceiling' || sc.id === 'the-year') {
+        S2.player.rungIdx = 6;
+        S2.player.isPresident = false;
+        S2.player.stats.integrity = 70;
+        S2.player.dirt = [];
+        S2.date.month = 7;
+      } else if (sc.id === 'amend-table') {
+        let idx = 0;
+        RZ.ladderFor('ZA').forEach((r, i) => { if (r.tier <= 6) idx = i; });
+        S2.player.rungIdx = idx;
+        S2.player.isPresident = false;
+        S2.parties[S2.player.partyId].gov = true;
+        if (S2.nation.govParties.indexOf(S2.player.partyId) < 0) S2.nation.govParties = [S2.player.partyId];
+      } else if (sc.id === 'ribbon-day') {
+        S2.player.rungIdx = 4;
+        S2.flags.ribbon = { kind: 'clinic', name: 'a clinic', ico: '🏥' };
+      } else if (sc.id === 'manifesto-desk') {
+        S2.player.rungIdx = 4;
+      }
       if (!sc.when(RZ.engine.mkApi(S2))) throw new Error(sc.id + ' is closed even at the top of the ladder');
     });
     ok('and every gated room does open once you are senior enough', true);
@@ -4266,31 +4324,37 @@ section('30. An appointment whose reason went away');
   // Circumstances move between the morning the diary is drawn up and the
   // afternoon. `rehab` is only offered while a file of yours is exposed; clear
   // the file and the meeting that was about it cannot happen — but the diary
-  // renders its own buttons, so without this it stayed on the desk, clickable,
-  // and doAction ran it straight past its own `when`.
+  // renders its own buttons, so without pruning it stayed on the desk,
+  // clickable, and doAction ran it straight past its own `when`.
   const withDirt = (seed) => {
     const S = career('ZA', seed, 4);
     S.player.dirt = [{ id: 'x', label: 'something in a file', severity: 3, exposed: true, year: S.date.year }];
     return S;
   };
+  // Booked by hand, because build() picks at random and this must not be flaky.
+  const book = (S, extra = {}) => {
+    S.docket.entries = [Object.assign({
+      actionId: 'rehab', sceneId: null, ico: '🕯️', name: 'Rehabilitate yourself',
+      at: '09:30', who: null, why: 'It is in the diary because of the job.',
+      kept: false, declined: false
+    }, extra)];
+    return S.docket.entries[0];
+  };
 
   {
     const S = withDirt(9600);
+    book(S);
     ok('the action is on offer while the file is out',
       RZ.engine.availableActions(S).some((a) => a.id === 'rehab'));
-    // Book it by hand — build() picks at random and this must not be flaky.
-    S.docket.entries = [{ actionId: 'rehab', sceneId: null, ico: '🕯️', name: 'Rehabilitate yourself',
-      at: '09:30', who: null, why: 'It is in the diary because of the job.',
-      kept: false, declined: false }];
     ok('and an appointment for it is live', RZ.docket.live(S).length === 1);
-    ok('and not lapsed', !RZ.docket.lapsed(S, S.docket.entries[0]));
 
     // The file goes away.
     S.player.dirt = [];
     ok('once the file is gone the engine stops offering it',
       !RZ.engine.availableActions(S).some((a) => a.id === 'rehab'));
-    ok('so the appointment has lapsed', RZ.docket.lapsed(S, S.docket.entries[0]));
     ok('and the diary stops showing it', RZ.docket.live(S).length === 0);
+    ok('and there is nothing left on the desk to click',
+      !RZ.docket.entries(S).some((e) => e.actionId === 'rehab' && !e.kept && !e.declined));
   }
 
   {
@@ -4298,34 +4362,39 @@ section('30. An appointment whose reason went away');
     const S = withDirt(9601);
     const c = RZ.COUNTRIES.ZA;
     const p = RZ.cast.who(S, c, 'the Chief Whip', '');
-    S.docket.entries = [{ actionId: 'rehab', sceneId: null, ico: '🕯️', name: 'Rehabilitate yourself',
-      at: '09:30', who: { key: p.key, name: p.name, role: p.role }, why: 'They asked.',
-      kept: false, declined: false }];
+    book(S, { who: { key: p.key, name: p.name, role: p.role }, why: 'They asked.' });
     S.player.dirt = [];
     const rel0 = p.rel, feed0 = S.feed.length;
     const stood = RZ.docket.close(S);
-    ok('a lapsed appointment is struck out at the month end', S.docket.entries[0].declined === true);
-    ok('and marked as lapsed rather than missed', S.docket.entries[0].lapsed === true);
-    ok('and nobody is stood up for it', stood.length === 0);
+    ok('nobody is stood up for an appointment that became impossible', stood.length === 0);
     ok('and it costs nothing with them', RZ.cast.get(S, p.key).rel === rel0);
     ok('and it is not in the record', S.feed.length === feed0);
   }
 
   {
-    // A kept appointment stays visible even if its action has since lapsed —
-    // it already happened, and the diary is a record as well as a plan.
+    // One you actually kept stays on the page: the diary is a record as well
+    // as a plan, and pruning must not erase what already happened.
     const S = withDirt(9602);
-    S.docket.entries = [{ actionId: 'rehab', sceneId: null, ico: '🕯️', name: 'Rehabilitate yourself',
-      at: '09:30', who: null, why: 'They asked.', kept: true, declined: false }];
+    book(S, { kept: true });
     S.player.dirt = [];
-    ok('one you kept is still on the page', RZ.docket.live(S).length === 1);
-    ok('and it is not treated as lapsed', !RZ.docket.lapsed(S, S.docket.entries[0]));
+    ok('one you kept survives the prune', RZ.docket.live(S).length === 1);
+    ok('and is still marked kept', RZ.docket.entries(S)[0].kept === true);
   }
 
-  // And the invariant the browser harness asserts, stated here too: everything
-  // the diary offers is something the engine would accept.
   {
-    let checked = 0;
+    // And one you declined stays declined rather than quietly reappearing.
+    const S = withDirt(9603);
+    book(S, { declined: true });
+    S.player.dirt = [];
+    RZ.docket.live(S);
+    ok('one you declined is not resurrected',
+      RZ.docket.entries(S).every((e) => e.declined || e.kept));
+  }
+
+  // The invariant the browser harness asserts, stated here too: everything the
+  // diary offers is something the engine would accept.
+  {
+    let checked = 0, bad = null;
     for (let seed = 0; seed < 40; seed++) {
       const S = career('ZA', 9700 + seed, seed % 8);
       RZ.docket.build(S);
@@ -4333,12 +4402,11 @@ section('30. An appointment whose reason went away');
       RZ.docket.live(S).forEach((e) => {
         if (e.kept) return;
         checked++;
-        if (!offered.has(e.actionId)) {
-          ok('the diary never offers an action the engine would refuse', false, e.actionId);
-        }
+        if (!offered.has(e.actionId)) bad = bad || e.actionId;
       });
     }
-    ok('the diary never offers an action the engine would refuse', true, `${checked} entries`);
+    ok('the diary never offers an action the engine would refuse', bad === null,
+      bad || `${checked} entries`);
   }
 }
 
@@ -4362,11 +4430,12 @@ section('31. The constitution, and who can move on it');
   };
   const has = (S) => RZ.engine.availableActions(S).some((a) => a.id === 'amend');
 
-  // It is a vote in the House, not an executive act — and gating it on the
-  // presidency meant the whole module ran in nobody's career.
+  // It is a vote in the House, not an executive act — and gating the whole
+  // module on the presidency meant it ran in nobody's career: three players in
+  // a thousand ever got there.
   {
     const S = senior(9800);
-    ok('a senior minister in government can move an amendment', has(S));
+    ok('a cabinet minister in government can move on the constitution', has(S));
 
     const back = career('ZA', 9801, 4);
     back.parties[back.player.partyId].gov = true;
@@ -4379,20 +4448,23 @@ section('31. The constitution, and who can move on it');
     ok('and neither can the opposition', !has(opp));
   }
 
-  // Two of the four are about the head of state's own tenure. Reading "you may
-  // stand again" to somebody who is not standing for anything makes no sense.
+  // What a cabinet can table is devolution. Everything about the head of
+  // state's own powers stays palace paper — reading "you may stand again" to
+  // somebody who is not standing for anything makes no sense.
   {
     const S = senior(9810);
     const mine = RZ.gov.amendmentsFor(RZ.engine.mkApi(S)).map((x) => x.id);
     ok('a minister is not offered the term limit', !mine.includes('termlimit'));
     ok('nor a longer term', !mine.includes('termlength'));
-    ok('but the ordinary constitutional politics is theirs', mine.length > 0, mine.join(', '));
+    ok('nor the courts', !mine.includes('courts'));
+    ok('but devolution is theirs to table', mine.includes('devolve'), mine.join(', '));
 
     const pres = senior(9811);
     pres.player.isPresident = true;
     pres.nation.termNumber = 1;
     const theirs = RZ.gov.amendmentsFor(RZ.engine.mkApi(pres)).map((x) => x.id);
-    ok('a president is offered those too', theirs.includes('termlimit'));
+    ok('a president is offered the palace paper too', theirs.includes('termlimit'));
+    ok('and the courts', theirs.includes('courts'));
   }
 
   // Carried once is carried. `devolve`'s own `when` is simply `true`, so before
@@ -4432,26 +4504,44 @@ section('31. The constitution, and who can move on it');
     const middling = { party: 55, leader: 55, capital: 40, approval: 45, unrest: 35 };
     const weak = { party: 25, leader: 25, capital: 15, approval: 30, unrest: 55 };
 
-    ok('a supermajority alone does not carry a power grab',
-      rate(strong, 'courts', 0) < 0.85, (rate(strong, 'courts', 0) * 100).toFixed(0) + '%');
-    ok('but a strong government in a calm country usually can',
-      rate(strong, 'courts', 0) > 0.35, (rate(strong, 'courts', 0) * 100).toFixed(0) + '%');
-    ok('an angry country makes it much harder',
-      rate(angry, 'courts', 0) < rate(strong, 'courts', 0),
-      `${(rate(angry, 'courts', 0) * 100).toFixed(0)}% vs ${(rate(strong, 'courts', 0) * 100).toFixed(0)}%`);
+    // Capturing the courts is the president's to move, so it is measured with
+    // one; devolution is the cabinet's.
+    const asPres = (opts) => (S) => { S.player.isPresident = true; S.nation.termNumber = 1; return S; };
+    const presRate = (opts, spend, n = 250) => {
+      let carried = 0, ran = 0;
+      for (let i = 0; i < n; i++) {
+        const S = senior(9900 + i, opts);
+        S.player.isPresident = true; S.nation.termNumber = 1;
+        const api = RZ.engine.mkApi(S);
+        if (!RZ.gov.amendmentsFor(api).some((x) => x.id === 'courts')) continue;
+        ran++;
+        if (RZ.gov.attemptAmendment(api, 'courts', spend).passed) carried++;
+      }
+      return ran ? carried / ran : 0;
+    };
+
+    const grabStrong = presRate(strong, 0);
+    const grabAngry = presRate(angry, 0);
+    ok('a supermajority alone does not carry a power grab', grabStrong < 0.85,
+      (grabStrong * 100).toFixed(0) + '%');
+    ok('but a strong government in a calm country usually can', grabStrong > 0.35,
+      (grabStrong * 100).toFixed(0) + '%');
+    ok('an angry country makes it much harder', grabAngry < grabStrong,
+      `${(grabAngry * 100).toFixed(0)}% vs ${(grabStrong * 100).toFixed(0)}%`);
 
     // Money is the lever the mechanic is built around: crossbenchers are bought.
-    const dry = rate(middling, 'courts', 0);
-    const paid = rate(middling, 'courts', 40);
+    const dry = presRate(middling, 0);
+    const paid = presRate(middling, 40);
     ok('whipping money is what carries a middling government',
       paid > dry + 0.3, `${(dry * 100).toFixed(0)}% dry vs ${(paid * 100).toFixed(0)}% paid`);
     ok('and it cannot buy what is not there',
-      rate(weak, 'courts', 40) < 0.2, (rate(weak, 'courts', 40) * 100).toFixed(0) + '%');
+      presRate(weak, 40) < 0.2, (presRate(weak, 40) * 100).toFixed(0) + '%');
 
-    // Handing power away meets less resistance than taking it.
+    // Handing power away meets less resistance than taking it, and a cabinet
+    // can table that one without the palace.
     ok('devolving is easier than capturing the courts',
-      rate(strong, 'devolve', 0) > rate(strong, 'courts', 0),
-      `${(rate(strong, 'devolve', 0) * 100).toFixed(0)}% vs ${(rate(strong, 'courts', 0) * 100).toFixed(0)}%`);
+      rate(strong, 'devolve', 0) > grabStrong,
+      `${(rate(strong, 'devolve', 0) * 100).toFixed(0)}% vs ${(grabStrong * 100).toFixed(0)}%`);
     ok('but it still has to be voted for',
       rate(weak, 'devolve', 0) < 0.5, (rate(weak, 'devolve', 0) * 100).toFixed(0) + '%');
   }
@@ -4459,6 +4549,7 @@ section('31. The constitution, and who can move on it');
   // And a failed attempt is not free.
   {
     const S = senior(9950, { party: 20, leader: 20, capital: 60, approval: 20, unrest: 70 });
+    S.player.isPresident = true; S.nation.termNumber = 1;
     const cap0 = S.player.capital;
     const r = RZ.gov.attemptAmendment(RZ.engine.mkApi(S), 'courts', 0);
     ok('losing the vote still costs you capital', S.player.capital < cap0,
@@ -4468,6 +4559,1986 @@ section('31. The constitution, and who can move on it');
   }
 }
 
+/* ================= 1.8.0 minister start, VP desk, household, near-miss ================= */
+section('1.8.0 Minister start, VP desk, household, near-miss');
+{
+  const S = RZ.engine.newGame({
+    countryId: 'ZA', seed: 1801, name: 'Cabinet Start', gender: 'f',
+    regionId: RZ.COUNTRIES.ZA.regions[0].id, bgId: RZ.BACKGROUNDS[0].id,
+    partyId: RZ.COUNTRIES.ZA.parties[0].id, startAs: 'minister'
+  });
+  const api = RZ.engine.mkApi(S);
+  ok('a cabinet start is at minister tier', api.tier() === 6, `tier=${api.tier()}`);
+  ok('and has a portfolio', !!S.player.ministry, S.player.ministry);
+  ok('and sits in government', S.nation.govParties.indexOf(S.player.partyId) >= 0);
+  ok('and has four actions', S.actionsPerTurn === 4, `ap=${S.actionsPerTurn}`);
+  ok('and is not already president', S.player.isPresident === false);
+}
+
+{
+  const S = career('BW', 1802, 11);
+  const lad = RZ.ladderFor('BW');
+  const vp = lad.findIndex((r) => r.id === 'vp' || r.tier === 11);
+  S.player.rungIdx = vp >= 0 ? vp : S.player.rungIdx;
+  S.player.isPresident = false;
+  const acts = RZ.engine.availableActions(S).map((a) => a.id);
+  ok('a vice-president is offered the budget', acts.indexOf('budget') >= 0, acts.join(','));
+  ok('and is offered an amendment', acts.indexOf('amend') >= 0, acts.join(','));
+  const api = RZ.engine.mkApi(S);
+  const amendable = RZ.gov.amendmentsFor(api);
+  ok('and at least one amendment is tableable from that chair', amendable.length > 0);
+  ok('term limits stay president-only', !amendable.some((x) => x.id === 'termlimit' || x.id === 'termlength' || x.id === 'courts'));
+}
+
+{
+  const S = career('ZA', 1804, 6);
+  S.family.patience = 20;
+  S.flags.kitchenTable = false;
+  S.pendingScene = null;
+  RZ.family.monthly(S, 1, {});
+  ok('a strained household summons the kitchen', S.pendingScene === 'kitchen-table',
+    `pending=${S.pendingScene} flag=${S.flags.kitchenTable}`);
+}
+
+{
+  const S = career('ZA', 1805, 10);
+  S.player.trait = S.player.trait || 'firebrand';
+  if (!S.contender) RZ.contender.init(S);
+  const ct = S.contender;
+  const lad = RZ.ladderFor('ZA');
+  const target = lad.findIndex((r) => r.tier >= 9 && r.tier < 13);
+  S.player.rungIdx = target;
+  ct.rungIdx = Math.max(0, target - 1);
+  ct.progress = 9999;
+  S.flags.contenderNearMiss = false;
+  S.pendingScene = null;
+  RZ.contender.tick(S, 1, {});
+  ok('a high-rung climb is a named near-miss', S.flags.contenderNearMiss === true,
+    `flag=${S.flags.contenderNearMiss} rung=${ct.rungIdx} pending=${S.pendingScene}`);
+  ok('and summons the side room at the conference', S.pendingScene === 'contender-slate',
+    `pending=${S.pendingScene}`);
+}
+
+{
+  const S = career('BW', 1806, 11);
+  S.player.stats.integrity = 70;
+  S.player.dirt = [];
+  RZ.engine.endGame(S, 'retire');
+  ok('a clean career that stops at the door is remembered as never taking it',
+    S.legacyMarks.neverTookIt === true, JSON.stringify(S.legacyMarks));
+  const lg = RZ.gov.legacy(S);
+  ok('and the rank names it', lg.rank === 'The One Who Never Took It', lg.rank);
+  const plain = RZ.gov.obituaryPlain(S, lg);
+  ok('and the seed is shareable as plain text', /Career #/.test(plain) && /Kgosi/.test(plain));
+}
+
+{
+  ok('Angola speaks Portuguese in its institutions', RZ.COUNTRIES.AO.terms.assembly === 'Assembleia Nacional');
+  ok('Mozambique does too', RZ.COUNTRIES.MZ.terms.hos === 'Presidente');
+  ok('chrome helper switches for those two', RZ.L('AO', 'Desk', 'Mesa') === 'Mesa' && RZ.L('BW', 'Desk', 'Mesa') === 'Desk');
+}
+
+/* ================= 1.8.1 vice-president estimates ================= */
+section('1.8.1 Vice-president chairs the estimates');
+{
+  function asVp(cid, seed) {
+    const S = career(cid, seed, 11);
+    const lad = RZ.ladderFor(cid);
+    const vp = lad.findIndex((r) => r.id === 'vp' || r.id === 'vpza' || r.tier === 11);
+    S.player.rungIdx = vp >= 0 ? vp : S.player.rungIdx;
+    S.player.isPresident = false;
+    S.actionsLeft = 5;
+    return S;
+  }
+  function playEstimates(S, sides) {
+    const out = RZ.engine.doAction(S, 'budget');
+    if (!out || !out.dialogue) throw new Error('VP budget did not open a room');
+    const cv = out.dialogue;
+    for (const want of sides) {
+      const opts = RZ.dialogue.options(cv).filter((o) => o.ok);
+      let pick;
+      if (want === 'none') pick = opts.find((o) => !o.side);
+      else if (typeof want === 'number') pick = opts.find((o) => o.i === want) || opts[want];
+      else pick = opts.find((o) => o.side === want);
+      if (!pick) pick = opts[0];
+      RZ.dialogue.choose(cv, pick.i);
+    }
+    if (!cv.done) throw new Error('estimates room never closed');
+    RZ.engine.finishDialogue(S, cv);
+    return cv;
+  }
+
+  {
+    const S = asVp('BW', 1810);
+    const acts = RZ.engine.availableActions(S);
+    const budget = acts.find((a) => a.id === 'budget');
+    ok('a vice-president is still offered the budget', !!budget);
+    ok('and it is named as chairing the estimates', budget && budget.name === 'Chair the estimates',
+      budget && budget.name);
+    ok('and the blurb says he has the pen', budget && /pen/.test(budget.desc), budget && budget.desc);
+  }
+
+  {
+    const S = asVp('BW', 1811);
+    S.player.standing.leader = 80;
+    S.player.standing.party = 80;
+    const health0 = S.nation.budget.health;
+    const cv = playEstimates(S, ['spend', 'spend', 'none']);
+    ok('the room is the estimates committee', cv.sceneId === 'estimates-chair', cv.sceneId);
+    ok('the same Finance minister as the cabinet budget room',
+      cv.people.purse.role === 'Minister of Finance');
+    ok('a strong deputy who defends the package keeps it',
+      S.flags.estimatesLast && S.flags.estimatesLast.rewritten === false,
+      JSON.stringify(S.flags.estimatesLast && { rewritten: S.flags.estimatesLast.rewritten, stance: S.flags.estimatesLast.stance }));
+    ok('and the health line actually moved', S.nation.budget.health > health0,
+      `${health0} -> ${S.nation.budget.health}`);
+    ok('and the career remembers you got a budget through', S.legacyMarks.chairedEstimates === true);
+  }
+
+  {
+    const S = asVp('ZA', 1812);
+    S.player.standing.leader = 20;
+    S.player.standing.party = 20;
+    playEstimates(S, ['spend', 'spend', 'none']);
+    ok('a weak deputy who defends still has the palace rewrite it',
+      S.flags.estimatesLast && S.flags.estimatesLast.rewritten === true,
+      JSON.stringify(S.flags.estimatesLast && { rewritten: S.flags.estimatesLast.rewritten, stance: S.flags.estimatesLast.stance }));
+    ok('and the rewrite fattens administration',
+      S.nation.budget.admin > 18, String(S.nation.budget.admin));
+  }
+
+  {
+    const S = asVp('BW', 1813);
+    S.player.standing.leader = 80;
+    S.player.standing.party = 80;
+    playEstimates(S, ['purse', 'purse', 'purse']);
+    ok('yielding always lets him write his road in',
+      S.flags.estimatesLast && S.flags.estimatesLast.rewritten === true &&
+      S.flags.estimatesLast.stance === 'yield',
+      JSON.stringify(S.flags.estimatesLast && { rewritten: S.flags.estimatesLast.rewritten, stance: S.flags.estimatesLast.stance }));
+    ok('and the first argument is still in the document',
+      S.nation.budget.debtsvc > 14, String(S.nation.budget.debtsvc));
+  }
+
+  {
+    const T = asVp('BW', 1815);
+    T.player.standing.leader = 80;
+    T.player.standing.party = 80;
+    const dirt0 = T.player.dirt.length;
+    const out = RZ.engine.doAction(T, 'budget');
+    const cv = out.dialogue;
+    RZ.dialogue.choose(cv, RZ.dialogue.options(cv).find((o) => o.side === 'spend').i);
+    RZ.dialogue.choose(cv, RZ.dialogue.options(cv).find((o) => o.side === 'purse').i);
+    const leak = RZ.dialogue.options(cv).filter((o) => o.ok && !o.side).pop();
+    RZ.dialogue.choose(cv, leak.i);
+    RZ.engine.finishDialogue(T, cv);
+    ok('leaking the minute keeps the package',
+      T.flags.estimatesLast && T.flags.estimatesLast.rewritten === false &&
+      T.flags.estimatesLast.stance === 'leak',
+      JSON.stringify(T.flags.estimatesLast && { rewritten: T.flags.estimatesLast.rewritten, stance: T.flags.estimatesLast.stance }));
+    ok('and puts a file on you', T.player.dirt.length > dirt0, String(T.player.dirt.length));
+  }
+
+  {
+    const S = asVp('BW', 1816);
+    makePresident(S);
+    const acts = RZ.engine.availableActions(S);
+    const budget = acts.find((a) => a.id === 'budget');
+    ok('a president still tables rather than chairs',
+      budget && budget.name === 'Table the national budget', budget && budget.name);
+    const out = RZ.engine.doAction(S, 'budget');
+    ok('and still gets the slider, not the room', out && out.special === 'budget' && !out.dialogue,
+      JSON.stringify(out && { special: out.special, dialogue: !!out.dialogue }));
+  }
+
+  {
+    const S = career('ZA', 1817, 6);
+    RZ.gov.beginEstimates(S);
+    RZ.gov.tiltEstimates(S, 'debtsvc', 'health', 6);
+    const pack = RZ.gov.composeEstimates(S);
+    ok('a tilt from debt into health still sums to a hundred',
+      RZ.gov.BUDGET_LINES.reduce((n, l) => n + pack[l.k], 0) === 100,
+      JSON.stringify(pack));
+    ok('and health is the line that rose', pack.health > S.nation.budget.health &&
+      pack.debtsvc < S.nation.budget.debtsvc);
+  }
+}
+
+/* ================= 1.8.2 cabinet dynamics ================= */
+section('1.8.2 Cabinet is people, not a dice roll');
+{
+  function asPres(cid, seed) {
+    const S = career(cid, seed, 12);
+    makePresident(S);
+    S.actionsLeft = 5;
+    S.parties[S.player.partyId].gov = true;
+    return S;
+  }
+  function playCut(S, picks) {
+    const out = RZ.engine.doAction(S, 'reshuffle');
+    if (!out || !out.dialogue) throw new Error('reshuffle did not open a room');
+    const cv = out.dialogue;
+    for (const want of picks) {
+      const opts = RZ.dialogue.options(cv).filter((o) => o.ok);
+      let pick;
+      if (want === 'none') pick = opts.find((o) => !o.side);
+      else if (typeof want === 'number') pick = opts[want];
+      else pick = opts.find((o) => o.side === want);
+      if (!pick) pick = opts[0];
+      RZ.dialogue.choose(cv, pick.i);
+    }
+    if (!cv.done) throw new Error('cabinet-cut never closed');
+    RZ.engine.finishDialogue(S, cv);
+    return cv;
+  }
+
+  {
+    const S = asPres('BW', 1820);
+    RZ.state.fillCabinet(S);
+    ok('a President has a named cabinet', S.cabinet.length >= 5 && S.cabinet.every((m) => m.name));
+    const fin = S.cabinet.find((m) => m.ministryId === 'fin');
+    const purse = RZ.cast.who(S, RZ.COUNTRIES.BW, 'Minister of Finance', 'the Treasury');
+    ok('Finance at the table is Finance in the estimates room',
+      !!(fin && purse && fin.name === purse.name),
+      `table=${fin && fin.name} cast=${purse && purse.name}`);
+  }
+
+  {
+    const S = asPres('ZA', 1821);
+    RZ.state.fillCabinet(S);
+    S.cabinet.forEach((m) => { m.loyalty = 10; m.corruption = 50; });
+    S.player.standing.leader = 60;
+    const before = S.cabinet.reduce((n, m) => n + m.loyalty, 0) / S.cabinet.length;
+    for (let i = 0; i < 36; i++) RZ.state.cabinetTick(S, 1, {});
+    const after = S.cabinet.reduce((n, m) => n + m.loyalty, 0) / S.cabinet.length;
+    ok('loyalty finds a level rather than pinning at the floor',
+      after > before + 8 && after < 70, `${before.toFixed(1)} -> ${after.toFixed(1)}`);
+  }
+
+  {
+    const S = asPres('BW', 1822);
+    RZ.state.fillCabinet(S);
+    const fin = S.cabinet.find((m) => m.ministryId === 'fin');
+    const oldName = fin.name;
+    const r = RZ.state.dropMinister(S, 'fin', { loyalty: 80, competence: 40, corruption: 20 });
+    ok('dropping a minister changes who sits there', r && r.next.name !== oldName,
+      `gone=${oldName} next=${r && r.next.name}`);
+    ok('and the chair is still filled',
+      S.cabinet.find((m) => m.ministryId === 'fin').name === r.next.name);
+    ok('and the old occupant is still somebody you know',
+      Object.keys(S.cast).some((k) => S.cast[k].name === oldName));
+    const purse = RZ.cast.who(S, RZ.COUNTRIES.BW, 'Minister of Finance', 'the Treasury');
+    ok('so the next estimates room gets the new one', purse.name === r.next.name,
+      `cast=${purse.name} next=${r.next.name}`);
+  }
+
+  {
+    const S = asPres('BW', 1823);
+    const acts = RZ.engine.availableActions(S);
+    ok('a president is still offered the reshuffle', acts.some((a) => a.id === 'reshuffle'));
+    const cv = playCut(S, ['rot', 0]);
+    ok('reshuffle opens the cut, not a dice roll', cv.sceneId === 'cabinet-cut', cv.sceneId);
+    ok('and two named ministers are in the room',
+      !!(cv.people.cut && cv.people.rot && cv.people.cut.name && cv.people.rot.name),
+      JSON.stringify({ cut: cv.people.cut && cv.people.cut.name, rot: cv.people.rot && cv.people.rot.name }));
+    ok('and somebody actually left the table', (S.flags.cabinetDropped || 0) >= 1,
+      String(S.flags.cabinetDropped));
+  }
+
+  {
+    const S = RZ.engine.newGame({
+      countryId: 'BW', seed: 1824, name: 'Test Minister', gender: 'f',
+      regionId: RZ.COUNTRIES.BW.regions[0].id, bgId: RZ.BACKGROUNDS[0].id,
+      partyId: RZ.COUNTRIES.BW.parties[0].id, startAs: 'minister'
+    });
+    ok('minister start does not fill the cabinet at creation',
+      !S.cabinet || S.cabinet.length === 0, String(S.cabinet && S.cabinet.length));
+    RZ.state.fillCabinet(S);
+    const mine = RZ.state.playerMinistryId(S);
+    ok('and then skips the chair you already sit in',
+      !!mine && !S.cabinet.some((m) => m.ministryId === mine),
+      `mine=${mine} seats=${S.cabinet.map((m) => m.ministryId).join(',')}`);
+    const rows = RZ.state.cabinetSummary(S);
+    ok('and the table still has a row that is you',
+      rows.some((r) => r.you), JSON.stringify(rows.map((r) => r.risk)));
+  }
+
+  {
+    const S = asPres('ZA', 1825);
+    RZ.state.fillCabinet(S);
+    S.cabinet.forEach((m) => { m.loyalty = 8; });
+    const cr = RZ.state.CRISES.find((c) => c.id === 'cabinet-leak');
+    ok('a disloyal cabinet is eligible for the leak room', cr.when(S) === true);
+    ok('and names the leaker', !!S.flags.leakerId, String(S.flags.leakerId));
+    const row = RZ.state.CRISES.find((c) => c.id === 'cabinet-row');
+    ok('two ministers of different kinds can be summoned to argue', row.when(S) === true &&
+      S.flags.rowLeft && S.flags.rowRight && S.flags.rowLeft !== S.flags.rowRight,
+      JSON.stringify({ left: S.flags.rowLeft, right: S.flags.rowRight }));
+    const vp = career('ZA', 1826, 11);
+    vp.parties[vp.player.partyId].gov = true;
+    RZ.state.fillCabinet(vp);
+    ok('and a deputy can be in that room too', row.when(vp) === true);
+  }
+}
+
+/* ================= 1.8.3 deputy desk, stale diary, palace lock ================= */
+section('1.8.3 The deputy does not give his speech');
+{
+  const PALACE = ['address', 'reshuffle', 'anticorr', 'summit', 'resourcedeal',
+                  'judges', 'security', 'earlyelection'];
+  function asVp(cid, seed) {
+    const S = career(cid, seed, 11);
+    const lad = RZ.ladderFor(cid);
+    const vp = lad.findIndex((r) => r.id === 'vp' || r.id === 'vpza' || r.tier === 11);
+    S.player.rungIdx = vp >= 0 ? vp : S.player.rungIdx;
+    S.player.isPresident = false;
+    S.actionsLeft = 5;
+    return S;
+  }
+
+  {
+    const S = asVp('BW', 1830);
+    const ids = RZ.engine.availableActions(S).map((a) => a.id);
+    const leaked = ids.filter((id) => PALACE.indexOf(id) >= 0);
+    ok('the deputy desk does not offer the palace actions', leaked.length === 0, leaked.join(','));
+    ok('and still offers the estimates', ids.indexOf('budget') >= 0);
+    ok('and still offers an amendment', ids.indexOf('amend') >= 0);
+  }
+
+  {
+    const S = asVp('ZA', 1831);
+    const ids = RZ.engine.availableActions(S).map((a) => a.id);
+    const leaked = ids.filter((id) => PALACE.indexOf(id) >= 0);
+    ok('nor does a South African deputy', leaked.length === 0, leaked.join(','));
+  }
+
+  {
+    let leaked = [];
+    for (let i = 0; i < 50; i++) {
+      const S = asVp('BW', 1840 + i);
+      RZ.docket.build(S).entries.forEach((e) => {
+        if (PALACE.indexOf(e.actionId) >= 0) leaked.push(e.actionId);
+      });
+    }
+    ok('fifty deputy diaries never book a palace action', leaked.length === 0, leaked.join(','));
+  }
+
+  {
+    const S = asVp('BW', 1899);
+    const left = S.actionsLeft;
+    S.docket = {
+      turn: S.turn, declined: 0, kept: 0,
+      entries: [{
+        actionId: 'address', sceneId: null, ico: '📺', name: 'Address the nation',
+        at: '08:00', who: null, why: 'The office put it there. Nobody asked you.',
+        kept: false, declined: false
+      }]
+    };
+    ok('a leftover nation-address is not still in the book',
+      RZ.docket.entries(S).every((e) => e.actionId !== 'address'),
+      JSON.stringify(RZ.docket.entries(S).map((e) => e.actionId)));
+    ok('and taking it does nothing', RZ.engine.doAction(S, 'address') === null);
+    ok('and it did not spend the morning', S.actionsLeft === left);
+  }
+
+  {
+    const S = asVp('BW', 1900);
+    S.docket = {
+      turn: S.turn, declined: 0, kept: 0,
+      entries: [{
+        actionId: 'address', sceneId: null, ico: '📺', name: 'Address the nation',
+        at: '08:00', who: { key: 'x', name: 'Someone', role: 'the Secretary' },
+        why: 'They asked for the meeting.', kept: false, declined: false
+      }]
+    };
+    const feed0 = S.feed.length;
+    RZ.docket.close(S);
+    ok('closing the month does not stand anyone up for a palace slot you could not keep',
+      S.feed.length === feed0, String(S.feed.length - feed0));
+  }
+
+  {
+    const T = career('BW', 1901, 12);
+    makePresident(T);
+    const ids = RZ.engine.availableActions(T).map((a) => a.id);
+    ok('a president is still offered the address', ids.indexOf('address') >= 0);
+    ok('and allowed() agrees', RZ.gov.allowed(T, RZ.gov.actionById('address')) === true);
+    const V = asVp('BW', 1902);
+    ok('a deputy is not', RZ.gov.allowed(V, RZ.gov.actionById('address')) === false);
+    ok('but is allowed the estimates', RZ.gov.allowed(V, RZ.gov.actionById('budget')) === true);
+  }
+
+  {
+    const T = career('BW', 1903, 12);
+    makePresident(T);
+    T.actionsLeft = 3;
+    const out = RZ.engine.doAction(T, 'address');
+    ok('a president can still give the speech', !!(out && (out.res || out.dialogue || out.entry)),
+      JSON.stringify(out && Object.keys(out)));
+    ok('and the speech is now a holding room', !!(out && out.dialogue && out.dialogue.sceneId === 'nation-address'),
+      out && out.dialogue && out.dialogue.sceneId);
+  }
+}
+
+/* ================= 1.9.0 the office has a job ================= */
+section('1.9.0 The office has a job');
+
+{
+  function asMinister(cid, seed, ministryId) {
+    const S = career(cid, seed, 6);
+    const c = RZ.COUNTRIES[cid];
+    const m = (c.ministries || []).find((x) => x.id === ministryId) || c.ministries[0];
+    S.player.ministry = m.name;
+    S.parties[S.player.partyId].gov = true;
+    S.player.isPresident = false;
+    S.actionsLeft = 4;
+    if (RZ.blocs) RZ.blocs.init(S);
+    return S;
+  }
+  function playOut(cv) {
+    let guard = 0;
+    while (!cv.done && guard++ < 12) {
+      const opts = RZ.dialogue.options(cv).filter((o) => o.ok);
+      if (!opts.length) throw new Error('no options in ' + cv.sceneId);
+      RZ.dialogue.choose(cv, opts[0].i);
+    }
+    if (!cv.done) throw new Error(cv.sceneId + ' never closed');
+    return cv;
+  }
+
+  {
+    const S = asMinister('BW', 190, 'health');
+    ok('health maps to the clinic room', RZ.state.dutySceneId(S) === 'duty-clinic');
+    const ids = RZ.engine.availableActions(S).map((a) => a.id);
+    ok('a minister is offered the ministry', ids.indexOf('ministry') >= 0);
+    ok('and constituency Friday', ids.indexOf('friday') >= 0);
+    const duty = RZ.ward.duty(S);
+    ok('the desk names sitting the ministry', duty.id === 'ministry', duty && duty.id);
+  }
+
+  {
+    const S = asMinister('BW', 191, 'edu');
+    ok('education maps to the school room', RZ.state.dutySceneId(S) === 'duty-school');
+    S.actionsLeft = 4;
+    const h0 = S.nation.society.education;
+    const out = RZ.engine.doAction(S, 'ministry');
+    ok('sitting education opens the school room', !!(out && out.dialogue && out.dialogue.sceneId === 'duty-school'),
+      out && out.dialogue && out.dialogue.sceneId);
+    playOut(out.dialogue);
+    ok('a delivered education minute moves the schools', S.nation.society.education > h0,
+      `${h0} -> ${S.nation.society.education}`);
+    ok('and marks the duty sat', S.flags.didDuty === S.turn);
+  }
+
+  {
+    const S = asMinister('BW', 192, 'health');
+    const h0 = S.nation.society.health;
+    RZ.state.applyDuty(RZ.engine.mkApi(S), 'health', 'deliver');
+    ok('a delivered health duty stocks the clinics', S.nation.society.health > h0);
+  }
+
+  {
+    const S = asMinister('BW', 193, 'def');
+    ok('defence maps to the cluster', RZ.state.dutySceneId(S) === 'duty-cluster');
+    S.actionsLeft = 4;
+    const out = RZ.engine.doAction(S, 'ministry');
+    ok('sitting defence opens the cluster', out && out.dialogue && out.dialogue.sceneId === 'duty-cluster');
+  }
+
+  {
+    const S = asMinister('BW', 194, 'mines');
+    ok('mines maps to the shaft', RZ.state.dutySceneId(S) === 'duty-shaft');
+  }
+
+  {
+    const S = asMinister('BW', 195, 'local');
+    ok('local government maps to the list', RZ.state.dutySceneId(S) === 'duty-list');
+  }
+
+  {
+    const S = asMinister('BW', 196, 'infra');
+    ok('works maps to the road', RZ.state.dutySceneId(S) === 'duty-road');
+  }
+
+  {
+    const S = career('BW', 197, 4);
+    S.actionsLeft = 4;
+    RZ.ward.init(S);
+    const ids = RZ.engine.availableActions(S).map((a) => a.id);
+    ok('an MP is offered Friday', ids.indexOf('friday') >= 0);
+    ok('and is not offered the ministry', ids.indexOf('ministry') < 0);
+    const t0 = S.ward.trust;
+    const out = RZ.engine.doAction(S, 'friday');
+    ok('Friday opens the yard', !!(out && out.dialogue && out.dialogue.sceneId === 'friday-ward'),
+      out && out.dialogue && out.dialogue.sceneId);
+    playOut(out.dialogue);
+    ok('and the ward noticed you came', S.ward.lastFriday === S.turn && S.ward.trust >= t0);
+  }
+
+  {
+    const S = career('BW', 198, 4);
+    RZ.ward.init(S);
+    RZ.ward.initManifesto(S);
+    RZ.ward.pickManifesto(S, 'clinic');
+    RZ.ward.pickManifesto(S, 'road');
+    RZ.ward.pickManifesto(S, 'jobs');
+    ok('three lines make a manifesto', RZ.ward.hasManifesto(S));
+    RZ.ward.stamp(S, 'clinic', 'kept');
+    RZ.ward.stamp(S, 'road', 'broken');
+    const led = RZ.ward.ledger(S);
+    ok('the ledger stamps kept and broken', led.kept === 1 && led.broken === 1, JSON.stringify(led.items));
+  }
+
+  {
+    const low = career('BW', 199, 4);
+    const high = career('BW', 199, 4);
+    RZ.ward.init(low); RZ.ward.init(high);
+    low.ward.trust = 20; high.ward.trust = 85;
+    high.ward.delivered = 3; low.ward.abandoned = 2;
+    ok('a trusted incumbent scores higher than a neglected one',
+      RZ.ward.incumbentSwing(high) > RZ.ward.incumbentSwing(low),
+      `${RZ.ward.incumbentSwing(high)} vs ${RZ.ward.incumbentSwing(low)}`);
+  }
+
+  {
+    const S = career('BW', 200, 4);
+    RZ.ward.init(S);
+    const api = RZ.engine.mkApi(S);
+    const p = RZ.ward.start(S, api, 'clinic', { rushed: true });
+    p.monthsLeft = 0; p.risk = 0;
+    RZ.ward.tick(S, 1, {});
+    ok('a finished clinic summons the ribbon', S.pendingScene === 'ribbon-day', String(S.pendingScene));
+    ok('and remembers what opened', !!(S.flags.ribbon && S.flags.ribbon.kind === 'clinic'),
+      JSON.stringify(S.flags.ribbon));
+    const cv = RZ.dialogue.beginById(S, 'ribbon-day');
+    ok('the ribbon is a meeting', !!(cv && cv.sceneId === 'ribbon-day'));
+    playOut(cv);
+    ok('and the flag is cleared', !S.flags.ribbon);
+  }
+
+  {
+    const T = career('BW', 201, 12);
+    makePresident(T);
+    T.actionsLeft = 3;
+    T.date.month = 3;
+    const duty = RZ.ward.duty(T);
+    ok('the presidential duty is the briefing', duty.id === 'brief', duty && duty.id);
+    T.date.month = 2;
+    T.flags.sonaYear = T.date.year - 1;
+    ok('February without a speech is State of the Nation', RZ.ward.duty(T).id === 'address');
+    const out = RZ.engine.doAction(T, 'address');
+    ok('Address the nation is a holding room', !!(out && out.dialogue && out.dialogue.sceneId === 'nation-address'));
+    playOut(out.dialogue);
+    ok('and the year is marked', T.flags.sonaYear === T.date.year);
+  }
+
+  {
+    const S = career('BW', 202, 4);
+    S.campaign.season = true;
+    S.pendingScene = null;
+    ok('a campaign without a manifesto is eligible for the desk',
+      RZ.dialogue.byId('manifesto-desk').when(RZ.engine.mkApi(S)) === true);
+    RZ.dialogue.summon(S, 'manifesto-desk');
+    const cv = RZ.dialogue.beginById(S, 'manifesto-desk');
+    playOut(cv);
+    ok('three beats print three lines', RZ.ward.hasManifesto(S),
+      JSON.stringify(S.manifesto && S.manifesto.items));
+  }
+
+  {
+    const S = asMinister('BW', 203, 'health');
+    ok('ministry rooms exist for every family',
+      ['duty-clinic','duty-school','duty-road','duty-cluster','duty-shaft','duty-list']
+        .every((id) => !!RZ.dialogue.byId(id)));
+  }
+
+  {
+    const S = asMinister('BW', 204, 'health');
+    const pool = RZ.dialogue.scenesFor(S, 'ministry').map((sc) => sc.id);
+    ok('a health minister is only offered the clinic', pool.length === 1 && pool[0] === 'duty-clinic', pool.join(','));
+    RZ.docket.build(S);
+    const first = RZ.docket.entries(S)[0];
+    ok('the diary opens on sitting the ministry', !!(first && first.actionId === 'ministry'), first && first.actionId);
+    ok('and the person in it is from the clinic', !!(first && first.sceneId === 'duty-clinic'), first && first.sceneId);
+  }
+
+  {
+    const S = career('BW', 205, 4);
+    RZ.docket.build(S);
+    const first = RZ.docket.entries(S)[0];
+    ok('an MP diary opens on Friday', !!(first && first.actionId === 'friday'), first && first.actionId);
+  }
+
+  {
+    const S = career('BW', 206, 4);
+    RZ.ward.init(S);
+    const t0 = S.ward.trust;
+    RZ.ward.tick(S, 1, {});
+    S.turn += 2;
+    RZ.ward.tick(S, 1, {});
+    ok('staying in the capital drains the ward', S.ward.trust < t0, `${t0} -> ${S.ward.trust}`);
+  }
+}
+
+/* ================= 1.10.0 State House ================= */
+section('1.10.0 State House');
+
+{
+  function playOut(cv) {
+    let guard = 0;
+    while (!cv.done && guard++ < 12) {
+      const opts = RZ.dialogue.options(cv).filter((o) => o.ok);
+      if (!opts.length) throw new Error('no options in ' + cv.sceneId);
+      RZ.dialogue.choose(cv, opts[0].i);
+    }
+    if (!cv.done) throw new Error(cv.sceneId + ' never closed');
+    return cv;
+  }
+
+  {
+    const S = makePresident(career('BW', 210, 13));
+    S.date.month = 3;
+    RZ.state.fillCabinet(S);
+    const ids = RZ.engine.availableActions(S).map((a) => a.id);
+    ok('a president is offered the briefing', ids.indexOf('brief') >= 0);
+    ok('and the summit', ids.indexOf('summit') >= 0);
+    ok('and still the speech', ids.indexOf('address') >= 0);
+    const duty = RZ.ward.duty(S);
+    ok('the desk names the briefing', duty.id === 'brief', duty && duty.id);
+  }
+
+  {
+    const V = career('BW', 211, 11);
+    V.player.isPresident = false;
+    const ids = RZ.engine.availableActions(V).map((a) => a.id);
+    ok('a deputy is not offered the briefing', ids.indexOf('brief') < 0);
+    ok('and doAction refuses it', RZ.engine.doAction(V, 'brief') === null);
+  }
+
+  {
+    const S = makePresident(career('BW', 212, 13));
+    RZ.state.fillCabinet(S);
+    const file = RZ.state.houseFile(S);
+    ok('the file names a worst number', !!(file && file.worst && file.worst.k), JSON.stringify(file && file.worst));
+    ok('and a hottest province', !!(file && file.hot && file.hot.name));
+    ok('and a plotter from the table', !!(file && file.plotter && file.plotter.ministryId));
+    const brief = RZ.state.pickBrief(S);
+    ok('the briefing picks two chairs', !!(brief && brief.left && brief.right && brief.left.ministryId !== brief.right.ministryId),
+      brief && brief.left && brief.right && brief.left.ministryId + '/' + brief.right.ministryId);
+    ok('of different kinds', RZ.state.ministryKind(S, brief.left.ministryId) !== RZ.state.ministryKind(S, brief.right.ministryId));
+  }
+
+  {
+    const S = makePresident(career('BW', 213, 13));
+    RZ.state.fillCabinet(S);
+    RZ.state.pickBrief(S);
+    S.actionsLeft = 4;
+    const h0 = S.nation.society.health;
+    const g0 = S.nation.economy.growth;
+    const out = RZ.engine.doAction(S, 'brief');
+    ok('taking the briefing opens the cabinet room', !!(out && out.dialogue && out.dialogue.sceneId === 'cabinet-brief'),
+      out && out.dialogue && out.dialogue.sceneId);
+    playOut(out.dialogue);
+    ok('and marks the duty sat', S.flags.didDuty === S.turn);
+    ok('and a delivered minute moves the country',
+      S.nation.society.health > h0 || S.nation.economy.growth > g0 || S.flags.houseQuality,
+      `health ${h0}->${S.nation.society.health} growth ${g0}->${S.nation.economy.growth} q=${S.flags.houseQuality}`);
+  }
+
+  {
+    const S = makePresident(career('BW', 214, 13));
+    RZ.state.fillCabinet(S);
+    RZ.state.pickBrief(S);
+    const left = RZ.state.byMinistry(S, S.flags.briefLeft);
+    const loy0 = left.loyalty;
+    const unrest0 = S.nation.society.unrest;
+    RZ.state.applyHouse(RZ.engine.mkApi(S), 'power', 'deliver');
+    ok('a delivered power minute cools the street', S.nation.society.unrest < unrest0,
+      `${unrest0} -> ${S.nation.society.unrest}`);
+    ok('and warms the minister who won', left.loyalty > loy0, `${loy0} -> ${left.loyalty}`);
+    ok('and stamps ranTheCountry', !!S.legacyMarks.ranTheCountry);
+  }
+
+  {
+    const S = makePresident(career('BW', 215, 13));
+    S.actionsLeft = 3;
+    const out = RZ.engine.doAction(S, 'summit');
+    ok('the summit is a corridor', !!(out && out.dialogue && out.dialogue.sceneId === 'sadc-summit'),
+      out && out.dialogue && out.dialogue.sceneId);
+    playOut(out.dialogue);
+    ok('and remembers what was signed', !!S.flags.summit);
+  }
+
+  {
+    const S = makePresident(career('BW', 216, 13));
+    S.nation.govApproval = 28;
+    S.nation.society.unrest = 70;
+    const cr = RZ.state.CRISES.find((c) => c.id === 'house-censure');
+    ok('low approval makes a censure eligible', cr.when(S) === true);
+    const cv = RZ.dialogue.beginById(S, 'house-censure');
+    ok('the censure is a meeting', !!(cv && cv.sceneId === 'house-censure'));
+    playOut(cv);
+    ok('and the House records a result', !!S.flags.censure, String(S.flags.censure));
+  }
+
+  {
+    const S = makePresident(career('BW', 217, 13));
+    S.date.month = 3;
+    RZ.docket.build(S);
+    const first = RZ.docket.entries(S)[0];
+    ok('the presidential diary opens on the briefing', !!(first && first.actionId === 'brief'), first && first.actionId);
+  }
+
+  {
+    const S = makePresident(career('ZA', 218, 13));
+    RZ.COUNTRIES.ZA.regions.forEach(function (r) { S.player.regionSupport[r.id] = 40; });
+    S.player.regionSupport.wc = 2;
+    const hot = RZ.state.hottestRegion(S);
+    ok('the hottest province is the one with the least support', hot.id === 'wc', JSON.stringify(hot));
+  }
+
+  {
+    ok('the three State House rooms exist',
+      ['cabinet-brief', 'house-censure', 'sadc-summit'].every((id) => !!RZ.dialogue.byId(id)));
+    ok('censure is a summoned crisis', RZ.state.SUMMONS.indexOf('house-censure') >= 0);
+  }
+}
+
+/* ================= 1.11.0 A second year in office ================= */
+section('1.11.0 A second year in office');
+
+{
+  function playOut(cv) {
+    let guard = 0;
+    while (!cv.done && guard++ < 12) {
+      const opts = RZ.dialogue.options(cv).filter((o) => o.ok);
+      if (!opts.length) throw new Error('no options in ' + cv.sceneId);
+      RZ.dialogue.choose(cv, opts[0].i);
+    }
+    if (!cv.done) throw new Error(cv.sceneId + ' never closed');
+    return cv;
+  }
+
+  {
+    const S = makePresident(career('BW', 220, 13));
+    S.date.month = 3;
+    RZ.state.fillCabinet(S);
+    const ids = RZ.engine.availableActions(S).map((a) => a.id);
+    ok('a president is offered the hottest province', ids.indexOf('province') >= 0);
+    ok('and the ambassador', ids.indexOf('embassy') >= 0);
+    ok('and the opposition', ids.indexOf('opposition') >= 0);
+    ok('and the tax package', ids.indexOf('tax') >= 0);
+  }
+
+  {
+    const V = career('BW', 221, 11);
+    V.player.isPresident = false;
+    const ids = RZ.engine.availableActions(V).map((a) => a.id);
+    ok('a deputy is not offered the province', ids.indexOf('province') < 0);
+    ok('and doAction refuses it', RZ.engine.doAction(V, 'province') === null);
+  }
+
+  {
+    const S = makePresident(career('BW', 222, 13));
+    RZ.state.fillCabinet(S);
+    const proj = RZ.state.pickProject(S);
+    ok('the project names a province', !!(proj && proj.hot && proj.hot.id), JSON.stringify(proj && proj.hot));
+    ok('and a kind of thing', !!(proj && proj.kind), proj && proj.kind);
+    ok('and two chairs', !!(proj && proj.min && proj.purse && proj.min.ministryId !== proj.purse.ministryId),
+      proj && proj.min && proj.purse && proj.min.ministryId + '/' + proj.purse.ministryId);
+  }
+
+  {
+    const S = makePresident(career('BW', 223, 13));
+    RZ.state.fillCabinet(S);
+    RZ.state.pickProject(S);
+    S.actionsLeft = 4;
+    const out = RZ.engine.doAction(S, 'province');
+    ok('sitting the province opens the site', !!(out && out.dialogue && out.dialogue.sceneId === 'house-project'),
+      out && out.dialogue && out.dialogue.sceneId);
+    playOut(out.dialogue);
+    ok('and a delivered date plants a project', !!(S.house && S.house.project) || S.flags.projQuality === 'show',
+      JSON.stringify(S.house && S.house.project) + ' q=' + S.flags.projQuality);
+  }
+
+  {
+    const S = makePresident(career('ZA', 224, 13));
+    RZ.COUNTRIES.ZA.regions.forEach(function (r) { S.player.regionSupport[r.id] = 40; });
+    S.player.regionSupport.wc = 2;
+    RZ.state.fillCabinet(S);
+    RZ.state.pickProject(S);
+    const rid = S.flags.projRegion;
+    const s0 = S.player.regionSupport[rid];
+    RZ.state.applyProject(RZ.engine.mkApi(S), 'deliver');
+    ok('a delivered project is live', !!(RZ.state.liveProject(S)));
+    ok('and warms the province a little now', S.player.regionSupport[rid] > s0,
+      `${s0} -> ${S.player.regionSupport[rid]}`);
+    ok('and stamps builtTheProvince', !!S.legacyMarks.builtTheProvince);
+    const photo = makePresident(career('BW', 2231, 13));
+    RZ.state.fillCabinet(photo);
+    RZ.state.pickProject(photo);
+    RZ.state.applyProject(RZ.engine.mkApi(photo), 'show');
+    ok('a photograph does not plant a site', !RZ.state.liveProject(photo));
+    const p = RZ.state.liveProject(S);
+    p.left = 0;
+    RZ.state.finishProject(S);
+    ok('finishing it clears the site', !RZ.state.liveProject(S));
+    ok('and the province moved again', S.player.regionSupport[rid] > s0);
+  }
+
+  {
+    const S = makePresident(career('ZW', 225, 13));
+    S.nation.intl.sanctions = 40;
+    const pow = RZ.state.pickPower(S);
+    ok('sanctions bring Washington', pow.id === 'us', pow && pow.id);
+    const S2 = makePresident(career('BW', 226, 13));
+    S2.nation.economy.debt = 96;
+    S2.nation.intl.sanctions = 0;
+    const china = RZ.state.pickPower(S2);
+    ok('a hole in the books brings Beijing', china.id === 'china', china && china.id);
+    const S3 = makePresident(career('BW', 227, 13));
+    S3.nation.intl.sanctions = 0;
+    S3.nation.economy.debt = 26;
+    S3.flags.powerLast = null;
+    const n = RZ.state.pickPower(S3);
+    ok('otherwise the neighbour', n.id === 'neighbour', n && n.id + ' ' + n.name);
+    ok('Botswana\'s neighbour is South Africa', n.neighbourId === 'ZA', n && n.neighbourId);
+  }
+
+  {
+    const S = makePresident(career('BW', 228, 13));
+    S.actionsLeft = 3;
+    const out = RZ.engine.doAction(S, 'embassy');
+    ok('the ambassador is a room', !!(out && out.dialogue && out.dialogue.sceneId === 'great-power'),
+      out && out.dialogue && out.dialogue.sceneId);
+    playOut(out.dialogue);
+    ok('and remembers what was signed', !!S.flags.powerDeal, String(S.flags.powerDeal));
+  }
+
+  {
+    const S = makePresident(career('BW', 229, 13));
+    S.actionsLeft = 3;
+    const out = RZ.engine.doAction(S, 'resourcedeal');
+    ok('a resource deal is the same room', !!(out && out.dialogue && out.dialogue.sceneId === 'great-power'));
+    ok('and it is China', S.flags.powerId === 'china', S.flags.powerId);
+  }
+
+  {
+    const S = makePresident(career('BW', 230, 13));
+    const o = RZ.state.opposition(S);
+    ok('the opposition has a name', !!(o && o.name), JSON.stringify(o));
+    ok('and a party that is not yours', o.partyId && o.partyId !== S.player.partyId, o.partyId);
+    const again = RZ.state.opposition(S);
+    ok('and they persist', again.id === o.id && again.name === o.name);
+    S.actionsLeft = 3;
+    const out = RZ.engine.doAction(S, 'opposition');
+    ok('calling them in is a meeting', !!(out && out.dialogue && out.dialogue.sceneId === 'opp-meet'),
+      out && out.dialogue && out.dialogue.sceneId);
+    playOut(out.dialogue);
+    ok('and the corridor records a result', !!S.flags.oppDeal, String(S.flags.oppDeal));
+  }
+
+  {
+    const S = makePresident(career('BW', 231, 13));
+    S.nation.govApproval = 32;
+    RZ.state.opposition(S);
+    S.opposition.file = 40;
+    const cr = RZ.state.CRISES.find((c) => c.id === 'opp-table');
+    ok('a file and a floor make a motion eligible', cr.when(S) === true);
+    const cv = RZ.dialogue.beginById(S, 'opp-table');
+    ok('the motion is a meeting', !!(cv && cv.sceneId === 'opp-table'));
+    playOut(cv);
+    ok('and the House records a result', !!S.flags.oppDeal, String(S.flags.oppDeal));
+  }
+
+  {
+    const S = makePresident(career('BW', 232, 13));
+    S.date.month = 10;
+    const duty = RZ.ward.duty(S);
+    ok('October without a package pins tax', duty.id === 'tax', duty && duty.id);
+    S.actionsLeft = 3;
+    const out = RZ.engine.doAction(S, 'tax');
+    ok('the package is a room', !!(out && out.dialogue && out.dialogue.sceneId === 'tax-package'),
+      out && out.dialogue && out.dialogue.sceneId);
+    playOut(out.dialogue);
+    ok('and the year is stamped', S.flags.taxYear === S.date.year, String(S.flags.taxYear));
+    ok('and a pack was chosen', !!S.flags.taxPack, String(S.flags.taxPack));
+    const ids = RZ.engine.availableActions(S).map((a) => a.id);
+    ok('and the action leaves the desk until next year', ids.indexOf('tax') < 0);
+  }
+
+  {
+    const S = makePresident(career('BW', 233, 13));
+    S.date.month = 10;
+    RZ.docket.build(S);
+    const first = RZ.docket.entries(S)[0];
+    ok('the October diary opens on the package', !!(first && first.actionId === 'tax'), first && first.actionId);
+  }
+
+  {
+    const S = makePresident(career('BW', 234, 13));
+    const raw = RZ.engine.exportSave(S);
+    ok('a career exports as JSON', typeof raw === 'string' && raw.indexOf(S.player.name) >= 0);
+    const back = RZ.engine.importSave(raw);
+    ok('and loads back', !!(back && back.player && back.player.name === S.player.name && back.countryId === 'BW'));
+    ok('and refuses junk', RZ.engine.importSave('{nope}') === null);
+  }
+
+  {
+    ok('the four new rooms exist',
+      ['house-project', 'great-power', 'opp-meet', 'opp-table', 'tax-package'].every((id) => !!RZ.dialogue.byId(id)));
+    ok('the motion is a summoned crisis', RZ.state.SUMMONS.indexOf('opp-table') >= 0);
+  }
+}
+
+/* ================= 1.12.0 The opposition is a party ================= */
+section('1.12.0 The opposition is a party');
+
+{
+  function playOut(cv) {
+    let guard = 0;
+    while (!cv.done && guard++ < 12) {
+      const opts = RZ.dialogue.options(cv).filter((o) => o.ok);
+      if (!opts.length) throw new Error('no options in ' + cv.sceneId);
+      RZ.dialogue.choose(cv, opts[0].i);
+    }
+    if (!cv.done) throw new Error(cv.sceneId + ' never closed');
+    return cv;
+  }
+
+  {
+    const S = makePresident(career('BW', 240, 13));
+    const o = RZ.state.opposition(S);
+    ok('the caucus has a unity', o.unity >= 0 && o.unity <= 100, String(o.unity));
+    ok('and it is the party\'s unity', S.parties[o.partyId].unity === o.unity);
+    const other = RZ.state.otherOppositionParty(S);
+    ok('there is another party that wants the title', !!(other && other.id && other.id !== o.partyId && other.id !== S.player.partyId),
+      other && other.id);
+  }
+
+  {
+    const S = makePresident(career('BW', 241, 13));
+    RZ.state.opposition(S);
+    const u0 = S.opposition.unity;
+    RZ.state.applyOpp(RZ.engine.mkApi(S), 'deal');
+    ok('a corridor drops the caucus', S.opposition.unity < u0, `${u0} -> ${S.opposition.unity}`);
+    ok('and sets their line', S.opposition.line === 'corridor', S.opposition.line);
+  }
+
+  {
+    const S = makePresident(career('BW', 242, 13));
+    const o = RZ.state.opposition(S);
+    o.unity = 22;
+    o.line = 'corridor';
+    const cr = RZ.state.CRISES.find((c) => c.id === 'opp-split');
+    ok('a corridor makes a split eligible', cr.when(S) === true);
+    S.actionsLeft = 3;
+    const cv = RZ.dialogue.beginById(S, 'opp-split');
+    ok('the hawk is a meeting', !!(cv && cv.sceneId === 'opp-split'));
+    playOut(cv);
+    ok('and the House records a result', !!S.flags.oppSplit, String(S.flags.oppSplit));
+  }
+
+  {
+    const S = makePresident(career('BW', 243, 13));
+    const o = RZ.state.opposition(S);
+    RZ.state.hawk(S);
+    const from = o.partyId;
+    const s0 = S.parties[from].seats;
+    const mine = S.parties[S.player.partyId].seats;
+    RZ.state.applySplit(RZ.engine.mkApi(S), 'take');
+    ok('taking the hawk moves a seat', S.parties[from].seats < s0 || S.flags.oppCrossed > 0,
+      `${s0} -> ${S.parties[from].seats} crossed=${S.flags.oppCrossed}`);
+    ok('onto your benches', S.parties[S.player.partyId].seats >= mine);
+    ok('and the caucus is a split', S.opposition.line === 'split' && S.opposition.unity < 30);
+    ok('and stamps splitTheOpposition', !!S.legacyMarks.splitTheOpposition);
+  }
+
+  {
+    const S = makePresident(career('BW', 244, 13));
+    const ids = RZ.engine.availableActions(S).map((a) => a.id);
+    ok('a president is offered the other party', ids.indexOf('oppother') >= 0);
+    S.actionsLeft = 3;
+    const out = RZ.engine.doAction(S, 'oppother');
+    ok('calling them in is a meeting', !!(out && out.dialogue && out.dialogue.sceneId === 'opp-other'),
+      out && out.dialogue && out.dialogue.sceneId);
+    playOut(out.dialogue);
+    ok('and the corridor records a result', !!S.flags.oppOther, String(S.flags.oppOther));
+  }
+
+  {
+    const SZ = makePresident(career('SZ', 245, 13));
+    const ids = RZ.engine.availableActions(SZ).map((a) => a.id);
+    ok('Eswatini is not offered the other party', ids.indexOf('oppother') < 0);
+  }
+
+  {
+    const S = makePresident(career('ZA', 246, 13));
+    ok('a South African president can sit supply', RZ.state.supplyLive(S) === true,
+      'govParties=' + (S.nation.govParties || []).join(',') + ' thin=' + RZ.state.thinMajority(S));
+    const ids = RZ.engine.availableActions(S).map((a) => a.id);
+    ok('and the desk offers it', ids.indexOf('supply') >= 0);
+    S.actionsLeft = 3;
+    const out = RZ.engine.doAction(S, 'supply');
+    ok('supply is a room', !!(out && out.dialogue && out.dialogue.sceneId === 'opp-supply'),
+      out && out.dialogue && out.dialogue.sceneId);
+    playOut(out.dialogue);
+    ok('and the letter records a result', !!S.flags.oppSupply, String(S.flags.oppSupply));
+  }
+
+  {
+    const S = makePresident(career('ZA', 247, 13));
+    RZ.state.opposition(S);
+    RZ.state.applySupply(RZ.engine.mkApi(S), 'paper');
+    ok('a paper stamps the year', S.flags.supplyYear === S.date.year, String(S.flags.supplyYear));
+  }
+
+  {
+    const file = RZ.state.houseFile(makePresident(career('BW', 248, 13)));
+    ok('the file does not invent an opposition on render', file.opp === null);
+  }
+
+  {
+    ok('the three party rooms exist',
+      ['opp-split', 'opp-other', 'opp-supply'].every((id) => !!RZ.dialogue.byId(id)));
+    ok('the split is a summoned crisis', RZ.state.SUMMONS.indexOf('opp-split') >= 0);
+  }
+}
+
+/* ================= 1.13.0 A hung House is a room ================= */
+section('1.13.0 A hung House is a room');
+
+{
+  function playOut(cv) {
+    let guard = 0;
+    while (!cv.done && guard++ < 12) {
+      const opts = RZ.dialogue.options(cv).filter((o) => o.ok);
+      if (!opts.length) throw new Error('no options in ' + cv.sceneId);
+      RZ.dialogue.choose(cv, opts[0].i);
+    }
+    if (!cv.done) throw new Error(cv.sceneId + ' never closed');
+    return cv;
+  }
+
+  function hungSeats(S) {
+    const c = RZ.COUNTRIES[S.countryId];
+    const total = c.house.seats;
+    const need = Math.floor(total / 2) + 1;
+    const lead = S.player.partyId;
+    const rest = c.parties.filter((p) => p.id !== lead);
+    const seats = {};
+    seats[lead] = need - 8;
+    const leftover = total - seats[lead];
+    rest.forEach((p, i) => {
+      seats[p.id] = i === 0
+        ? Math.max(1, Math.floor(leftover * 0.45))
+        : Math.max(1, Math.floor((leftover * 0.55) / Math.max(1, rest.length - 1)));
+    });
+    let used = Object.keys(seats).reduce((n, id) => n + seats[id], 0);
+    seats[lead] += total - used;
+    rest.forEach((p) => { S.parties[p.id].seats = seats[p.id]; });
+    S.parties[lead].seats = seats[lead];
+    return seats;
+  }
+
+  {
+    const S = makePresident(career('ZA', 250, 13));
+    const seats = hungSeats(S);
+    const t = RZ.elections.coalitionOptions(S, seats);
+    ok('ZA options see a hung House', t.hung === true, 'hung=' + t.hung + ' lead=' + t.leadSeats + ' need=' + t.need);
+    ok('and name the runner-up as GNU', !!(t.gnu && t.gnu.id && t.gnu.id !== S.player.partyId), t.gnu && t.gnu.id);
+    ok('and name a kingmaker who is not them', !!(t.king && t.king.id && t.king.id !== t.gnu.id),
+      'king=' + (t.king && t.king.id) + ' gnu=' + (t.gnu && t.gnu.id));
+    ok('and GNU is the two largest', t.gnuSlate.length === 2, String(t.gnuSlate));
+    ok('and a kingmaker slate is not GNU', t.kingSlate.join(',') !== t.gnuSlate.join(','),
+      'king=' + t.kingSlate.join('+') + ' gnu=' + t.gnuSlate.join('+'));
+  }
+
+  {
+    const S = makePresident(career('ZA', 251, 13));
+    hungSeats(S);
+    const t = RZ.elections.coalitionOptions(S);
+    S.flags.coalitionTalks = t;
+    RZ.elections.applyCoalition(RZ.engine.mkApi(S), 'gnu');
+    ok('GNU writes the runner-up into government', S.nation.govParties.indexOf(t.gnu.id) >= 0,
+      String(S.nation.govParties));
+    ok('and stamps formedGnu', !!S.legacyMarks.formedGnu);
+    ok('and clears the talks', S.flags.coalitionTalks === null);
+    ok('and the kind is gnu', S.flags.coalitionKind === 'gnu');
+  }
+
+  {
+    const S = makePresident(career('ZA', 252, 13));
+    hungSeats(S);
+    const t = RZ.elections.coalitionOptions(S);
+    S.flags.coalitionTalks = t;
+    RZ.elections.applyCoalition(RZ.engine.mkApi(S), 'king');
+    ok('a kingmaker writes a partner who is not the runner-up',
+      S.nation.govParties.indexOf(t.king.id) >= 0 && S.nation.govParties.indexOf(t.gnu.id) < 0,
+      String(S.nation.govParties) + ' king=' + t.king.id + ' gnu=' + t.gnu.id);
+    ok('and stamps formedKing', !!S.legacyMarks.formedKing);
+  }
+
+  {
+    const S = makePresident(career('ZA', 253, 13));
+    hungSeats(S);
+    const t = RZ.elections.coalitionOptions(S);
+    S.flags.coalitionTalks = t;
+    RZ.elections.applyCoalition(RZ.engine.mkApi(S), 'minor');
+    ok('a minority is the lead alone', S.nation.govParties.length === 1 && S.nation.govParties[0] === S.player.partyId,
+      String(S.nation.govParties));
+    ok('and stamps formedMinority', !!S.legacyMarks.formedMinority);
+    ok('and supply is live', RZ.state.supplyLive(S) === true);
+  }
+
+  {
+    let parked = false, last = '';
+    for (let seed = 254; seed < 272 && !parked; seed++) {
+      const S = makePresident(career('ZA', seed, 13));
+      S.player.isLeader = true;
+      S.nation.yearsInPower = 4;
+      RZ.COUNTRIES.ZA.parties.forEach((p) => {
+        S.parties[p.id].vote = p.id === S.player.partyId ? 44 : (p.id === 'DA' ? 22 : 5);
+      });
+      const r = RZ.gov.runElection(S);
+      last = 'pending=' + S.pendingScene + ' lead=' + (r.gov && r.gov.lead) +
+        ' hung=' + (r.gov && r.gov.hung) + ' pendingGov=' + (r.gov && r.gov.pending);
+      if (S.pendingScene === 'coalition-talks' && r.talks && r.gov.pending) {
+        parked = true;
+        ok('a hung ZA count the player leads parks talks', true);
+        ok('and the night is a caretaker', S.nation.govParties.length === 1, String(S.nation.govParties));
+        const cv = RZ.dialogue.beginById(S, 'coalition-talks');
+        S.pendingScene = null;
+        ok('talks are a meeting', !!(cv && cv.sceneId === 'coalition-talks'));
+        playOut(cv);
+        ok('and a kind is stamped', !!S.flags.coalitionKind, String(S.flags.coalitionKind));
+      }
+    }
+    if (!parked) ok('a hung ZA count the player leads parks talks', false, last);
+  }
+
+  {
+    const S = makePresident(career('ZM', 255, 13));
+    S.player.isLeader = true;
+    const auto = RZ.elections.formGovernment(S, hungSeats(S));
+    ok('a presidential republic does not sit talks', RZ.elections.talksLive(S, auto) === false);
+  }
+
+  {
+    const S = makePresident(career('LS', 256, 13));
+    const t = RZ.elections.coalitionOptions(S, hungSeats(S));
+    ok('Lesotho names a kingmaker', !!(t.king && t.king.id), t.king && t.king.abbr);
+    const auto = RZ.elections.formGovernment(S, hungSeats(S));
+    ok('and a hung LS the player leads is talks', RZ.elections.talksLive(S, auto) === true,
+      'hung=' + auto.hung + ' lead=' + auto.lead + ' player=' + S.player.partyId);
+  }
+
+  {
+    const S0 = makePresident(career('ZA', 257, 13));
+    hungSeats(S0);
+    const before = RZ.elections.formGovernment(S0, hungSeats(S0));
+    const S1 = makePresident(career('ZA', 257, 13));
+    hungSeats(S1);
+    const after = RZ.elections.formGovernment(S1, hungSeats(S1));
+    ok('NPC auto-form still returns the same sort',
+      before.parties.join(',') === after.parties.join(',') && before.lead === after.lead,
+      before.parties.join('+') + ' vs ' + after.parties.join('+'));
+  }
+
+  {
+    const file = RZ.state.houseFile(makePresident(career('BW', 258, 13)));
+    ok('the file does not invent talks on render', !file.coalition || file.coalition.pending === false);
+    ok('and still does not invent an opposition', file.opp === null);
+  }
+
+  {
+    ok('the talks room exists', !!RZ.dialogue.byId('coalition-talks'));
+    ok('and it is a summoned crisis', RZ.elections.SUMMONS.indexOf('coalition-talks') >= 0);
+  }
+}
+
+/* ================= 1.14.0 Tuesday is the job ================= */
+section('1.14.0 Tuesday is the job');
+
+{
+  function playOut(cv) {
+    let guard = 0;
+    while (!cv.done && guard++ < 12) {
+      const opts = RZ.dialogue.options(cv).filter((o) => o.ok);
+      if (!opts.length) throw new Error('no options in ' + cv.sceneId);
+      RZ.dialogue.choose(cv, opts[0].i);
+    }
+    if (!cv.done) throw new Error(cv.sceneId + ' never closed');
+    return cv;
+  }
+
+  function forceMinority(S, under) {
+    const c = RZ.COUNTRIES[S.countryId];
+    const need = Math.floor(c.house.seats / 2) + 1;
+    const lead = S.player.partyId;
+    under = under == null ? 8 : under;
+    S.parties[lead].seats = Math.max(1, need - under);
+    S.nation.govParties = [lead];
+    S.flags.coalitionKind = 'minor';
+    S.flags.coalitionTalks = null;
+    c.parties.forEach((p) => {
+      if (S.parties[p.id]) S.parties[p.id].gov = p.id === lead;
+    });
+    return { seats: S.parties[lead].seats, need: need };
+  }
+
+  {
+    const S = makePresident(career('BW', 270, 13));
+    const n = forceMinority(S);
+    ok('a minority is live when the lead is short', RZ.state.minorityLive(S) === true,
+      'have=' + n.seats + ' need=' + n.need);
+    ok('and the House does not hold without names or a paper',
+      RZ.state.houseHolds(S, {}) === false);
+  }
+
+  {
+    const S = makePresident(career('BW', 271, 13));
+    forceMinority(S);
+    S.player.standing.leader = 60;
+    S.player.standing.party = 50;
+    S.flags.censurePlan = 'whip';
+    ok('two names from the Whip and two from leadership are not a majority of 31',
+      RZ.state.houseHolds(S, { whip: true }) === false,
+      'have=' + RZ.state.govSeats(S) + ' need=' + RZ.state.houseNeed(S));
+  }
+
+  {
+    const S = makePresident(career('BW', 272, 13));
+    forceMinority(S, 2);
+    S.player.standing.leader = 60;
+    S.player.standing.party = 55;
+    ok('a two-seat hole can be whipped', RZ.state.houseHolds(S, { whip: true }) === true,
+      'have=' + RZ.state.govSeats(S) + ' +names vs need=' + RZ.state.houseNeed(S));
+  }
+
+  {
+    const S = makePresident(career('BW', 273, 13));
+    forceMinority(S);
+    S.flags.supplyYear = S.date.year;
+    S.player.standing.party = 50;
+    ok('a paper this year holds a minority whose caucus is intact',
+      RZ.state.houseHolds(S, {}) === true);
+    S.player.standing.party = 18;
+    ok('and does not hold one whose caucus has left',
+      RZ.state.houseHolds(S, { whip: true }) === false);
+  }
+
+  {
+    const S = makePresident(career('BW', 274, 13));
+    S.player.standing.party = 50;
+    S.player.standing.leader = 50;
+    ok('a majority holds without a paper', RZ.state.houseHolds(S, {}) === true,
+      'have=' + RZ.state.govSeats(S) + ' need=' + RZ.state.houseNeed(S) + ' minority=' + RZ.state.minorityLive(S));
+  }
+
+  {
+    const S = makePresident(career('BW', 275, 13));
+    forceMinority(S);
+    S.date.month = 3;
+    const duty = RZ.ward.duty(S);
+    ok('a minority without a paper pins supply', duty.id === 'supply', duty && duty.id);
+    S.date.month = 10;
+    const oct = RZ.ward.duty(S);
+    ok('and Tuesday beats the October package', oct.id === 'supply', oct && oct.id);
+    S.date.month = 2;
+    const feb = RZ.ward.duty(S);
+    ok('and February is still the speech', feb.id === 'address', feb && feb.id);
+  }
+
+  {
+    const S = makePresident(career('BW', 276, 13));
+    forceMinority(S);
+    RZ.state.applySupply(RZ.engine.mkApi(S), 'paper');
+    ok('a paper stamps the year', S.flags.supplyYear === S.date.year);
+    S.date.month = 4;
+    const duty = RZ.ward.duty(S);
+    ok('and the pin goes away until next year', duty.id !== 'supply', duty && duty.id);
+    const ids = RZ.engine.availableActions(S).map((a) => a.id);
+    ok('and the action leaves the desk', ids.indexOf('supply') < 0);
+  }
+
+  {
+    const S = makePresident(career('BW', 277, 13));
+    forceMinority(S);
+    const st0 = S.nation.society.stability;
+    RZ.state.tick(S, 1, {});
+    ok('skipping Tuesday is counted', (S.flags.missedSupply || 0) >= 1, String(S.flags.missedSupply));
+    ok('and stability moves', S.nation.society.stability < st0,
+      `${st0} -> ${S.nation.society.stability}`);
+  }
+
+  {
+    const S = makePresident(career('BW', 278, 13));
+    forceMinority(S);
+    S.player.standing.leader = 40;
+    S.player.standing.party = 50;
+    const out = RZ.state.applyCensure(RZ.engine.mkApi(S), 'whip');
+    ok('a lost whip in a parliamentary minority takes the chair', out === 'lost' && S.over === true && S.ending === 'noconfidence',
+      'out=' + out + ' over=' + S.over + ' ending=' + S.ending);
+  }
+
+  {
+    const S = makePresident(career('ZM', 279, 13));
+    S.player.standing.party = 10;
+    S.player.standing.leader = 20;
+    const out = RZ.state.applyCensure(RZ.engine.mkApi(S), 'whip');
+    ok('a presidential House cannot take the chair', S.over !== true && out === 'lost',
+      'over=' + S.over + ' out=' + out + ' system=' + RZ.COUNTRIES.ZM.system);
+  }
+
+  {
+    const S = makePresident(career('BW', 280, 13));
+    const cr = RZ.state.CRISES.find((c) => c.id === 'house-censure');
+    const pMaj = cr.p(S);
+    forceMinority(S);
+    const pMin = cr.p(S);
+    ok('a minority without a paper is a live censure', cr.when(S) === true);
+    ok('and likelier than a majority', pMin > pMaj, `maj=${pMaj} min=${pMin}`);
+  }
+
+  {
+    const S = makePresident(career('BW', 281, 13));
+    forceMinority(S);
+    const file = RZ.state.houseFile(S);
+    ok('the file names a minority', file.coalition && file.coalition.minority === true);
+    ok('and prints the arithmetic without inventing people',
+      file.coalition.seats === RZ.state.govSeats(S) && file.opp === null);
+  }
+
+  {
+    const S = makePresident(career('BW', 282, 13));
+    forceMinority(S);
+    S.date.month = 3;
+    S.actionsLeft = 3;
+    RZ.docket.build(S);
+    const first = RZ.docket.entries(S)[0];
+    ok('the diary opens on Tuesday', !!(first && first.actionId === 'supply'), first && first.actionId);
+  }
+}
+
+/* ================= 1.15.0 The partner is a person ================= */
+section('1.15.0 The partner is a person');
+
+{
+  function hungSeats(S) {
+    const c = RZ.COUNTRIES[S.countryId];
+    const total = c.house.seats;
+    const need = Math.floor(total / 2) + 1;
+    const lead = S.player.partyId;
+    const rest = c.parties.filter((p) => p.id !== lead);
+    const seats = {};
+    seats[lead] = need - 8;
+    const leftover = total - seats[lead];
+    rest.forEach((p, i) => {
+      seats[p.id] = i === 0
+        ? Math.max(1, Math.floor(leftover * 0.45))
+        : Math.max(1, Math.floor((leftover * 0.55) / Math.max(1, rest.length - 1)));
+    });
+    let used = Object.keys(seats).reduce((n, id) => n + seats[id], 0);
+    seats[lead] += total - used;
+    rest.forEach((p) => { S.parties[p.id].seats = seats[p.id]; });
+    S.parties[lead].seats = seats[lead];
+    return seats;
+  }
+
+  function formWith(S, kind) {
+    hungSeats(S);
+    const t = RZ.elections.coalitionOptions(S);
+    S.flags.coalitionTalks = t;
+    RZ.elections.applyCoalition(RZ.engine.mkApi(S), kind);
+    return t;
+  }
+
+  {
+    const S = makePresident(career('ZA', 290, 13));
+    const t = formWith(S, 'gnu');
+    ok('a GNU plants a partner', !!(S.partner && S.partner.name && S.partner.partyId === t.gnu.id),
+      S.partner && S.partner.partyId);
+    ok('and they sit Finance', S.partner.chair === 'fin', S.partner && S.partner.chair);
+    const fin = RZ.state.byMinistry(S, 'fin');
+    ok('and Finance is theirs', !!(fin && fin.partyId === t.gnu.id), fin && fin.partyId);
+    ok('and the partnership is live', RZ.state.partnerLive(S) === true);
+  }
+
+  {
+    const S = makePresident(career('ZA', 291, 13));
+    const t = formWith(S, 'king');
+    ok('a kingmaker plants a partner who is not the runner-up',
+      !!(S.partner && S.partner.partyId === t.king.id && S.partner.partyId !== t.gnu.id),
+      S.partner && S.partner.partyId);
+    ok('and they have a chair', !!(S.partner && S.partner.chair), S.partner && S.partner.chair);
+  }
+
+  {
+    const S = makePresident(career('ZA', 292, 13));
+    formWith(S, 'gnu');
+    S.date.month = 3;
+    const duty = RZ.ward.duty(S);
+    ok('a GNU without a paper pins the partner', duty.id === 'partner', duty && duty.id);
+    S.date.month = 2;
+    const feb = RZ.ward.duty(S);
+    ok('and February is still the speech', feb.id === 'address', feb && feb.id);
+  }
+
+  {
+    const S = makePresident(career('ZA', 293, 13));
+    formWith(S, 'gnu');
+    RZ.state.applyPartner(RZ.engine.mkApi(S), 'policy');
+    ok('a paper stamps the year', S.flags.partnerYear === S.date.year);
+    S.date.month = 4;
+    const duty = RZ.ward.duty(S);
+    ok('and the pin goes away until next year', duty.id !== 'partner', duty && duty.id);
+    ok('and stamps keptTheGnu', !!S.legacyMarks.keptTheGnu);
+  }
+
+  {
+    const S = makePresident(career('ZA', 294, 13));
+    formWith(S, 'gnu');
+    const lead = S.player.partyId;
+    RZ.state.applyPartner(RZ.engine.mkApi(S), 'walk');
+    ok('walking unseats them', S.nation.govParties.length === 1 && S.nation.govParties[0] === lead,
+      String(S.nation.govParties));
+    ok('and they leave the building', S.partner == null);
+    ok('and you are a minority', RZ.state.minorityLive(S) === true);
+    ok('and stamps gnuWalked', !!S.legacyMarks.gnuWalked);
+    S.date.month = 3;
+    const duty = RZ.ward.duty(S);
+    ok('and Tuesday starts', duty.id === 'supply', duty && duty.id);
+  }
+
+  {
+    const S = makePresident(career('ZM', 295, 13));
+    ok('a presidential republic has no partner', RZ.state.partnerLive(S) === false);
+  }
+
+  {
+    const S = makePresident(career('ZA', 296, 13));
+    formWith(S, 'gnu');
+    S.player.standing.party = 20;
+    const cr = RZ.state.CRISES.find((c) => c.id === 'gnu-caucus');
+    ok('a sour caucus summons your hawk', cr.when(S) === true);
+  }
+
+  {
+    const S = makePresident(career('ZA', 297, 13));
+    formWith(S, 'gnu');
+    S.partner.standing = 20;
+    S.flags.missedPartner = 2;
+    const cr = RZ.state.CRISES.find((c) => c.id === 'gnu-meet');
+    ok('a yellowed photograph summons the partner', cr.when(S) === true);
+  }
+
+  {
+    const file = RZ.state.houseFile(makePresident(career('BW', 298, 13)));
+    ok('the file does not invent a partner on render', file.partner === null);
+  }
+
+  {
+    const S = makePresident(career('ZA', 299, 13));
+    formWith(S, 'gnu');
+    S.date.month = 3;
+    S.actionsLeft = 3;
+    RZ.docket.build(S);
+    const first = RZ.docket.entries(S)[0];
+    ok('the diary opens on the partner', !!(first && first.actionId === 'partner'), first && first.actionId);
+    const ids = RZ.engine.availableActions(S).map((a) => a.id);
+    ok('and the desk offers it', ids.indexOf('partner') >= 0);
+    const out = RZ.engine.doAction(S, 'partner');
+    ok('and sitting them is a meeting', !!(out && out.dialogue && out.dialogue.sceneId === 'gnu-meet'),
+      out && out.dialogue && out.dialogue.sceneId);
+  }
+
+  {
+    ok('the two partner rooms exist',
+      ['gnu-meet', 'gnu-caucus'].every((id) => !!RZ.dialogue.byId(id)));
+    ok('and both are summoned crises',
+      RZ.state.SUMMONS.indexOf('gnu-meet') >= 0 && RZ.state.SUMMONS.indexOf('gnu-caucus') >= 0);
+  }
+}
+
+/* ================= 1.16.0 Saturday is the vote ================= */
+section('1.16.0 Saturday is the vote');
+
+{
+  function forceConference(S) {
+    S.nextConference = S.date.year;
+    S.date.month = 7;
+    S.player.isLeader = true;
+    S.player.isPresident = true;
+    S.flags.defendedConference = null;
+    return S;
+  }
+
+  {
+    const S = makePresident(career('BW', 310, 13));
+    ok('the hall is closed out of season', RZ.state.conferenceDefenceLive(S) === false);
+    forceConference(S);
+    ok('and opens in June of a conference year', RZ.state.conferenceDefenceLive(S) === true);
+  }
+
+  {
+    const S = makePresident(career('BW', 311, 13));
+    forceConference(S);
+    S.date.month = 2;
+    const feb = RZ.ward.duty(S);
+    ok('February is still the speech', feb.id === 'address', feb && feb.id);
+    S.date.month = 7;
+    S.flags.sonaYear = S.date.year;
+    const duty = RZ.ward.duty(S);
+    ok('and June pins Saturday', duty.id === 'conference', duty && duty.id);
+  }
+
+  {
+    const S = makePresident(career('BW', 312, 13));
+    forceConference(S);
+    S.player.standing.party = 72;
+    S.player.standing.grassroots = 70;
+    S.player.fame = 70;
+    ok('a hall with names holds', RZ.state.conferenceHolds(S, { quiet: true }) === true);
+  }
+
+  {
+    const S = makePresident(career('BW', 313, 13));
+    forceConference(S);
+    S.player.standing.party = 18;
+    ok('and a caucus on the floor does not', RZ.state.conferenceHolds(S, { quiet: true }) === false);
+  }
+
+  {
+    const S = makePresident(career('BW', 314, 13));
+    forceConference(S);
+    S.player.standing.party = 72;
+    S.player.standing.grassroots = 70;
+    S.player.fame = 70;
+    RZ.state.applyConference(RZ.engine.mkApi(S), 'keep');
+    ok('standing and winning keeps both jobs', S.player.isLeader === true && S.player.isPresident === true && !S.over);
+    ok('and stamps keptTheHall', !!S.legacyMarks.keptTheHall);
+    ok('and the pin goes away', RZ.state.conferenceDefenceLive(S) === false);
+  }
+
+  {
+    const S = makePresident(career('BW', 315, 13));
+    forceConference(S);
+    RZ.state.applyConference(RZ.engine.mkApi(S), 'anoint');
+    ok('anointing keeps the country', S.player.isPresident === true && !S.over);
+    ok('and gives away the party', S.player.isLeader === false);
+    ok('and is two centres', S.flags.twoCentre === true);
+    ok('and stamps madeWay', !!S.legacyMarks.madeWay);
+  }
+
+  {
+    const S = makePresident(career('BW', 316, 13));
+    forceConference(S);
+    S.player.standing.party = 18;
+    RZ.state.applyConference(RZ.engine.mkApi(S), 'keep');
+    ok('a lost hall in a parl republic takes the chair', S.over === true && S.ending === 'recall',
+      'over=' + S.over + ' ending=' + S.ending);
+    ok('and stamps recalled', !!S.legacyMarks.recalled);
+  }
+
+  {
+    const S = makePresident(career('ZM', 317, 13));
+    forceConference(S);
+    S.player.standing.party = 18;
+    RZ.state.applyConference(RZ.engine.mkApi(S), 'keep');
+    ok('a presidential republic cannot be recalled by the hall', !S.over);
+    ok('and splits anyway', S.flags.twoCentre === true && S.player.isLeader === false && S.player.isPresident === true);
+  }
+
+  {
+    const S = makePresident(career('ZA', 318, 13));
+    const c = RZ.COUNTRIES.ZA;
+    const total = c.house.seats;
+    const need = Math.floor(total / 2) + 1;
+    const lead = S.player.partyId;
+    const rest = c.parties.filter((p) => p.id !== lead);
+    S.parties[lead].seats = need - 8;
+    const leftover = total - S.parties[lead].seats;
+    rest.forEach((p, i) => {
+      S.parties[p.id].seats = i === 0
+        ? Math.max(1, Math.floor(leftover * 0.45))
+        : Math.max(1, Math.floor((leftover * 0.55) / Math.max(1, rest.length - 1)));
+    });
+    const t = RZ.elections.coalitionOptions(S);
+    S.flags.coalitionTalks = t;
+    RZ.elections.applyCoalition(RZ.engine.mkApi(S), 'gnu');
+    forceConference(S);
+    S.player.standing.party = 72;
+    S.player.standing.grassroots = 70;
+    S.player.fame = 70;
+    RZ.state.applyConference(RZ.engine.mkApi(S), 'dump');
+    ok('dumping at conference unseats the partner', S.partner == null && S.flags.coalitionKind === 'minor');
+    ok('and Tuesday starts', RZ.state.minorityLive(S) === true);
+  }
+
+  {
+    const file = RZ.state.houseFile(makePresident(career('BW', 319, 13)));
+    ok('the file does not invent a challenger on render', file.challenger === null);
+    ok('and does not invent two centres', file.twoCentre === false);
+  }
+
+  {
+    const S = makePresident(career('BW', 320, 13));
+    forceConference(S);
+    S.flags.sonaYear = S.date.year;
+    S.actionsLeft = 3;
+    RZ.docket.build(S);
+    const first = RZ.docket.entries(S)[0];
+    ok('the diary opens on Saturday', !!(first && first.actionId === 'conference'), first && first.actionId);
+    const ids = RZ.engine.availableActions(S).map((a) => a.id);
+    ok('and the desk offers it', ids.indexOf('conference') >= 0);
+    const out = RZ.engine.doAction(S, 'conference');
+    ok('and sitting it is a meeting', !!(out && out.dialogue && out.dialogue.sceneId === 'conference-floor'),
+      out && out.dialogue && out.dialogue.sceneId);
+  }
+
+  {
+    ok('the hall exists', !!RZ.dialogue.byId('conference-floor'));
+    ok('and is a summoned crisis', RZ.state.SUMMONS.indexOf('conference-floor') >= 0);
+  }
+}
+
+/* ================= 1.17.0 The partner quotes the paper ================= */
+section('1.17.0 The partner quotes the paper');
+
+{
+  function formGnu(S) {
+    const c = RZ.COUNTRIES[S.countryId];
+    const total = c.house.seats;
+    const need = Math.floor(total / 2) + 1;
+    const lead = S.player.partyId;
+    const rest = c.parties.filter((p) => p.id !== lead);
+    S.parties[lead].seats = need - 8;
+    const leftover = total - S.parties[lead].seats;
+    rest.forEach((p, i) => {
+      S.parties[p.id].seats = i === 0
+        ? Math.max(1, Math.floor(leftover * 0.45))
+        : Math.max(1, Math.floor((leftover * 0.55) / Math.max(1, rest.length - 1)));
+    });
+    const t = RZ.elections.coalitionOptions(S);
+    S.flags.coalitionTalks = t;
+    RZ.elections.applyCoalition(RZ.engine.mkApi(S), 'gnu');
+    return t;
+  }
+
+  {
+    const S = makePresident(career('ZA', 330, 13));
+    formGnu(S);
+    ok('a GNU without a paper has no quote', RZ.state.partnerQuote(S) === null);
+    RZ.state.applyPartner(RZ.engine.mkApi(S), 'policy');
+    ok('and a date still is not an annexure', RZ.state.partnerQuote(S) === null);
+  }
+
+  {
+    const S = makePresident(career('ZA', 331, 13));
+    formGnu(S);
+    RZ.state.applyPartner(RZ.engine.mkApi(S), 'policy');
+    S.player.capital = 40;
+    RZ.bill.table(S, RZ.engine.mkApi(S), 'land');
+    const q = RZ.state.partnerQuote(S);
+    ok('a land bill is a hostile quote', !!(q && q.kind === 'bill' && q.id === 'land' && q.hostile), JSON.stringify(q));
+    const file = RZ.state.houseFile(S);
+    ok('and the file names it without inventing people', file.quote && file.quote.id === 'land' && file.partner && file.partner.id);
+  }
+
+  {
+    const S = makePresident(career('ZA', 332, 13));
+    formGnu(S);
+    RZ.state.applyPartner(RZ.engine.mkApi(S), 'policy');
+    S.player.capital = 40;
+    RZ.bill.table(S, RZ.engine.mkApi(S), 'land');
+    RZ.state.applyPartner(RZ.engine.mkApi(S), 'honour');
+    ok('honouring a hostile bill pulls it', S.bill == null);
+    ok('and they stay', !!(S.partner && S.flags.coalitionKind === 'gnu'));
+    ok('and stamps honouredThePaper', !!S.legacyMarks.honouredThePaper);
+  }
+
+  {
+    const S = makePresident(career('ZA', 333, 13));
+    formGnu(S);
+    RZ.state.applyPartner(RZ.engine.mkApi(S), 'policy');
+    S.player.capital = 40;
+    RZ.bill.table(S, RZ.engine.mkApi(S), 'anticorr');
+    const q = RZ.state.partnerQuote(S);
+    ok('an integrity bill is not hostile', !!(q && q.kind === 'bill' && !q.hostile));
+    RZ.state.applyPartner(RZ.engine.mkApi(S), 'honour');
+    ok('and honouring it leaves it on the paper', !!(S.bill && S.bill.id === 'anticorr'));
+  }
+
+  {
+    const S = makePresident(career('ZA', 334, 13));
+    formGnu(S);
+    RZ.state.applyPartner(RZ.engine.mkApi(S), 'policy');
+    S.date.month = 10;
+    const q = RZ.state.partnerQuote(S);
+    ok('October without a package is a quote', !!(q && q.kind === 'tax'), q && q.kind);
+    RZ.state.applyPartner(RZ.engine.mkApi(S), 'honour');
+    ok('and honouring it sits a holiday', S.flags.taxYear === S.date.year && S.flags.taxPack === 'holiday');
+  }
+
+  {
+    const S = makePresident(career('ZA', 335, 13));
+    formGnu(S);
+    RZ.state.applyPartner(RZ.engine.mkApi(S), 'policy');
+    S.nation.economy.debt = 90;
+    ok('a hole in the books is a quote', RZ.state.partnerQuote(S).kind === 'rating');
+  }
+
+  {
+    const S = makePresident(career('ZA', 336, 13));
+    formGnu(S);
+    RZ.state.applyPartner(RZ.engine.mkApi(S), 'policy');
+    S.player.capital = 40;
+    RZ.bill.table(S, RZ.engine.mkApi(S), 'land');
+    S.partner.standing = 20;
+    RZ.state.applyPartner(RZ.engine.mkApi(S), 'renege');
+    ok('reneging when they are on the floor is a walk', S.partner == null && S.flags.coalitionKind === 'minor');
+    ok('and Tuesday starts', RZ.state.minorityLive(S) === true);
+    ok('and stamps renegedThePaper', !!S.legacyMarks.renegedThePaper);
+  }
+
+  {
+    const S = makePresident(career('ZA', 337, 13));
+    formGnu(S);
+    RZ.state.applyPartner(RZ.engine.mkApi(S), 'policy');
+    S.player.capital = 40;
+    RZ.bill.table(S, RZ.engine.mkApi(S), 'land');
+    const ids = RZ.engine.availableActions(S).map((a) => a.id);
+    ok('a live quote puts the partner back on the desk', ids.indexOf('partner') >= 0);
+    const cr = RZ.state.CRISES.find((c) => c.id === 'gnu-meet');
+    ok('and summons the same room', cr.when(S) === true);
+  }
+
+  {
+    const file = RZ.state.houseFile(makePresident(career('BW', 338, 13)));
+    ok('the file does not invent a quote on render', file.quote === null);
+  }
+
+  {
+    ok('withdraw exists and is not a dissolution', typeof RZ.bill.withdraw === 'function');
+  }
+}
+
+/* ================= 1.18.0 The rest of the house meets ================= */
+section('1.18.0 The rest of the house meets');
+
+{
+  function formGnu(S) {
+    const c = RZ.COUNTRIES[S.countryId];
+    const total = c.house.seats;
+    const need = Math.floor(total / 2) + 1;
+    const lead = S.player.partyId;
+    const rest = c.parties.filter((p) => p.id !== lead);
+    S.parties[lead].seats = need - 8;
+    const leftover = total - S.parties[lead].seats;
+    rest.forEach((p, i) => {
+      S.parties[p.id].seats = i === 0
+        ? Math.max(1, Math.floor(leftover * 0.45))
+        : Math.max(1, Math.floor((leftover * 0.55) / Math.max(1, rest.length - 1)));
+    });
+    const t = RZ.elections.coalitionOptions(S);
+    S.flags.coalitionTalks = t;
+    RZ.elections.applyCoalition(RZ.engine.mkApi(S), 'gnu');
+    return t;
+  }
+
+  {
+    const S = makePresident(career('ZA', 350, 13));
+    formGnu(S);
+    RZ.state.applyPartner(RZ.engine.mkApi(S), 'policy');
+    S.player.capital = 40;
+    RZ.bill.table(S, RZ.engine.mkApi(S), 'anticorr');
+    RZ.state.applyPartner(RZ.engine.mkApi(S), 'honour');
+    const opp = (S.bill.blocs || []).find((b) => b.id === 'opp');
+    ok('honouring a friendly bill pledges the opposition', !!(opp && opp.pledged), opp && opp.how);
+  }
+
+  {
+    const S = makePresident(career('ZA', 351, 13));
+    formGnu(S);
+    RZ.state.applyPartner(RZ.engine.mkApi(S), 'policy');
+    S.player.capital = 40;
+    RZ.bill.table(S, RZ.engine.mkApi(S), 'land');
+    S.bill.weeksLeft = 0;
+    S.bill.blocs.forEach((b) => { b.pledged = true; b.lean = 80; });
+    S.partner.standing = 20;
+    RZ.bill.division(S);
+    ok('carrying a hostile bill they quoted is a walk', S.partner == null && S.flags.coalitionKind === 'minor');
+  }
+
+  {
+    const bw = RZ.ward.fridayMatter(career('BW', 352, 4));
+    const za = RZ.ward.fridayMatter(career('ZA', 353, 4));
+    ok('Friday in Botswana is not Friday in Joburg', bw.job !== za.job && bw.a !== za.a, bw.job + ' / ' + za.job);
+  }
+
+  {
+    const S = career('ZA', 354, 6);
+    S.date.month = 7;
+    ok('the year is live in the middle', RZ.ward.yearLive(S) === true);
+    const P = makePresident(career('ZA', 355, 13));
+    P.date.month = 7;
+    ok('and not once you have the palace', RZ.ward.yearLive(P) === false);
+  }
+
+  {
+    const S = career('ZA', 356, 6);
+    S.player.stats.integrity = 70;
+    S.player.dirt = [];
+    const cr = RZ.state.CRISES.find((c) => c.id === 'sg-ceiling');
+    ok('a clean pair of hands summons the SG', cr && cr.when(S) === true);
+    S.player.stats.integrity = 40;
+    ok('and a dirty pair does not', cr.when(S) === false);
+  }
+
+  {
+    RZ.engine.recordLast({
+      countryId: 'ZA', player: { name: 'Thabo Molefe', isPresident: true, rungIdx: 13, dirt: [] },
+      date: { year: 2031 }, ending: 'recall', flags: { wasPresident: true },
+      legacyMarks: {}
+    });
+    const S = career('ZA', 357, 0);
+    ok('the next career in the same country hears a rumour', !!(S.flags.inheritance && S.flags.inheritance.name === 'Thabo Molefe'));
+    const BW = career('BW', 358, 0);
+    ok('and a different country does not', !BW.flags.inheritance);
+  }
+
+  {
+    ok('the SG room exists', !!RZ.dialogue.byId('sg-ceiling'));
+    ok('and the year exists', !!RZ.dialogue.byId('the-year'));
+    ok('and both are summoned',
+      RZ.state.SUMMONS.indexOf('sg-ceiling') >= 0 && RZ.ward.SUMMONS.indexOf('the-year') >= 0);
+  }
+}
+
+/* ================= 1.19.0 The clause is a room ================= */
+section('1.19.0 The clause is a room');
+
+{
+  function playOut(cv) {
+    let guard = 0;
+    while (!cv.done && guard++ < 12) {
+      const opts = RZ.dialogue.options(cv).filter((o) => o.ok);
+      if (!opts.length) throw new Error('no options in ' + cv.sceneId);
+      RZ.dialogue.choose(cv, opts[0].i);
+    }
+    if (!cv.done) throw new Error(cv.sceneId + ' never closed');
+    return cv;
+  }
+
+  function asMinister(cid, seed) {
+    const S = career(cid, seed, 6);
+    const lad = RZ.ladderFor(cid);
+    let idx = 0;
+    lad.forEach((r, i) => { if (r.tier <= 6) idx = i; });
+    S.player.rungIdx = idx;
+    S.player.isPresident = false;
+    S.parties[S.player.partyId].gov = true;
+    if (S.nation.govParties.indexOf(S.player.partyId) < 0) S.nation.govParties = [S.player.partyId];
+    S.actionsLeft = 4;
+    return S;
+  }
+
+  function setSeats(St, mineFrac) {
+    const c = RZ.COUNTRIES[St.countryId];
+    const total = c.house.seats;
+    const mine = Math.round(total * mineFrac);
+    c.parties.forEach((p, i) => {
+      St.parties[p.id].seats = i === 0 ? mine : Math.round((total - mine) / (c.parties.length - 1));
+    });
+    St.nation.govParties = [St.player.partyId];
+    St.parties[St.player.partyId].gov = true;
+  }
+
+  {
+    const S = asMinister('ZA', 400);
+    const api = RZ.engine.mkApi(S);
+    const acts = RZ.engine.availableActions(S).map((a) => a.id);
+    ok('a minister is offered the clause', acts.indexOf('amend') >= 0, acts.join(','));
+    ok('and is not offered the estimates', acts.indexOf('budget') < 0);
+    const list = RZ.gov.amendmentsFor(api);
+    ok('and can table devolve', list.some((x) => x.id === 'devolve'));
+    ok('and cannot table a palace clause',
+      !list.some((x) => x.id === 'termlimit' || x.id === 'termlength' || x.id === 'courts'));
+    ok('and the live helper agrees', RZ.gov.amendLive(api) === true);
+  }
+
+  {
+    const S = makePresident(career('ZA', 401, 13));
+    const api = RZ.engine.mkApi(S);
+    const list = RZ.gov.amendmentsFor(api);
+    ok('a president still sees palace paper',
+      list.some((x) => x.id === 'termlimit' || x.id === 'termlength' || x.id === 'courts'));
+  }
+
+  {
+    const S = asMinister('ZA', 402);
+    setSeats(S, 0.75);
+    S.player.standing.party = 80; S.player.standing.leader = 80; S.player.capital = 100;
+    S.actionsLeft = 3;
+    const out = RZ.engine.doAction(S, 'amend');
+    ok('sitting the clause is a room', !!(out && out.dialogue && out.dialogue.sceneId === 'amend-table'),
+      out && out.dialogue && out.dialogue.sceneId);
+    playOut(out.dialogue);
+    ok('and the year is stamped', S.flags.amendYear === S.date.year, String(S.flags.amendYear));
+    const ids = RZ.engine.availableActions(S).map((a) => a.id);
+    ok('and the action leaves the desk until next year', ids.indexOf('amend') < 0);
+  }
+
+  {
+    const S = asMinister('BW', 403);
+    setSeats(S, 0.9);
+    S.player.standing.party = 90; S.player.standing.leader = 90; S.player.capital = 200;
+    RZ.gov.beginAmend(S);
+    const buried = RZ.gov.applyAmend(RZ.engine.mkApi(S), 'bury');
+    ok('burying is not a carry', buried.passed === false && buried.buried === true, buried.title);
+    ok('and does not devolve the country', S.legacyMarks.devolved !== true);
+  }
+
+  {
+    const S = asMinister('BW', 404);
+    setSeats(S, 0.9);
+    S.player.standing.party = 90; S.player.standing.leader = 90; S.player.capital = 200;
+    RZ.gov.beginAmend(S);
+    const api = RZ.engine.mkApi(S);
+    const carried = RZ.gov.applyAmend(api, 'whip');
+    ok('a supermajority cabinet can carry devolve', carried.passed === true, carried.title);
+    ok('and the regions actually have the share', S.legacyMarks.devolved === true);
+  }
+
+  {
+    const S = career('BW', 405, 11);
+    const lad = RZ.ladderFor('BW');
+    const vp = lad.findIndex((r) => r.id === 'vp' || r.tier === 11);
+    S.player.rungIdx = vp >= 0 ? vp : S.player.rungIdx;
+    S.player.isPresident = false;
+    S.parties[S.player.partyId].gov = true;
+    const acts = RZ.engine.availableActions(S).map((a) => a.id);
+    ok('a vice-president still sits the clause', acts.indexOf('amend') >= 0, acts.join(','));
+    ok('and still chairs the estimates', acts.indexOf('budget') >= 0);
+  }
+
+  {
+    const S = career('ZA', 406, 3);
+    S.parties[S.player.partyId].gov = true;
+    const api = RZ.engine.mkApi(S);
+    const acts = RZ.engine.availableActions(S).map((a) => a.id);
+    ok('a backbencher is not offered the clause', acts.indexOf('amend') < 0);
+    ok('and the live helper says so', RZ.gov.amendLive(api) === false);
+  }
+
+  {
+    ok('the room exists', !!RZ.dialogue.byId('amend-table'));
+    ok('and its topic is the action', RZ.dialogue.byId('amend-table').topic === 'amend');
+  }
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`);
 if (failures) { console.error(`${failures} failed`); process.exit(1); }
 console.log('every new mechanic fires and does what it says');
+

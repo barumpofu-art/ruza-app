@@ -4,10 +4,11 @@
    afternoon that decides what kind of politician you are going to be, played
    before the first month starts.
 
-   Two openings, because there are two ways in. The ward activist is somebody
+   Three openings, because there are three ways in. The ward activist is somebody
    who was insulted in their own yard and could not let it go. The
    parliamentary candidate is somebody already successful being asked, in a
-   room with no windows, what they are worth.
+   room with no windows, what they are worth. The minister has already made
+   every compromise the climb demands, except the last one.
 
    Each answer sets the starting position AND a trait that follows you for the
    whole career, so the scene is not decoration — it is the first real choice.
@@ -188,6 +189,59 @@
               'He is silent for long enough that you think you have finished your career in a lounge.\n\n' +
               '“You are going to be exhausting,” he says at last. “And you are right, which is worse.” ' +
               'He writes your name himself, in pen, and does not offer to fund you.';
+          }
+        }
+      ]
+    },
+
+    /* ---------------- the anteroom: how it starts in cabinet ---------------- */
+    minister: {
+      id: 'minister',
+      kicker: 'The oath is already taken',
+      title: function (c) { return 'An anteroom in ' + c.capital; },
+      opening: function (c, name) {
+        return 'You have already been sworn. The cameras have gone. The director-general is waiting in the corridor ' +
+          'with three folders and a face that has seen twelve of you.\n\n' +
+          'The person who put you here is still in the chair, and they have sent for you before the first cabinet. ' +
+          'Not to brief you. To see what you are.\n\n' +
+          '“Sit down,” they say. “The country is going to decide, over the next four years, whether you are the ' +
+          'successor or the spare. I would like to know which one you think you are, before they do.”';
+      },
+      question: function (c) {
+        return 'They do not look at the folders. They look at you.\n\n' +
+          '“So. What did the climb cost you, and are you finished paying?”';
+      },
+      answers: [
+        {
+          id: 'mandarin', trait: 'mandarin',
+          t: '“I know where every file is. That is what it cost.”',
+          d: 'You kept your hands in the machine and off the camera.',
+          reply: function (c) {
+            return '“I did not buy anyone,” you say. “I did not make a speech. I signed what had to be signed and I ' +
+              'know which of your ministers has never read a vote. That is the climb. I am not finished.”\n\n' +
+              'They nod once, which in this building is a promotion. “Good. The camera will find you anyway. ' +
+              'Try not to enjoy it.”';
+          }
+        },
+        {
+          id: 'advocate', trait: 'advocate',
+          t: '“I kept my name. That is rarer than a ministry.”',
+          d: 'The clean path. It ends short of the last office, and you know that.',
+          reply: function (c) {
+            return '“I can still walk into a hall without somebody looking at the floor,” you say. “That cost me ' +
+              'the last office, if I am honest, and I am still here. I am not going to start paying now.”\n\n' +
+              'They almost smile. “Then you will be a very good minister, and you will never sit in my chair. ' +
+              'I can live with that. The country might even thank you.”';
+          }
+        },
+        {
+          id: 'schemer', trait: 'schemer',
+          t: '“I kept things. I am not finished.”',
+          d: 'The last step is a set of files. You have some of them already.',
+          reply: function (c) {
+            return 'You do not say what you kept. You do not have to. They have been in this building long enough.\n\n' +
+              '“Be careful,” they say, “that the last step is still a step, and not a fall. I have seen both. ' +
+              'The folders are yours. Try to open them in the right order.”';
           }
         }
       ]

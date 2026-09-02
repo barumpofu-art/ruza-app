@@ -61,11 +61,12 @@
     if (P.stats.grit > 60) P.health = C100(P.health + cost * 0.18);
   }
 
-  // Below thirty the body stops asking.
+  // Below twenty-four the body stops asking. A collapse is a room now, not a
+  // card that ends the run: the spouse and the deputy are both already there.
   function medicalCollapse(S) {
     var P = S.player;
-    if (P.health >= 30) return false;
-    if (S.flags.lastCollapse !== undefined && S.turn - S.flags.lastCollapse < 8) return false;
+    if (P.health >= 24) return false;
+    if (S.flags.lastCollapse !== undefined && S.turn - S.flags.lastCollapse < 24) return false;
 
     S.flags.lastCollapse = S.turn;
     S.flags.collapses = (S.flags.collapses || 0) + 1;
@@ -74,7 +75,7 @@
     // A hospital is rest whether you wanted it or not — and it has to put you
     // back far enough above the line that you are not straight back in it,
     // or a collapse becomes a permanent condition rather than a warning.
-    P.health = C100(Math.max(P.health, RZ.range(60, 72)));
+    P.health = C100(Math.max(P.health, RZ.range(58, 70)));
     S.skipTurns = (S.skipTurns || 0) + 1;
 
     // The country is sympathetic. The party starts counting.
@@ -95,6 +96,8 @@
           'Somebody has already been asked, informally, whether they would be available.',
       deltas: api.deltas.slice(), tone: 'bad'
     });
+    // The feed card is the news. The room is the decision: rest, push, or hand over.
+    if (RZ.dialogue && RZ.dialogue.byId('collapse-bed')) RZ.dialogue.summon(S, 'collapse-bed');
     return true;
   }
 
@@ -562,6 +565,7 @@
     congressPurge: congressPurge,
     cabinetReckoning: cabinetReckoning,
     resolveDemand: resolveDemand,
-    SHOCKS: SHOCKS
+    SHOCKS: SHOCKS,
+    SUMMONS: ['collapse-bed']
   };
 })();
